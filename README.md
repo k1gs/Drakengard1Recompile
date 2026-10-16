@@ -11,6 +11,7 @@ This repository currently provides:
 
 - A read-only, opt-in image fingerprint and extracted ELF inspection tool.
 - Pinned PS2Recomp/Ghidra workflow, guarded local lift and diagnostic native runner glue.
+- An observed kernel-patch translation experiment with exact dispatch and instruction checks.
 - Synthetic ELF tests and Windows/Linux CI requiring no game or BIOS.
 - A staged research roadmap, evidence requirements and publication checks.
 
@@ -32,6 +33,7 @@ The tool does not extract an ISO, execute guest code, or validate authenticity.
 - [Current state and next action](CURRENT_STATE.md)
 - [Verified input metadata and initial ELF findings](docs/INPUT_EUROPE.md)
 - [Pinned toolchain, lift results and build commands](docs/TOOLCHAIN.md)
+- [Kernel patch evidence, local preparation and validation limits](docs/KERNEL_PATCH.md)
 - [Roadmap and acceptance gates (Russian)](docs/ROADMAP.md)
 - [Runtime architecture and decision criteria](docs/ARCHITECTURE.md)
 - [Sources and candidate tools](docs/RESEARCH.md)

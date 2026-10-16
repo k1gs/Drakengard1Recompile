@@ -1,4 +1,6 @@
 #include "ps2_runtime.h"
+#include "verify_input.h"
+#include "runtime/ee_scheduler.h"
 #include <exception>
 #include <iostream>
 #include <memory>
@@ -9,7 +11,30 @@ int main(int argc, char** argv) {
         return 2;
     }
     try {
+        if (!verifyEuropeElf(argv[1])) {
+            std::cerr << "Native input refused: cannot hash file or wrong Europe ELF SHA-256\n";
+            return 2;
+        }
+        std::cout << "Verified Europe ELF SHA-256\n";
         auto runtime = std::make_unique<PS2Runtime>();
+        unsigned frames = 0;
+        runtime->setDebugUiCallbacks(
+            [](PS2Runtime&, void*) {},
+            [](PS2Runtime& rt, void* data) {
+                auto& ticks = *static_cast<unsigned*>(data);
+                if (++ticks % 120 != 0) return;
+                const auto snapshot = rt.eeScheduler().snapshot();
+                std::cerr << "[diagnostic] frame=" << ticks << " sequence=" << snapshot.sequence
+                          << " cycle=" << snapshot.eeCycle << " running=" << snapshot.runningThreadId;
+                for (const auto& thread : snapshot.threads) {
+                    std::cerr << " tid=" << thread.id << " pc=0x" << std::hex << thread.pc
+                              << " ra=0x" << thread.ra << " sp=0x" << thread.sp << std::dec
+                              << " state=" << static_cast<int>(thread.status)
+                              << " wait=" << static_cast<int>(thread.waitReason);
+                }
+                std::cerr << std::endl;
+            }, nullptr, &frames);
+        runtime->setMissingFunctionPolicy(PS2Runtime::MissingFunctionPolicy::Stop);
         if (!runtime->initialize("Drakengard Europe - diagnostic runtime")) return 3;
         if (!runtime->loadELF(argv[1])) return 4;
         runtime->run();

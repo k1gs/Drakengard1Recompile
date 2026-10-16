@@ -4,6 +4,8 @@ import ghidra.app.script.GhidraScript;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.FunctionIterator;
 import ghidra.program.model.address.AddressSetView;
+import ghidra.program.model.address.AddressSet;
+import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.model.address.AddressRange;
 import ghidra.program.model.address.AddressRangeIterator;
 import java.util.TreeMap;
@@ -25,14 +27,21 @@ public class ExportRecompMap extends GhidraScript {
         int count = 0;
         int functionCount = 0;
         TreeMap<Long, Integer> events = new TreeMap<>();
+        AddressSet executable = new AddressSet();
+        for (MemoryBlock block : currentProgram.getMemory().getBlocks())
+            if (block.isExecute() && block.isInitialized())
+                executable.add(block.getStart(), block.getEnd());
         FunctionIterator functions = currentProgram.getFunctionManager().getFunctions(true);
         while (functions.hasNext()) {
             monitor.checkCancelled();
             Function f = functions.next();
             if (f.isExternal() || f.getBody().isEmpty()) continue;
+            AddressSetView codeBody = f.getBody().intersect(executable);
+            if (codeBody.isEmpty()) continue;
             functionCount++;
-            events.merge(f.getEntryPoint().getOffset(), 0, Integer::sum);
-            AddressRangeIterator ranges = f.getBody().getAddressRanges();
+            if (codeBody.contains(f.getEntryPoint()))
+                events.merge(f.getEntryPoint().getOffset(), 0, Integer::sum);
+            AddressRangeIterator ranges = codeBody.getAddressRanges();
             while (ranges.hasNext()) {
                 AddressRange range = ranges.next();
                 long start = range.getMinAddress().getOffset();

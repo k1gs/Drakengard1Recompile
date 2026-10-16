@@ -4,23 +4,43 @@ function(drakengard_configure_runner)
         message(FATAL_ERROR "Enable pinned PS2Recomp runtime targets first")
     endif()
     get_filename_component(REPO_ROOT "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../.." ABSOLUTE)
-    set(GENERATED_DIR "${REPO_ROOT}/generated/lift-002")
+    set(GENERATED_DIR "${REPO_ROOT}/generated/lift-005")
     if(NOT EXISTS "${GENERATED_DIR}/register_functions.cpp")
         message(FATAL_ERROR "Run the verified local lift first")
     endif()
     get_target_property(runner_sources ps2EntryRunner SOURCES)
     list(FILTER runner_sources EXCLUDE REGEX "main[.]cpp$")
+    # Replace the default empty registration TU, keeping unity grouping stable.
+    list(TRANSFORM runner_sources REPLACE ".*register_functions[.]cpp$"
+        "${REPO_ROOT}/native/runner/verify_input.cpp")
     set_property(TARGET ps2EntryRunner PROPERTY SOURCES "${runner_sources}")
     file(GLOB guest_sources CONFIGURE_DEPENDS "${GENERATED_DIR}/*.cpp")
     target_sources(ps2EntryRunner PRIVATE
         "${REPO_ROOT}/native/runner/main.cpp" ${guest_sources})
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    set(kernel_units "${CMAKE_BINARY_DIR}/kernel_translation")
+    execute_process(COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/scripts/prepare_kernel.py"
+        "${kernel_units}" RESULT_VARIABLE kernel_result)
+    if(NOT kernel_result EQUAL 0)
+        message(FATAL_ERROR "Prepare verified kernel image and lift first")
+    endif()
+    file(GLOB kernel_sources CONFIGURE_DEPENDS "${kernel_units}/*.cpp")
+    target_sources(ps2EntryRunner PRIVATE ${kernel_sources}
+        "${REPO_ROOT}/native/runner/kernel_functions.cpp")
+    target_include_directories(ps2EntryRunner PRIVATE "${kernel_units}")
     target_include_directories(ps2EntryRunner PRIVATE "${GENERATED_DIR}")
     set_target_properties(ps2EntryRunner PROPERTIES
         UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE 16 INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF)
     if(MSVC)
+        get_target_property(runner_link_options ps2EntryRunner LINK_OPTIONS)
+        list(FILTER runner_link_options EXCLUDE REGEX "^/FORCE(:.*)?$")
+        set_property(TARGET ps2EntryRunner PROPERTY LINK_OPTIONS "${runner_link_options}")
         target_compile_options(ps2EntryRunner PRIVATE /Od /bigobj /MP4 /arch:AVX2 /fp:precise)
         target_link_options(ps2EntryRunner PRIVATE /STACK:8388608)
         target_compile_options(ps2_runtime PRIVATE /arch:AVX2 /fp:precise)
+    endif()
+    if(WIN32)
+        target_link_libraries(ps2EntryRunner PRIVATE bcrypt)
     endif()
 
     # Upstream's unknown syscall fallback returns success. Replace only that path
@@ -35,13 +55,51 @@ function(drakengard_configure_runner)
     if(strict_system STREQUAL original_system)
         message(FATAL_ERROR "Pinned unknown-syscall source contract changed; review first")
     endif()
+    set(install_call "runtime->setEeSyscallOverride(rdram, syscallIndex, handler);")
+    string(REPLACE "${install_call}"
+        "if (handler != 0u && !runtime->hasFunction(handler)) { std::cerr << \"Missing syscall handler: syscall=0x\" << std::hex << syscallIndex << \" handler=0x\" << handler << \" pc=0x\" << ctx->pc << std::dec << std::endl; throw std::runtime_error(\"No generated code for installed syscall handler\"); }\n        ${install_call}"
+        guarded_system "${strict_system}")
+    if(guarded_system STREQUAL strict_system)
+        message(FATAL_ERROR "Pinned SetSyscall contract changed; review first")
+    endif()
+    set(strict_system "${guarded_system}")
     set(strict_file "${CMAKE_BINARY_DIR}/private_strict_System.cpp")
-    file(WRITE "${strict_file}" "#include <stdexcept>\n${strict_system}")
+    string(REPLACE "throw std::runtime_error(\"No generated code for installed syscall handler\");"
+        "diagnoseMissingHandler(rdram, PS2_RAM_SIZE, handler); throw std::runtime_error(\"No generated code for installed syscall handler\");"
+        strict_system "${strict_system}")
+    file(CONFIGURE OUTPUT "${strict_file}"
+        CONTENT "#include <stdexcept>\n#include \"diagnostic.h\"\n${strict_system}" @ONLY)
     get_target_property(runtime_sources ps2_runtime SOURCES)
     list(FILTER runtime_sources EXCLUDE REGEX "Syscalls/System[.]cpp$")
     set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
     target_sources(ps2_runtime PRIVATE "${strict_file}")
     target_include_directories(ps2_runtime PRIVATE
+        "${REPO_ROOT}/native/runner"
         "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/Kernel/Syscalls")
+
+    # Add a separate exact-address kernel table instead of expanding the dense
+    # application table across the unused 2GB guest virtual-address interval.
+    file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/ps2_runtime.cpp" runtime_original)
+    string(REPLACE "return generatedFunctionTableSlot(address, slot) && g_ps2RecompiledFunctionTable[slot] != nullptr;"
+        "return lookupKernelFunction(address) != nullptr || (generatedFunctionTableSlot(address, slot) && g_ps2RecompiledFunctionTable[slot] != nullptr);"
+        runtime_guarded "${runtime_original}")
+    if(runtime_guarded STREQUAL runtime_original)
+        message(FATAL_ERROR "Pinned hasFunction contract changed")
+    endif()
+    string(REPLACE "pushDispatchPc(address);"
+        "pushDispatchPc(address);\n    if (auto kernel = lookupKernelFunction(address)) return kernel;"
+        runtime_extended "${runtime_guarded}")
+    if(runtime_extended STREQUAL runtime_guarded)
+        message(FATAL_ERROR "Pinned lookupFunction contract changed")
+    endif()
+    set(runtime_file "${CMAKE_BINARY_DIR}/private_extended_Runtime.cpp")
+    file(CONFIGURE OUTPUT "${runtime_file}"
+        CONTENT "#include \"kernel_functions.h\"\n${runtime_extended}" @ONLY)
+    set_source_files_properties("${runtime_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
+        INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
+    get_target_property(runtime_sources ps2_runtime SOURCES)
+    list(FILTER runtime_sources EXCLUDE REGEX "/ps2_runtime[.]cpp$")
+    set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
+    target_sources(ps2_runtime PRIVATE "${runtime_file}")
 endfunction()
 cmake_language(DEFER CALL drakengard_configure_runner)

@@ -117,7 +117,7 @@ Generated files: 7 799, суммарно 162 739 681 байт. Компилят�
 корректность карты или native execution. Lift-001 признан непригодным для build: exporter
 захватывал holes между частями тела функций, породив MSVC C1002 на двух 10-МБ generated functions.
 
-Текущий lift-002: 8 212 fragments, 120 331 resumable entries, 1 536 warnings / 200 436 fallback
+Исторический lift-002: 8 212 fragments, 120 331 resumable entries, 1 536 warnings / 200 436 fallback
 entries, 0 skipped/stubs/decode failures/errors. 8 215 generated files, 134 875 411 байт.
 Отдельный synthetic Ghidra regression создал тело из [0x1000,0x1004) и [0x1008,0x100c):
 exporter сохранил ровно эти два участка, 8 covered bytes, не включив 4-byte hole.
@@ -125,10 +125,30 @@ exporter сохранил ровно эти два участка, 8 covered byt
 
 ## Diagnostic native runner
 
+Before native configure/build, prepare the kernel image and lift in [KERNEL_PATCH.md](KERNEL_PATCH.md).
+The native loader still receives the original boot ELF; the wrapper ELF is only a translation input.
+
+Текущий overlay использует `generated/lift-005`, полученный командой
+`python scripts/lift.py --input-complete --map work/functions-ghidra-006.csv --run-id lift-005`.
+Для повторения используйте свежие output IDs и согласуйте generated path в overlay.
+Карта содержит только initialized executable memory Ghidra; upstream дополнительно исключил
+кандидат из `.vutext`. 8 338 EE fragments, 120 416 resumable entries; 0 stubs/skips/decode failures,
+1 540 indirect warnings. Восстановление callback entries не подтверждает полноту карты.
+
+`SeedAddressFunctions.java` принимает подтверждённые runtime-адреса; `SeedReferencedCode.java`
+исследует ещё не покрытые executable destinations существующих data references. Полученные
+кандидаты требуют проверки: анализ может принять таблицу или VU payload за EE instructions.
+
 `native/runner/overlay.cmake` добавляет наш host entry и локальные generated files к pinned
 upstream targets через CMAKE_PROJECT_TOP_LEVEL_INCLUDES, не меняя tools/ps2recomp.
 Unknown syscall fallback превращается в exception в private build-tree source; если точный
 контекст upstream изменится, configure остановится. Guest skip/return-success не добавляются.
+SetSyscall также отказывает в установке handler без generated code; диагностический prefix
+и совпадения в RAM пишутся только в локальный лог и не создают execution aliases.
+Runner проверяет ELF SHA-256 самостоятельно через Windows BCrypt, до runtime initialization.
+На других платформах verifier отказывает; Python/CI tooling остаётся переносимым.
+Scheduler snapshots читаются через штатный snapshot API. Счётчик diagnostic frames отражает
+host render loop, а не количество отрисованных кадров игры.
 
 ```powershell
 $root = (Get-Location).Path.Replace('\','/')
