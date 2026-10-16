@@ -1,4 +1,5 @@
 # Private inputs and all derived game data
+/game/
 /private/
 /work/
 /tools/

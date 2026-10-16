@@ -15,6 +15,8 @@ python scripts/intake.py image --input-complete --input "private/Drakengard-Euro
 Локально извлеките ISO отдельным проверенным ISO-инструментом в `work/extracted/`.
 Не запускайте извлечённые файлы на host и не меняйте оригинал. Запишите название/версию
 extractor и команду в локальном журнале. Извлечение этим репозиторием пока не автоматизировано.
+Для текущего Europe input использован системный Windows bsdtar; точная версия и команды
+записаны в [отчёте приёмки](INPUT_EUROPE.md). Папка game/ также целиком исключена из Git.
 
 ```powershell
 python scripts/intake.py tree --input-complete --input "work/extracted" --output "work/intake-tree.json"

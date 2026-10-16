@@ -1,10 +1,10 @@
 # Project rules
 
-- Scope: Drakengard 1, PS2, Europe. No game input is available at bootstrap.
+- Scope: Drakengard 1, PS2, Europe. See CURRENT_STATE.md for verified input and progress.
 - Read CURRENT_STATE.md and docs/ROADMAP.md before continuing. Preserve unrelated work.
 - Never search for, inspect, or analyze incoming game files before the user confirms they are complete.
 - Keep original input read-only. Inputs, BIOS, extracted files, analysis exports, generated guest code,
-  saves, traces and screenshots belong in ignored private/, work/, tools/, or generated/.
+  saves, traces and screenshots belong in ignored game/, private/, work/, tools/, or generated/.
 - Public Git contains original source, synthetic tests, configuration templates and reviewed documentation only.
   Run scripts/check_public_tree.py before each publication; review staged content as well.
 - Do not invent addresses, ELF hashes, symbols, timing, supported APIs or runtime success.

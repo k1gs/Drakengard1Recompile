@@ -1,10 +1,11 @@
 # Drakengard 1 Europe — recompilation research
 
 Early preparation for a native PC port of **Drakengard (PlayStation 2, Europe)**.
-**No game image has been supplied. There is no recompiled game or playable build.**
+**The supplied European disc has passed initial local intake. There is no recompiled game or playable build.**
 
-Expected European disc serial: **SLES-52322**. The actual revision, ELF and hashes
-remain unverified until read-only intake of the user's complete copy.
+Observed disc boot serial: **SLES-52322**, SYSTEM.CNF version **1.00**, video mode **PAL**.
+The exact supplied ISO/ELF hashes are recorded in [the intake summary](docs/INPUT_EUROPE.md).
+These identify the local input; external database authenticity/revision matching is not yet verified.
 
 This repository currently provides:
 
@@ -28,6 +29,7 @@ The tool does not extract an ISO, execute guest code, or validate authenticity.
 ## Project notes
 
 - [Current state and next action](CURRENT_STATE.md)
+- [Verified input metadata and initial ELF findings](docs/INPUT_EUROPE.md)
 - [Roadmap and acceptance gates (Russian)](docs/ROADMAP.md)
 - [Runtime architecture and decision criteria](docs/ARCHITECTURE.md)
 - [Sources and candidate tools](docs/RESEARCH.md)
