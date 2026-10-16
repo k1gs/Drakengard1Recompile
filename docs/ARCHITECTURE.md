@@ -2,7 +2,8 @@
 
 Целевая цепочка: локальный образ → извлечённый boot ELF и ресурсы → карта функций →
 статическая трансляция EE → native host runtime → реальные GS/audio/input/file services.
-Сейчас реализован только диагностический intake. Runtime и recompiler не выбраны окончательно.
+Реализованы intake, Ghidra function-map export, guarded lift и diagnostic runner glue.
+Для исследования закреплён PS2Recomp; полнота его runtime для игры ещё не подтверждена.
 
 ## Что проверить до интеграции
 
@@ -17,8 +18,9 @@
 - **Media/input**: CD streaming, SPU2, FMV, pad и memory-card contracts.
 
 Windows x64 — первая платформа. C++20/CMake — предполагаемый стек при выборе PS2Recomp.
-Renderer/API, audio backend и runtime fork остаются открытыми до M2; сейчас нет смысла
-создавать фиктивный C++ launcher, который лишь сообщает об успешном запуске.
+Первый diagnostic host использует upstream raylib/OpenGL и audio backend. Это проверка
+bring-up, а не окончательный выбор renderer/audio architecture. Runner не возвращает
+код успеха как доказательство working port; остановки и unsupported paths диагностируются отдельно.
 
 ## Контракты диагностики
 

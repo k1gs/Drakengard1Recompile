@@ -21,7 +21,8 @@ runtime и IOP модуль, но также предупреждает о ча�
 ## Toolchain register
 
 - Подготовительные scripts: Python 3.10+, standard library, Git.
-- Предполагаемый native build: CMake 3.20+, C++20 compiler, первоначально MSVC x64.
+- Native build: CMake 3.21+ (upstream root requirement), C++20 compiler, первоначально MSVC x64.
 - Перед M2: проверить upstream требования заново, выбрать commit, записать compiler/SDK,
   CMake и зависимости. Не использовать плавающий main как воспроизводимый lock.
-- PCSX2/Ghidra/PS2Recomp сейчас не скачаны, не собраны и не включены в репозиторий.
+- PCSX2/Ghidra/PS2Recomp подготовлены локально; версии и результаты: [TOOLCHAIN.md](TOOLCHAIN.md).
+  Их binaries и third-party source не включены в публичный репозиторий.

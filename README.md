@@ -1,7 +1,7 @@
 # Drakengard 1 Europe — recompilation research
 
 Early preparation for a native PC port of **Drakengard (PlayStation 2, Europe)**.
-**The supplied European disc has passed initial local intake. There is no recompiled game or playable build.**
+**The European ELF has been lifted locally. There is no verified playable build.**
 
 Observed disc boot serial: **SLES-52322**, SYSTEM.CNF version **1.00**, video mode **PAL**.
 The exact supplied ISO/ELF hashes are recorded in [the intake summary](docs/INPUT_EUROPE.md).
@@ -10,6 +10,7 @@ These identify the local input; external database authenticity/revision matching
 This repository currently provides:
 
 - A read-only, opt-in image fingerprint and extracted ELF inspection tool.
+- Pinned PS2Recomp/Ghidra workflow, guarded local lift and diagnostic native runner glue.
 - Synthetic ELF tests and Windows/Linux CI requiring no game or BIOS.
 - A staged research roadmap, evidence requirements and publication checks.
 
@@ -30,14 +31,15 @@ The tool does not extract an ISO, execute guest code, or validate authenticity.
 
 - [Current state and next action](CURRENT_STATE.md)
 - [Verified input metadata and initial ELF findings](docs/INPUT_EUROPE.md)
+- [Pinned toolchain, lift results and build commands](docs/TOOLCHAIN.md)
 - [Roadmap and acceptance gates (Russian)](docs/ROADMAP.md)
 - [Runtime architecture and decision criteria](docs/ARCHITECTURE.md)
 - [Sources and candidate tools](docs/RESEARCH.md)
 - [Source publication policy](docs/PUBLICATION.md)
 
 Windows x64 is the initial intended host. Linux portability is a later goal; current
-cross-platform CI covers preparation tooling only. PS2Recomp is a candidate, not an
-integrated or validated dependency. No upstream runtime is vendored or pinned yet.
+cross-platform CI covers preparation tooling only. PS2Recomp is pinned for local research;
+no upstream runtime or generated game code is vendored. Native coverage remains under validation.
 
 Only original project code and documentation are licensed under MIT. No game data,
 BIOS, original executables or generated game code are distributed. Third-party code,

@@ -5,7 +5,8 @@ import sys
 
 ROOT_FILES = {"README.md", "AGENTS.md", "CURRENT_STATE.md", "LICENSE",
               ".gitignore", ".gitattributes"}
-EXTENSIONS = {"docs": {".md"}, "scripts": {".py"}, "tests": {".py"},
+EXTENSIONS = {"docs": {".md"}, "scripts": {".py", ".java"}, "tests": {".py"},
+              "native": {".cpp", ".h", ".cmake", ".txt"},
               ".github": {".yml", ".yaml", ".md"}}
 
 
