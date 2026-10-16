@@ -9,6 +9,9 @@
 - Инструменты приёмки работают только по явному пути после `--input-complete`.
 - Локальные тесты используют исключительно синтетический ELF.
 - Локально: Python 3.10.0, 8 synthetic tests прошли; doctor выполнен.
+- Публичная репа: https://github.com/k1gs/drakengard1-recomp, ветка main.
+- Bootstrap checkpoint: b776414. Первый CI прошёл все 4 комбинации Windows/Linux ×
+  Python 3.10/3.13: https://github.com/k1gs/drakengard1-recomp/actions/runs/38931534901.
 - В текущем shell найдены Git и CMake; MSVC/clang-cl/Ninja в PATH не обнаружены.
   Это не проверка отсутствия установленного Visual Studio: перед M2 проверить developer shell.
 
