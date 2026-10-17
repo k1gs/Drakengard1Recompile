@@ -1,7 +1,12 @@
 # Состояние проекта
 
-Дата: 2026-10-17. Работа возобновлена пользователем.
+Дата: 2026-10-17. Пользователь попросил плавно завершить сеанс при остатке лимитов 7%.
 M3 EE startup выполнен до service layer. M4: SIF, read-only FileIO и ISO/CDVD backend; меню ещё не получено.
+
+Последний опубликованный implementation checkpoint: `903d5cb` (strict IOP probes), перед ним `b9d67c9`
+(ISO/CDVD/SIF0). CI для `903d5cb` запущен: https://github.com/k1gs/Drakengard1Recompile/actions/runs/39012376077.
+На момент этой записи он ещё выполнялся; предыдущий checkpoint прошёл CI. Собственные исходники
+сохранены; unrelated untracked `.vscode/` не включалась в commits.
 
 ## Сейчас
 
@@ -51,6 +56,12 @@ M3 EE startup выполнен до service layer. M4: SIF, read-only FileIO и 
 - Следующий эксперимент: подтвердить HW_ICFG state/semantics именно на IOP update reboot,
   затем реализовать только проверенный MMIO contract и повторить strict bootstrap.
   Cold-reset zeroing в reference emulator не доказывает значение этого register после BIOS init.
+- Reference-mmio-001 не загрузил нужный профиль: PCSX2 добавляет `PCSX2/` к `-datapath`.
+  Reference-mmio-002 использовал исправленный изолированный профиль и 30-second supervisor.
+  Logs подтверждают boot ELF, регистрацию IOP libraries и PAL CRTC; прямой записи HW_ICFG
+  не получено, видимое меню не проверялось. Оба собственных процесса завершены supervisor.
+  Официальные PINE/SaveState sources 2.8.2 просмотрены как возможный следующий способ чтения
+  `iopHwRegs.bin` из локального reference snapshot. PINE experiment/snapshot ещё не запускался.
 - Проверено: 28 Python tests, C++ exact kernel dispatch, SIF packet, real-file FileIO, ISO/CDVD
   и strict bare IOP checks. Actual game file/sector reads, графика, звук, ввод и сохранения ещё
   не подтверждены. Полного IOP reboot, меню и playable build нет.
