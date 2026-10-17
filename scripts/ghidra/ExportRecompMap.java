@@ -3,6 +3,9 @@
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.FunctionIterator;
+import ghidra.program.model.listing.Instruction;
+import ghidra.program.model.listing.InstructionIterator;
+import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSetView;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.mem.MemoryBlock;
@@ -11,6 +14,7 @@ import ghidra.program.model.address.AddressRangeIterator;
 import java.util.TreeMap;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.ArrayDeque;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,6 +22,12 @@ import java.nio.file.StandardOpenOption;
 import java.io.BufferedWriter;
 
 public class ExportRecompMap extends GhidraScript {
+    private void addInstruction(AddressSet coverage, Instruction instruction) {
+        if (instruction.getLength() != 4 || (instruction.getAddress().getOffset() & 3) != 0)
+            throw new IllegalStateException("Not an aligned EE instruction: " + instruction.getAddress());
+        coverage.add(instruction.getMinAddress(), instruction.getMaxAddress());
+    }
+
     @Override
     public void run() throws Exception {
         String[] args = getScriptArgs();
@@ -31,6 +41,51 @@ public class ExportRecompMap extends GhidraScript {
         for (MemoryBlock block : currentProgram.getMemory().getBlocks())
             if (block.isExecute() && block.isInitialized())
                 executable.add(block.getStart(), block.getEnd());
+        // Shared epilogues can have valid incoming branches and instructions but
+        // no Ghidra function owner. Include only code reached by explicit owned
+        // flow edges, never the whole bounding span or arbitrary unowned bytes.
+        ArrayDeque<Address> pending = new ArrayDeque<>();
+        InstructionIterator instructions = currentProgram.getListing().getInstructions(executable, true);
+        while (instructions.hasNext()) {
+            monitor.checkCancelled();
+            Instruction instruction = instructions.next();
+            if (getFunctionContaining(instruction.getAddress()) == null) continue;
+            for (Address target : instruction.getFlows())
+                if (executable.contains(target) && getFunctionContaining(target) == null &&
+                    getInstructionAt(target) != null) {
+                    pending.add(target);
+                    events.merge(target.getOffset(), 0, Integer::sum);
+                }
+        }
+        AddressSet extra = new AddressSet();
+        while (!pending.isEmpty()) {
+            monitor.checkCancelled();
+            Address address = pending.removeFirst();
+            if (extra.contains(address) || !executable.contains(address) ||
+                getFunctionContaining(address) != null) continue;
+            Instruction instruction = getInstructionAt(address);
+            if (instruction == null) continue;
+            addInstruction(extra, instruction);
+            for (int slot = 1; slot <= instruction.getDelaySlotDepth(); slot++) {
+                Address delay = address.add(slot * 4L);
+                Instruction delayInstruction = getInstructionAt(delay);
+                if (delayInstruction != null && executable.contains(delay) &&
+                    getFunctionContaining(delay) == null) addInstruction(extra, delayInstruction);
+            }
+            if (instruction.getFallThrough() != null) pending.add(instruction.getFallThrough());
+            for (Address target : instruction.getFlows())
+                if (executable.contains(target) && getFunctionContaining(target) == null) {
+                    pending.add(target);
+                    events.merge(target.getOffset(), 0, Integer::sum);
+                }
+        }
+        AddressRangeIterator extraRanges = extra.getAddressRanges();
+        while (extraRanges.hasNext()) {
+            AddressRange range = extraRanges.next();
+            events.merge(range.getMinAddress().getOffset(), 1, Integer::sum);
+            events.merge(range.getMaxAddress().getOffset() + 1, -1, Integer::sum);
+        }
+        println("Reachable unowned instruction bytes: " + extra.getNumAddresses());
         FunctionIterator functions = currentProgram.getFunctionManager().getFunctions(true);
         while (functions.hasNext()) {
             monitor.checkCancelled();

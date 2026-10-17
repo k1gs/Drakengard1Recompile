@@ -38,7 +38,7 @@ python scripts/kernel_image.py --input-complete
 & build/ps2recomp-tools/ps2xRecomp/Release/ps2_recomp.exe work/kernel-image-002/config.toml
 ```
 
-The main native overlay now requires this kernel lift (`generated/kernel-004`) and application lift-005.
+The main native overlay now requires this kernel lift (`generated/kernel-004`) and application lift-007.
 `prepare_kernel.py` checks the pinned image fingerprint, validates the map and writes only
 private build units. Generated headers are renamed to prevent collisions with the main lift.
 No kernel bytes or generated implementations are committed to this repository.

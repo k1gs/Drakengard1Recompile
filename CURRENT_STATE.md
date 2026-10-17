@@ -5,7 +5,8 @@ M3: native diagnostic runtime собран и исполняет EE startup; м�
 
 ## Последний runtime checkpoint
 
-- Source-only public checkpoint: `41dfcbf`; CI прошёл четыре комбинации Windows/Linux × Python 3.10/3.13.
+- Source-only public checkpoint: `e2ea923`; CI прошёл четыре комбинации Windows/Linux × Python 3.10/3.13,
+  включая C++ kernel-dispatch smoke: https://github.com/k1gs/drakengard1-recomp/actions/runs/38968911330.
 - Native build успешно слинкован без `/FORCE:MULTIPLE`: пустая upstream registration unit
   заменена нашим input verifier, generated registration используется единожды.
 - Native runner сам проверяет точный ELF SHA-256 до инициализации окна. Неверный ELF
@@ -45,11 +46,32 @@ M3: native diagnostic runtime собран и исполняет EE startup; м�
   на JALR `0x002625FC` → `0x002625D0`, RA `0x00262604`, SP `0x0011FF70`,
   A0 `0x004849F0`, A1 `1`, A2 `0`, A3 `0x0011FF70`; exit 5 без timeout.
   Binary SHA-256: `3e3f39427cfa1ad2299892346ac3b4641256d8e04d45987e6c1acf4d45908564`.
-  Следующий эксперимент: выяснить отсутствующие references этого callback и расширить map.
+  ELF содержит оба последних callback pointers как raw data words без Ghidra references.
+- `SeedDataPointers.java` восстановил 241 кандидата из initialized non-executable data;
+  известный реальный target `0x002625D0` найден по слову `0x0054B1CC`. Кандидаты не считаются символами/API.
+  Lift-006/build-021 успешны; native-run-011 прошёл callback и остановился на `0x00288AB8`.
+- Выяснено: `0x00288AB4`/`0x00288AB8` — существующие инструкции общего эпилога без function owner,
+  на них ведут реальные ветки. Exporter следует explicit owned flow edges и существующим unowned
+  instructions/fallthrough/delay slots, добавляя 252 code bytes, сохраняя остальные holes.
+  Map-008: 8 172 functions, 8 585 records, 2 191 156 covered bytes.
+- Lift-007/build-022: 8 584 EE fragments, 120 366 resumable entries, 1 538 indirect warnings,
+  0 stubs/skips/decode failures/errors; кандидат `.vutext` исключён upstream.
+- Native-run-012: 40-second timeout; snapshots постоянно PC `0x003223E0`, RA `0x003239D4`,
+  SP `0x0011FCC0`, thread 1. Guest читает SREG[0] по `0x006B0B40`, ожидая SIF RPC initialization.
+- Build-023/native-run-013 повторил этот wait за 20 секунд и записал реальные SIF DMA packets:
+  `0x006B0980` → IOP `0`, size `0x14`, CID `0x80000002`, opt `0`, EE receive buffer `0x006B08C0`;
+  затем `0x006B0C00` → IOP `0`, size `0x10`, тот же CID, opt `1`. Оба AfterCopy подтверждены.
+  Binary SHA-256: `62086f6f712f06381529caa4b51a671862fba5f90024e5823a86368b8e3265a0`.
+- Первый текущий blocker: native SIF command/RPC protocol не обслуживается после реального DMA copy.
+  IopRpcBridge::onSifTransfer не формирует response. Следующий эксперимент — packet-level channel,
+  реальные ответы через guest SIF0 handler и bind/call к существующим backend services; не писать ready flag напрямую.
+- Новые Ghidra synthetic checks прошли: raw pointer positive/negative cases, reachable shared epilogue
+  с сохранением gap, прежний discontinuous-body hole. Воспроизведение: docs/ANALYSIS_REGRESSIONS.md.
 - 19 Python tests и C++ synthetic kernel-dispatch smoke прошли: exact lookup, отказ до copy,
   исполнение после copy, отказ после byte mutation, независимые patch-регионы, invalid address/null RAM.
-- Подробная процедура и ограничения: docs/KERNEL_PATCH.md. CI расширен synthetic C++ smoke;
-  новая удалённая проверка будет запущена после публикации checkpoint.
+- Подробные процедуры и ограничения: docs/KERNEL_PATCH.md и docs/SIF_PROTOCOL.md.
+- PCSX2 baseline-003 создал targetable окно Drakengard в isolated profile и завершён по 60-second timeout.
+  Computer Use capture не состоялся: app approval timed out. Визуальный baseline остаётся неподтверждённым.
 - Все game-derived maps, generated code, snapshots/logs и binaries остаются ignored.
   Меню, кадр игры, звук и геймплей не подтверждены.
 
