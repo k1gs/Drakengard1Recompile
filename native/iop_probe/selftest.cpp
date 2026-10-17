@@ -118,6 +118,45 @@ int main() {
         rejects([&] { bareCall(memory, 0x1014, 0, 0, 0x1000, 0x1030); }, "Unresolved guest import missing:7");
         memory.reset();
         rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030); }, "owned bootstrap code");
+        std::vector<uint8_t> romBytes(0x400000);
+        SifRegisters sif;
+        sif.write(0x1d000000, 0xffffffff); // Peer-owned address remains quiescent.
+        sif.write(0x1d000010, 0x12345678);
+        sif.write(0x1d000030, 0x10000); sif.write(0x1d000030, 0x40000);
+        sif.write(0x1d000020, 0xffffffff); // Clear cannot invent peer bits.
+        sif.write(0x1d000040, 0x20);
+        if (sif.read(0x1d000000) || sif.read(0x1d000010) != 0x12345678 ||
+            sif.read(0x1d000030) != 0x50000 || sif.read(0x1d000020) ||
+            sif.read(0x1d000040) != 0xf0002022 || sif.read(0x1d000060))
+            throw std::runtime_error("SIF direction, flags, control or unused register contract failed");
+        sif.write(0x1d000040, 0x20);
+        if (sif.read(0x1d000040) != 0xf0002002 || sif.allows(0x1d000050, 0x23) || sif.allows(0x1d000000, 0x25))
+            throw std::runtime_error("SIF toggle, reserved register or width guard failed");
+        memory.reset(); code(memory, {0xac800000, 0x8c820000, 0, 0x03e00008, 0});
+        result = bareCall(memory, 0x1000, 0, 0xbd000030, 0x1000, 0x1100,
+                          nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &sif);
+        if (result.value != 0x50000) throw std::runtime_error("SIF set flags were overwritten by CPU SW backing storage");
+        romBytes[0] = 0x78; romBytes[1] = 0x56; romBytes[2] = 0x34; romBytes[3] = 0x92;
+        romBytes.back() = 0xa5;
+        ReadOnlyRom rom(std::move(romBytes));
+        for (uint32_t base : {0x1fc00000u, 0x9fc00000u, 0xbfc00000u}) {
+            memory.reset(); code(memory, {0x8c820000, 0, 0x03e00008, 0});
+            result = bareCall(memory, 0x1000, 0, base, 0x1000, 0x1100,
+                              nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &rom);
+            if (result.value != 0x92345678 || memory.read32(base) != 0)
+                throw std::runtime_error("Read-only ROM alias/load delay or staging restoration failed");
+        }
+        code(memory, {0x90820000, 0, 0x03e00008, 0});
+        result = bareCall(memory, 0x1000, 0, 0xbfffffffu, 0x1000, 0x1100,
+                          nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &rom);
+        if (result.value != 0xa5 || rom.allows(0xc0000000, 0x24) || rom.allows(0xfffe0130, 0x23) ||
+            rom.allows(0x7fc00000, 0x23) || rom.allows(0xbfc00000, 0x2b))
+            throw std::runtime_error("ROM bounds, write protection or KSEG3 exclusion failed");
+        code(memory, {0xac800000, 0x03e00008, 0});
+        rejects([&] { bareCall(memory, 0x1000, 0, 0xbfc00000, 0x1000, 0x1100,
+                               nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &rom); }, "hardware contract");
+        rejects([&] { bareCall(memory, 0xbfc00000, 0, 0, 0x1000, 0x1100,
+                               nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &rom); }, "owned bootstrap code");
         code(memory, {0x3c040001, 0x3c05001f, 0xac800000, 0x24840004, 0x0085102b,
                       0x1440fffc, 0, 0x2402002a, 0x03e00008, 0});
         memory.write32(0x1efffc, 0xdeadbeef); memory.write32(0x1f0000, 0xcafebabe);

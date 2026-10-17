@@ -50,6 +50,13 @@ static bool verifyHash(const char* path, const char* expected) {
 #endif
 }
 
+bool verifyFileSha256(const char* path, const char* expected) {
+    if (!path || !expected) return false;
+    const std::string hash(expected);
+    if (hash.size() != 64 || hash.find_first_not_of("0123456789abcdef") != std::string::npos) return false;
+    return verifyHash(path, expected);
+}
+
 bool verifyEuropeElf(const char* path) {
     return verifyHash(path, "065a94591d295bb936a8dca92e722c3bd72cd05848c7274b26d572b0f782e918");
 }

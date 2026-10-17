@@ -3,7 +3,9 @@
 Дата: 2026-10-17. Пользователь возобновил работу; разрешены дальнейшие эксперименты и focused commits/pushes.
 M3 EE startup выполнен до service layer. M4: SIF, read-only FileIO и ISO/CDVD backend; меню ещё не получено.
 
-Implementation checkpoints перед текущим обновлением: `15d6caf` (cache/owned kernel traps),
+Latest published checkpoint: `21ebdd3` (internal timers and owned IRQ delivery),
+CI passed: https://github.com/k1gs/Drakengard1Recompile/actions/runs/39029964607.
+Prior checkpoints: `5cd093b` (image-backed CDVD and CPU identity), `15d6caf` (cache/owned kernel traps),
 `3cc2f41` (passive reference registers), `903d5cb` (strict IOP probes), перед ним `b9d67c9`
 (ISO/CDVD/SIF0). CI для `903d5cb` запущен: https://github.com/k1gs/Drakengard1Recompile/actions/runs/39012376077.
 CI этого checkpoint и handoff `27fd01b` завершился успешно. Собственные исходники
@@ -11,10 +13,11 @@ CI этого checkpoint и handoff `27fd01b` завершился успешн�
 
 ## Сейчас
 
-- Latest isolated bootstrap-019 executed an actual timer IRQ through the installed guest vector,
-  then stopped at a BIOS data read `0xBFC00000`, PC `0x1A094`, after 4,096,612 LOADCORE
-  instructions and 22,016 isolated cache stores. Next: verified read-only ROM data mapping.
-  Main EE runner still stops at actual IOP reboot; this probe is not yet integrated.
+- Latest isolated bootstrap-021 passes the BIOS data read and SIF register initialization.
+  It reaches the fixed 8M instruction bound waiting for the absent EE peer: SIF F220 is zero,
+  PC `0x1AEE8`, Status `0x401`, 27,904 isolated cache stores. No peer flags are injected.
+  Main EE runner run-021 still stops at actual IOP reboot; this probe is not yet integrated.
+  Next: persistent cooperative IOP execution and a shared directional SIF register bus.
 
 - Native-run-014 прошёл SIF/RPC initialization через реальный SET_SREG reply и гостевой SIF0 handler;
   ready flag напрямую не менялся. Следующий FileIO SID `0x80000001` изначально отсутствовал.
@@ -267,3 +270,27 @@ M2 частично выполнен: визуальный baseline ещё не 
   Next: exact-hash-gated local ROM data mapping. Main EE reboot is still not integrated.
 - Validation: 31 Python tests; native ISO/CDVD checks, deterministic timer checks and optional
   strict bare IOP checks passed. These are not native menu/gameplay validation.
+
+### Verified ROM data and SIF bus checkpoint
+
+- `--boot-rom PATH --boot-rom-sha256 HASH` requires both options and verifies the entire local
+  4-MiB BIOS before any guest instruction. Wrong hash was rejected in iop-rom-refusal-001.log.
+  Data loads use actual immutable ROM words; stores and ROM instruction fetch remain forbidden.
+  Physical/KSEG0/KSEG1 aliases are bounded; KSEG3 BIU control is excluded. Temporary backing
+  words are restored after the core load, retaining actual load-delay behavior.
+- Bootstrap-020 passed the previous ROM read, then stopped at SIF F260 read 0xBD000060,
+  PC 0x1AE74, 4,138,518 instructions, 24,064 isolated cache stores.
+- Reviewed quiescent IOP SIF registers now implement directional addresses/flags, control and the
+  pinned reference's unused F260 view. No EE flag or transfer completion is invented.
+  Bootstrap-021 reached the fixed 8M limit in F220 polling at PC 0x1AEE8, Status 0x401,
+  27,904 cache stores. F220 remains zero because there is no running EE peer in this probe.
+- Native-build-032 / native-run-021 (private executable SHA-256
+  5efccf733ef2b56e68d380898ee7e358ba7661c69ce91ff979ca4bd77d7ed97e) passed ELF/ISO checks,
+  reached the same actual reboot request, then exited 5 without timeout. A read-only diagnostic
+  hook observed no EE SIF MMIO writes before that request. It changes no hardware behavior.
+- Next experiment: retain IOP CPU state across bounded slices, connect both processors to one
+  directional SIF bus, then accept a reboot only with an actual running bootstrap. Do not seed
+  active flags from snapshots or let upstream constant boot-ready reads satisfy the reset wait.
+  DMA START still requires a real engine; main BOOTEND remains fail-closed.
+- New game-free bootstrap interface checks run in CI. Local standalone checks and optional CPU
+  checks passed. Upstream stays pinned/clean; inputs, binaries and all logs stay ignored.

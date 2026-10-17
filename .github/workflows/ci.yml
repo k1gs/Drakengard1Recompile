@@ -27,5 +27,8 @@ jobs:
       - run: cmake -S native/timer_smoke -B build/timer-smoke
       - run: cmake --build build/timer-smoke --config Release
       - run: ctest --test-dir build/timer-smoke -C Release --output-on-failure
+      - run: cmake -S native/bootstrap_smoke -B build/bootstrap-smoke
+      - run: cmake --build build/bootstrap-smoke --config Release
+      - run: ctest --test-dir build/bootstrap-smoke -C Release --output-on-failure
       - run: python scripts/check_public_tree.py
       - run: git diff --check

@@ -9,20 +9,23 @@
 #include "owned_exceptions.h"
 #include "cdvd_device.h"
 #include "iop_timers.h"
+#include "read_only_rom.h"
+#include "sif_registers.h"
 #include <iostream>
 #include <stdexcept>
 #include <string>
 
 struct BareCallResult { uint32_t value{}, instructions{}; };
 
-// Execute only owned RAM code with RAM data accesses. Unknown imports, hardware,
+// Execute only owned RAM code with explicitly mapped data. Unknown imports, hardware,
 // exceptions and the instruction budget are explicit blockers, never zero returns.
 inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t entry,
                               uint32_t gp, uint32_t argument, uint32_t codeBegin, uint32_t codeEnd,
                               const PassiveHardware* hardware = nullptr, CoherentCache* cache = nullptr,
                               QuietInterrupts* interrupts = nullptr, QuiescentDma* dma = nullptr,
                               OwnedExceptions* exceptions = nullptr, drakengard::CdvdDevice* cdvd = nullptr,
-                              drakengard::IopTimers* timers = nullptr) {
+                              drakengard::IopTimers* timers = nullptr, const ReadOnlyRom* rom = nullptr,
+                              SifRegisters* sif = nullptr) {
     using namespace ps2x::iop::detail;
     IopCpuCore core(memory);
     IopImportRegistry imports(memory);
@@ -76,6 +79,8 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
         const uint32_t opcode = instruction >> 26;
         uint32_t interruptRead = 0;
         uint32_t dmaWrite = 0, dmaPrevious = 0, dmaValue = 0;
+        uint32_t sifWrite = 0;
+        std::optional<std::pair<uint32_t, uint32_t>> romRestore;
         if ((opcode >= 0x20 && opcode <= 0x26) || (opcode >= 0x28 && opcode <= 0x2b) || opcode == 0x2e) {
             const uint32_t address = cpu.gpr[(instruction >> 21) & 31] +
                 static_cast<uint32_t>(static_cast<int16_t>(instruction));
@@ -91,16 +96,27 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
             const bool timerWrite = opcode == 0x29 || opcode == 0x2b;
             const bool timerAccess = timers && (timerWrite || opcode == 0x21 || opcode == 0x25 || opcode == 0x23) &&
                 timers->supports(target, width, timerWrite);
+            const bool romAccess = rom && rom->allows(address, opcode);
+            const bool sifAccess = sif && sif->allows(target, opcode);
             if ((target >= IopMemory::RamSize || width > IopMemory::RamSize - target) &&
                 !(hardware && hardware->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
                 !(cache && cache->allows(address, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
                 !(interrupts && interrupts->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
-                !(dma && dma->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) && !cdvdAccess && !timerAccess) {
+                !(dma && dma->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
+                !cdvdAccess && !timerAccess && !romAccess && !sifAccess) {
                 std::cerr << "[bootstrap-mmio-blocker] steps=" << steps << " pc=0x" << std::hex << cpu.pc
                           << " instruction=0x" << instruction << " address=0x" << address << std::dec
                           << " rt_value=0x" << std::hex << cpu.gpr[(instruction >> 16) & 31] << std::dec
                           << " isolated_cache_stores=" << (cache ? cache->isolatedStores : 0) << '\n';
                 throw std::runtime_error("Non-RAM data access requires an explicit hardware contract");
+            }
+            if (romAccess) romRestore = rom->stage(memory, address, opcode);
+            if (sifAccess) {
+                if (opcode == 0x2b) {
+                    sif->write(target, cpu.gpr[(instruction >> 16) & 31]);
+                    sifWrite = target;
+                }
+                memory.write32(address, sif->read(target));
             }
             if (cdvdAccess) {
                 const auto key = static_cast<uint8_t>(target);
@@ -119,6 +135,10 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
         }
         const uint32_t previous = cpu.pc;
         const bool running = core.executeInstruction(cpu);
+        // Temporary staging preserves the upstream core's load-delay behavior
+        // without leaving ROM words in the masked hardware map (BIU aliases).
+        if (romRestore) memory.write32(romRestore->first, romRestore->second);
+        if (sifWrite) memory.write32(sifWrite, sif->read(sifWrite));
         if (!cpu.exception && interruptRead) interrupts->afterRead(memory, interruptRead);
         if (!cpu.exception && dmaWrite) dma->afterWrite(memory, dmaWrite, dmaPrevious, dmaValue);
         if (cdvd && cdvd->takeInterruptEdge()) memory.setInterruptStatus(memory.interruptStatus() | 4u);

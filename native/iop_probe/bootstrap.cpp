@@ -21,13 +21,17 @@ uint32_t word(std::span<const uint8_t> data, size_t offset) {
 
 int main(int argc, char** argv) {
     if (argc < 3 || std::string(argv[1]) != "--input-complete") {
-        std::cerr << "Pass --input-complete private-boot-plan.bin [--hardware-state reviewed-seed.bin] [--coherent-cache]\n"; return 2;
+        std::cerr << "Pass --input-complete private-boot-plan.bin [--hardware-state reviewed-seed.bin] [--coherent-cache]"
+                     " [--disc LOCAL_ISO] [--mecha-profile LOCAL.mec] [--boot-rom LOCAL_BIOS --boot-rom-sha256 REVIEWED_HASH]\n";
+        return 2;
     }
     try {
         using namespace ps2x::iop::detail;
         const char* hardwarePath = nullptr;
         const char* discPath = nullptr;
         const char* mechaPath = nullptr;
+        const char* romPath = nullptr;
+        const char* romHash = nullptr;
         bool coherent = false;
         for (int index = 3; index < argc; ++index) {
             if (std::string(argv[index]) == "--hardware-state" && !hardwarePath && index + 1 < argc)
@@ -36,10 +40,26 @@ int main(int argc, char** argv) {
                 discPath = argv[++index];
             else if (std::string(argv[index]) == "--mecha-profile" && !mechaPath && index + 1 < argc)
                 mechaPath = argv[++index];
+            else if (std::string(argv[index]) == "--boot-rom" && !romPath && index + 1 < argc)
+                romPath = argv[++index];
+            else if (std::string(argv[index]) == "--boot-rom-sha256" && !romHash && index + 1 < argc)
+                romHash = argv[++index];
             else if (std::string(argv[index]) == "--coherent-cache" && !coherent) coherent = true;
             else throw std::runtime_error("Unknown/duplicate bootstrap option");
         }
         if (mechaPath && !discPath) throw std::runtime_error("Mecha profile requires an actual disc backend");
+        if (bool(romPath) != bool(romHash)) throw std::runtime_error("Boot ROM requires both local path and reviewed SHA-256");
+        std::unique_ptr<ReadOnlyRom> rom;
+        if (romPath) {
+            if (!verifyFileSha256(romPath, romHash)) throw std::runtime_error("Boot ROM SHA-256 refused before guest execution");
+            if (std::filesystem::file_size(romPath) != 0x400000) throw std::runtime_error("Boot ROM size refused");
+            std::ifstream input(romPath, std::ios::binary);
+            if (!input) throw std::runtime_error("Cannot open boot ROM read-only");
+            std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(input)), {});
+            if (input.bad()) throw std::runtime_error("Boot ROM read failed");
+            rom = std::make_unique<ReadOnlyRom>(std::move(bytes));
+            std::cerr << "[boot-rom] verified 4-MiB data-only mapping; ROM execution remains unsupported\n";
+        }
         std::unique_ptr<drakengard::IsoMedia> media;
         std::unique_ptr<drakengard::CdvdDevice> cdvd;
         if (discPath) {
@@ -75,6 +95,7 @@ int main(int argc, char** argv) {
         QuiescentDma dma; dma.reset(memory);
         OwnedExceptions exceptions;
         drakengard::IopTimers timers;
+        SifRegisters sif;
         std::cerr << "[iop-clock] one modeled cycle per decoded instruction; no physical/PAL timing claim\n";
         PassiveHardware hardware;
         if (hardwarePath) hardware.load(hardwarePath, memory);
@@ -112,7 +133,7 @@ int main(int argc, char** argv) {
             sysmem.base + uint64_t(sysmem.size) >= SourcePool)
             throw std::runtime_error("SYSMEM bootstrap image refused");
         const auto initialized = bareCall(memory, sysmem.entry, sysmem.gp, IopMemory::RamSize, start, SourcePool,
-                                          &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions, cdvd.get(), &timers);
+                                          &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions, cdvd.get(), &timers, rom.get(), &sif);
         std::cout << "[bootstrap-sysmem] steps=" << initialized.instructions << " free_start=0x"
                   << std::hex << initialized.value << std::dec << '\n';
         if (initialized.value % 16 || initialized.value >= SourcePool - 0x30)
@@ -124,7 +145,7 @@ int main(int argc, char** argv) {
         std::cout << "[bootstrap-loadcore] base=0x" << std::hex << loadcore.base << " entry=0x"
                   << loadcore.entry << " reset_data=0x" << SourcePool << std::dec << " modules=" << count << '\n';
         const auto result = bareCall(memory, loadcore.entry, loadcore.gp, SourcePool, start, SourcePool,
-                                     &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions, cdvd.get(), &timers);
+                                     &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions, cdvd.get(), &timers, rom.get(), &sif);
         std::cout << "[bootstrap-loadcore-return] value=0x" << std::hex << result.value << std::dec
                   << " steps=" << result.instructions << "\nNo EE notification or BOOTEND has been issued\n";
     } catch (const std::exception& error) {

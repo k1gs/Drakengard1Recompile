@@ -155,5 +155,25 @@ function(drakengard_configure_runner)
     list(FILTER runtime_sources EXCLUDE REGEX "Stubs/SIF[.]cpp$")
     set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
     target_sources(ps2_runtime PRIVATE "${sif_file}")
+
+    # Observe actual EE bus writes before wiring a separate IOP bootstrap peer.
+    # This diagnostic copy changes no register value or completion behavior.
+    file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/ps2_memory.cpp" memory_original)
+    set(memory_entry "bool PS2Memory::writeIORegister(uint32_t address, uint32_t value)\n{")
+    string(REPLACE "${memory_entry}"
+        "${memory_entry}\n    diagnoseEeSifRegisterWrite(address, value);"
+        memory_traced "${memory_original}")
+    if(memory_traced STREQUAL memory_original)
+        message(FATAL_ERROR "Pinned EE memory register-write entry changed")
+    endif()
+    set(memory_file "${CMAKE_BINARY_DIR}/private_traced_Memory.cpp")
+    file(CONFIGURE OUTPUT "${memory_file}"
+        CONTENT "#include \"sif_diagnostic.h\"\n${memory_traced}" @ONLY)
+    set_source_files_properties("${memory_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
+        INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
+    get_target_property(runtime_sources ps2_runtime SOURCES)
+    list(FILTER runtime_sources EXCLUDE REGEX "/ps2_memory[.]cpp$")
+    set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
+    target_sources(ps2_runtime PRIVATE "${memory_file}")
 endfunction()
 cmake_language(DEFER CALL drakengard_configure_runner)

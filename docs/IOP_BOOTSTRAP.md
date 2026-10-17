@@ -170,3 +170,31 @@ ctest --test-dir build/timer-smoke -C Release --output-on-failure
 
 Primary counter contracts: [PCSX2 2.8.2 implementation](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopCounters.cpp)
 and [counter state](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopCounters.h).
+
+## ROM data and the EE peer boundary
+
+The probe accepts `--boot-rom LOCAL_BIOS --boot-rom-sha256 REVIEWED_HASH`. Both options are
+required together. The full file hash and 4-MiB size are checked before bootstrap execution.
+The data aperture exposes actual immutable bytes through physical/KSEG0/KSEG1 aliases;
+ROM stores and instruction execution remain unsupported. KSEG3, including BIU control,
+is excluded. Temporary core backing words are restored after each load to avoid alias pollution.
+
+Bootstrap-020 passed ROM lookup and reached SIF F260 at `0xBD000060`. The quiescent IOP bus
+now supports reviewed word address/flag/control registers. F220 is cleared by IOP writes;
+F230 is set by them. Peer address writes cannot create an EE address. The pinned reference's
+F240 functional control bits and unused F260 view are explicit device contracts, not peer
+completion signals. Unknown registers/widths still fail.
+
+Bootstrap-021 reached its fixed 8M bound polling F220 (PC `0x1AEE8`). This is an expected
+missing-peer boundary: the isolated experiment has no executing EE. Active SIF flags are
+never copied from a savestate. Native-run-021 still refuses the real reboot request; a read-only
+MMIO diagnostic recorded no EE bus writes before that refusal. Its original upstream boot
+profile is not a post-reset IOP model. Accepting the reboot requires persistent cooperative
+IOP execution, a shared SIF bus and actual causal DMA/IRQ completion.
+
+Game-free ROM bounds, alias, write-refusal and SIF direction/control tests are available at
+`native/bootstrap_smoke` and run in CI. Optional CPU tests additionally exercise load delays,
+restored backing words and refusal to execute ROM. None of this establishes a native menu.
+
+Primary bus contracts: [PCSX2 2.8.2 IOP memory access](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopMem.cpp),
+[EE writes](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/HwWrite.cpp).

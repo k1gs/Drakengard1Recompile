@@ -6,6 +6,16 @@
 #include <cstring>
 #include <iostream>
 
+inline void diagnoseEeSifRegisterWrite(uint32_t address, uint32_t value) {
+    if (address < 0x1000f200 || address > 0x1000f260) return;
+    static std::atomic<unsigned> count{0};
+    if (count.fetch_add(1) >= 128) return;
+    const auto flags = std::cerr.flags();
+    std::cerr << "[ee-sif-register-write] address=0x" << std::hex << address
+              << " value=0x" << value << std::dec << '\n';
+    std::cerr.flags(flags);
+}
+
 // Observe actual directional transfers; no writes, completion or synthetic replies.
 inline void diagnoseSifTransfer(const uint8_t* ram, const ps2x::iop::SifTransfer& transfer) {
     static std::atomic<unsigned> count{0};
