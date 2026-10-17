@@ -1,12 +1,34 @@
 # Состояние проекта
 
 Дата: 2026-10-17. Работа возобновлена пользователем.
-M3: native diagnostic runtime собран и исполняет EE startup; меню ещё не получено.
+M3 EE startup выполнен до service layer. M4: SIF channel и read-only FileIO backend; меню ещё не получено.
 
-## Последний runtime checkpoint
+## Сейчас
 
-- Source-only public checkpoint: `e2ea923`; CI прошёл четыре комбинации Windows/Linux × Python 3.10/3.13,
-  включая C++ kernel-dispatch smoke: https://github.com/k1gs/drakengard1-recomp/actions/runs/38968911330.
+- Native-run-014 прошёл SIF/RPC initialization через реальный SET_SREG reply и гостевой SIF0 handler;
+  ready flag напрямую не менялся. Следующий FileIO SID `0x80000001` изначально отсутствовал.
+- Реализован packet channel: negotiated EE receive buffer, init, bind, call, other-data, обычное
+  и no-interrupt completion, reset. EE/IOP address spaces сохраняются раздельными; IRQ зависит от reply.
+- FileIO backend использует настоящий runtime VFS для open/read/seek/close в read-only mode.
+  Синтетический file test проверил точные байты, unaligned buffers, EOF, seek, close и отказы.
+- Native-run-015 остановился на FileIO extension `0xFF`. Этот Europe client проверяет reply word 1
+  на версию 2. Backend явно возвращает отрицательный результат расширения, не объявляет версию,
+  не регистрирует переданные callback buffers; legacy read protocol реализован настоящими операциями.
+- Native-run-016 принял этот отказ, прошёл FileIO bind/probe, затем за 40 секунд остался на повторном
+  bind CDVD SID `0x80000592`, available=false. Последние snapshots: PC `0x0030AE18`, RA `0x0030AD64`,
+  SP `0x0011FD70`, thread 1. Exit — supervisor timeout, без подтверждённого кадра/меню.
+  Binary SHA-256: `41fbeb10835e7c9185d6d42c815dde0067f330608087888e65642ab1daaa58fa`.
+- Первый текущий blocker: отсутствует native CDVD RPC backend `0x80000592`. Следующий эксперимент:
+  проверить wire ABI команды, подключить SHA-verified original ISO read-only и обслужить реальные
+  CDVD requests. Не использовать fake disc-ready, fabricated LSN/TOC или guessed timing.
+- Проверено: 19 Python tests, C++ exact kernel dispatch smoke, C++ SIF packet smoke, C++ real-file
+  FileIO smoke. Actual game file/sector reads, графика, звук, ввод и сохранения ещё не подтверждены.
+- Build-028 пересобирает тот же source checkpoint после дополнительной проверки metadata/data overlap.
+
+## История runtime checkpoint
+
+- Source-only public checkpoint: `b666696`; CI прошёл четыре комбинации Windows/Linux × Python 3.10/3.13,
+  включая C++ kernel-dispatch smoke: https://github.com/k1gs/Drakengard1Recompile/actions/runs/39009134734.
 - Native build успешно слинкован без `/FORCE:MULTIPLE`: пустая upstream registration unit
   заменена нашим input verifier, generated registration используется единожды.
 - Native runner сам проверяет точный ELF SHA-256 до инициализации окна. Неверный ELF
@@ -62,9 +84,9 @@ M3: native diagnostic runtime собран и исполняет EE startup; м�
   `0x006B0980` → IOP `0`, size `0x14`, CID `0x80000002`, opt `0`, EE receive buffer `0x006B08C0`;
   затем `0x006B0C00` → IOP `0`, size `0x10`, тот же CID, opt `1`. Оба AfterCopy подтверждены.
   Binary SHA-256: `62086f6f712f06381529caa4b51a671862fba5f90024e5823a86368b8e3265a0`.
-- Первый текущий blocker: native SIF command/RPC protocol не обслуживается после реального DMA copy.
-  IopRpcBridge::onSifTransfer не формирует response. Следующий эксперимент — packet-level channel,
-  реальные ответы через guest SIF0 handler и bind/call к существующим backend services; не писать ready flag напрямую.
+- Исторический blocker run-013: native SIF command/RPC protocol не обслуживался после реального DMA copy.
+  IopRpcBridge::onSifTransfer не формировал response. Этот этап пройден packet-level channel,
+  реальными ответами через guest SIF0 handler и bind/call к backend services; см. текущий статус выше.
 - Новые Ghidra synthetic checks прошли: raw pointer positive/negative cases, reachable shared epilogue
   с сохранением gap, прежний discontinuous-body hole. Воспроизведение: docs/ANALYSIS_REGRESSIONS.md.
 - 19 Python tests и C++ synthetic kernel-dispatch smoke прошли: exact lookup, отказ до copy,
@@ -111,9 +133,9 @@ M3: native diagnostic runtime собран и исполняет EE startup; м�
 - Инструменты приёмки работают только по явному пути после `--input-complete`.
 - Локальные тесты используют исключительно синтетический ELF.
 - Локально: Python 3.10.0; 15 synthetic tests прошли, native return42 smoke исполнен.
-- Публичная репа: https://github.com/k1gs/drakengard1-recomp, ветка main.
+- Публичная репа: https://github.com/k1gs/Drakengard1Recompile, ветка main.
 - Bootstrap checkpoint: b776414. Первый CI прошёл все 4 комбинации Windows/Linux ×
-  Python 3.10/3.13: https://github.com/k1gs/drakengard1-recomp/actions/runs/38931534901.
+  Python 3.10/3.13: https://github.com/k1gs/Drakengard1Recompile/actions/runs/38931534901.
 - Найден и использован MSVC 19.41 x64 (VS 2022), Windows SDK 10.0.22621.0.
 
 ## Ещё не подтверждено

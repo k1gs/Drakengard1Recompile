@@ -26,7 +26,13 @@ function(drakengard_configure_runner)
     endif()
     file(GLOB kernel_sources CONFIGURE_DEPENDS "${kernel_units}/*.cpp")
     target_sources(ps2EntryRunner PRIVATE ${kernel_sources}
-        "${REPO_ROOT}/native/runner/kernel_functions.cpp")
+        "${REPO_ROOT}/native/runner/kernel_functions.cpp"
+        "${REPO_ROOT}/native/runner/sif_channel.cpp"
+        "${REPO_ROOT}/native/runner/fileio_rpc.cpp"
+        "${REPO_ROOT}/native/runner/sif_transport.cpp")
+    set_source_files_properties("${REPO_ROOT}/native/runner/sif_transport.cpp"
+        TARGET_DIRECTORY ps2EntryRunner PROPERTIES
+        INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
     target_include_directories(ps2EntryRunner PRIVATE "${kernel_units}")
     target_include_directories(ps2EntryRunner PRIVATE "${GENERATED_DIR}")
     set_target_properties(ps2EntryRunner PROPERTIES
@@ -93,19 +99,45 @@ function(drakengard_configure_runner)
         message(FATAL_ERROR "Pinned lookupFunction contract changed")
     endif()
     string(REPLACE "m_iopSubsystem->onSifTransfer(transfer);"
-        "diagnoseSifTransfer(rdram, transfer);\n    m_iopSubsystem->onSifTransfer(transfer);"
+        "diagnoseSifTransfer(rdram, transfer);\n    m_iopSubsystem->onSifTransfer(transfer);\n    drakengard::processSifTransfer(this, rdram, transfer);"
         runtime_traced "${runtime_extended}")
     if(runtime_traced STREQUAL runtime_extended)
         message(FATAL_ERROR "Pinned SIF transfer contract changed")
     endif()
+    string(REPLACE "m_iopSubsystem->reset();"
+        "drakengard::resetSifChannel(this);\n    m_iopSubsystem->reset();"
+        runtime_reset "${runtime_traced}")
+    if(runtime_reset STREQUAL runtime_traced)
+        message(FATAL_ERROR "Pinned IOP reset contract changed")
+    endif()
     set(runtime_file "${CMAKE_BINARY_DIR}/private_extended_Runtime.cpp")
     file(CONFIGURE OUTPUT "${runtime_file}"
-        CONTENT "#include \"kernel_functions.h\"\n#include \"sif_diagnostic.h\"\n${runtime_traced}" @ONLY)
+        CONTENT "#include \"kernel_functions.h\"\n#include \"sif_diagnostic.h\"\n#include \"sif_transport.h\"\n${runtime_reset}" @ONLY)
     set_source_files_properties("${runtime_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
         INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
     get_target_property(runtime_sources ps2_runtime SOURCES)
     list(FILTER runtime_sources EXCLUDE REGEX "/ps2_runtime[.]cpp$")
     set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
     target_sources(ps2_runtime PRIVATE "${runtime_file}")
+
+    # Outgoing EE -> IOP DMA is not an incoming EE SIF0 interrupt. Raise it only
+    # when the channel has actually delivered an IOP -> EE command reply.
+    set(sif_original_path "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/Kernel/Stubs/SIF.cpp")
+    file(READ "${sif_original_path}" sif_original)
+    string(REPLACE "ps2_syscalls::dispatchDmacHandlersForCause(rdram, runtime, 5u);"
+        "if (drakengard::takeSifReplyInterrupt(runtime)) ps2_syscalls::dispatchDmacHandlersForCause(rdram, runtime, 5u);"
+        sif_directional "${sif_original}")
+    if(sif_directional STREQUAL sif_original)
+        message(FATAL_ERROR "Pinned SIF DMA interrupt contract changed")
+    endif()
+    set(sif_file "${CMAKE_BINARY_DIR}/private_directional_SIF.cpp")
+    file(CONFIGURE OUTPUT "${sif_file}"
+        CONTENT "#include \"sif_transport.h\"\n${sif_directional}" @ONLY)
+    set_source_files_properties("${sif_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
+        INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/Kernel/Stubs")
+    get_target_property(runtime_sources ps2_runtime SOURCES)
+    list(FILTER runtime_sources EXCLUDE REGEX "Stubs/SIF[.]cpp$")
+    set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
+    target_sources(ps2_runtime PRIVATE "${sif_file}")
 endfunction()
 cmake_language(DEFER CALL drakengard_configure_runner)
