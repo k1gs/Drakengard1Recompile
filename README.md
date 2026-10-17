@@ -12,7 +12,9 @@ This repository currently provides:
 - A read-only, opt-in image fingerprint and extracted ELF inspection tool.
 - Pinned PS2Recomp/Ghidra workflow, guarded local lift and diagnostic native runner glue.
 - An observed kernel-patch translation experiment with exact dispatch and instruction checks.
-- Synthetic ELF tests and Windows/Linux CI requiring no game or BIOS.
+- Directional SIF/RPC, read-only FileIO and SHA-verified ISO/CDVD services.
+- Guarded ROMDIR inventory and an isolated IOP bootstrap experiment, separate from the EE runner.
+- Synthetic Python/C++ tests and Windows/Linux CI requiring no game or BIOS.
 - A staged research roadmap, evidence requirements and publication checks.
 
 ## Start
@@ -34,13 +36,16 @@ The tool does not extract an ISO, execute guest code, or validate authenticity.
 - [Verified input metadata and initial ELF findings](docs/INPUT_EUROPE.md)
 - [Pinned toolchain, lift results and build commands](docs/TOOLCHAIN.md)
 - [Kernel patch evidence, local preparation and validation limits](docs/KERNEL_PATCH.md)
+- [SIF protocol and service coverage](docs/SIF_PROTOCOL.md)
+- [Read-only ISO/CDVD media and checks](docs/MEDIA.md)
+- [IOP bootstrap evidence and current hardware blocker](docs/IOP_BOOTSTRAP.md)
 - [Roadmap and acceptance gates (Russian)](docs/ROADMAP.md)
 - [Runtime architecture and decision criteria](docs/ARCHITECTURE.md)
 - [Sources and candidate tools](docs/RESEARCH.md)
 - [Source publication policy](docs/PUBLICATION.md)
 
 Windows x64 is the initial intended host. Linux portability is a later goal; current
-cross-platform CI covers preparation tooling only. PS2Recomp is pinned for local research;
+cross-platform CI covers preparation tooling and standalone synthetic C++ service tests. PS2Recomp is pinned for local research;
 no upstream runtime or generated game code is vendored. Native coverage remains under validation.
 
 Only original project code and documentation are licensed under MIT. No game data,

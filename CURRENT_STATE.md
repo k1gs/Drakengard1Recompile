@@ -33,16 +33,33 @@ M3 EE startup выполнен до service layer. M4: SIF, read-only FileIO и 
   Backend явно остановился перед перезапуском; BOOTEND не выставляется. Exit 5, без timeout.
   Build-031 binary SHA-256: `8319df6c24d14359e5576bd4c4ec4e64cb214d16cc2d121f98567655521de002`.
 - Первый текущий blocker: actual IOP reboot/module initialization по этому запросу.
-  Следующий эксперимент: проверить ROMDIR/EXTINFO IOPRP280, порядок и зависимости модулей,
-  затем проверить фактическую загрузку/выполнение вместо unconditional reset-success.
-- Проверено: 19 Python tests, C++ exact kernel dispatch, SIF packet, real-file FileIO и ISO/CDVD
-  smoke. Actual game file/sector reads, графика, звук, ввод и сохранения ещё не подтверждены.
+  Отдельный strict bootstrap probe уже исполнил SYSMEM → LOADCORE и остановился перед неизвестным MMIO.
+- ROMDIR tool проверил IOPRP280: 269 889 bytes, 19 entries, 16 MIPS ELF images;
+  SHA-256 `58e8ddcf97b494600bac8df81397a0b51f6dea1eacfc242d56fe2cfdc8339916`.
+  Отдельный pinned IOP loader probe загрузил все 16 в IOP RAM: relocations_complete=true.
+  Это проверка образов/релокаций, не фактическая инициализация 16 модулей.
+- Read-only ROMDIR/EXTINFO анализ локального reference BIOS дал настоящий IOPBTCONF.
+  Версионный выбор из base ROM + update дал 29 boot modules; private plan — work/iop-boot-plan-001.
+  BIOS, boot configuration text, module bytes и boot bundle не публикуются.
+- Bare SYSMEM experiment: placement `0x830`, entry `0x890`, A0 = 2 MiB; actual return `0x1800`
+  после 703 instructions. LOADCORE помещён в `0x1830` по UDNL ABI; ему передан настоящий
+  layout ResetData с выбранными module images в изолированной 2-MiB RAM.
+- Bootstrap-001 остановился после 14 485 LOADCORE instructions: IOP PC `0xA000344C`,
+  read address `0xBF801450` (HW_ICFG по PCSX2 2.8.2). Значение не подставлялось.
+  RAM-only probe не исполняет HLE success-fallback, запрещает unknown imports/MMIO/exceptions
+  и имеет фиксированный instruction budget. Он пока не подключён к EE reboot request.
+- Следующий эксперимент: подтвердить HW_ICFG state/semantics именно на IOP update reboot,
+  затем реализовать только проверенный MMIO contract и повторить strict bootstrap.
+  Cold-reset zeroing в reference emulator не доказывает значение этого register после BIOS init.
+- Проверено: 28 Python tests, C++ exact kernel dispatch, SIF packet, real-file FileIO, ISO/CDVD
+  и strict bare IOP checks. Actual game file/sector reads, графика, звук, ввод и сохранения ещё
+  не подтверждены. Полного IOP reboot, меню и playable build нет.
 
 ## История runtime checkpoint
 
-- Последний опубликованный source checkpoint перед ISO/CDVD: `cb27445`; CI прошёл четыре комбинации
-  Windows/Linux × Python 3.10/3.13, включая C++ kernel/SIF/FileIO checks:
-  https://github.com/k1gs/Drakengard1Recompile/actions/runs/39010188639.
+- ISO/CDVD source checkpoint `b9d67c9`: CI прошёл четыре комбинации Windows/Linux × Python 3.10/3.13,
+  включая C++ kernel/SIF/FileIO/ISO checks:
+  https://github.com/k1gs/Drakengard1Recompile/actions/runs/39011480291.
 - Native build успешно слинкован без `/FORCE:MULTIPLE`: пустая upstream registration unit
   заменена нашим input verifier, generated registration используется единожды.
 - Native runner сам проверяет точный ELF SHA-256 до инициализации окна. Неверный ELF
