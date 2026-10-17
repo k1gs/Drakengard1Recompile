@@ -1,7 +1,7 @@
 # Project rules
 
-- Scope: Drakengard 1, PS2, Europe. See CURRENT_STATE.md for verified input and progress.
-- Read CURRENT_STATE.md and docs/ROADMAP.md before continuing. Preserve unrelated work.
+- Scope: Drakengard 1, PS2, Europe. CURRENT_STATE.md is a local, ignored progress journal.
+- Read CURRENT_STATE.md when available and docs/ROADMAP.md before continuing. Preserve unrelated work.
 - Never search for, inspect, or analyze incoming game files before the user confirms they are complete.
 - Keep original input read-only. Inputs, BIOS, extracted files, analysis exports, generated guest code,
   saves, traces and screenshots belong in ignored game/, private/, work/, tools/, or generated/.

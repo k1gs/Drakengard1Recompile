@@ -3,7 +3,7 @@ from pathlib import PurePosixPath
 import subprocess
 import sys
 
-ROOT_FILES = {"README.md", "AGENTS.md", "CURRENT_STATE.md", "LICENSE",
+ROOT_FILES = {"README.md", "AGENTS.md", "LICENSE",
               ".gitignore", ".gitattributes"}
 EXTENSIONS = {"docs": {".md"}, "scripts": {".py", ".java"}, "tests": {".py"},
               "native": {".cpp", ".h", ".cmake", ".txt"},

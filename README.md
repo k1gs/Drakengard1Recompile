@@ -32,7 +32,6 @@ The tool does not extract an ISO, execute guest code, or validate authenticity.
 
 ## Project notes
 
-- [Current state and next action](CURRENT_STATE.md)
 - [Verified input metadata and initial ELF findings](docs/INPUT_EUROPE.md)
 - [Pinned toolchain, lift results and build commands](docs/TOOLCHAIN.md)
 - [Kernel patch evidence, local preparation and validation limits](docs/KERNEL_PATCH.md)
