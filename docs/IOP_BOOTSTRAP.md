@@ -68,8 +68,39 @@ The gate's value was 1 in every snapshot; primary dmacman source implements get/
 
 Bootstrap-002 passed HW_ICFG, then stopped at the DMA-global gate, PC 0xA0003470. Bootstrap-003
 with both registers stopped at 0xFFFE0130, PC 0xA0003488, after 14,500 LOADCORE instructions.
-Next: establish the coherent instruction-cache/cache-isolation contract. Flush stores with
-CP0.Status.IsC must not overwrite backing RAM. Cache-control is still an explicit blocker.
+
+## Functional cache and kernel execution
+
+The optional `--coherent-cache` mode executes the guest flush routine with coherent instruction
+fetch, a small BIU shadow and isolated cache-line zero stores that leave backing RAM intact.
+Supported control values are 0, 0xC04 and 0xC4; other isolated accesses remain unsupported.
+Initial shadow zero follows the pinned reference's BIU read fallback, not a measured physical
+BIU/reset state. The model has no cache timing. A private build-tree CPU unit changes only the
+isolated word-store side effect; the original checkout and EE runtime remain unchanged.
+
+The first apparent instruction-budget stall was a finite word fill, not a fixed wait. The observed
+loop increments the write pointer by four until its end address. A 2-MiB five-instruction-per-word
+fill already needs ~2.62M instructions. After a synthetic 1.875-MiB fill/boundary regression, the
+fixed cap became 8M; an intentional infinite loop still stops. Budget diagnostics record PC,
+registers and a bounded code window only in local logs.
+
+The quiescent interrupt model implements I_STAT acknowledgement, I_MASK storage and I_CTRL
+read-and-disable. DMA interrupt registers implement write-one-to-clear flags and master IRQ;
+priority/idle-channel storage does not imply a transfer. A channel start is explicitly refused
+until an actual engine is implemented. No device events, completed DMA or successful IRQ delivery
+are fabricated. An actual pending IRQ requires a separate exception-delivery implementation.
+
+SYSCALL traps execute the nonzero exception vector that the real guest kernel installed at 0x80.
+Only actual owned vector instructions are fetched; CPU EPC/Cause/Status and guest RFE perform the
+return. No host syscall result is substituted. Unknown exceptions remain fatal. Synthetic checks
+cover a real guest handler returning via EPC+4/RFE, missing vectors, cache/RAM preservation,
+I_CTRL side effects, pending IRQ rejection, DMA W1C flags and unsupported channel starts.
+
+Bootstrap-012 passed six guest kernel syscalls and stopped at a byte read of 0xBF402005,
+IOP PC 0xAF18, after 2,402,274 instructions in the LOADCORE call. It performed 10,240 isolated
+cache stores without corrupting backing RAM. The next experiment is the actual CDVD hardware
+interface backed by verified media, including real DMA bytes/IRQ completion. This does not yet
+establish that all selected modules initialized, that EE reboot completes, or that a menu renders.
 
 Strict synthetic C++ checks cover normal return/delay slot, exception, non-RAM access, unresolved
 import, unowned instruction fetch and instruction-budget exhaustion. Python tests cover ROMFS
@@ -85,3 +116,6 @@ Reference capture: [loopback PINE protocol](https://github.com/PCSX2/pcsx2/blob/
 [register reads](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/ps2/Iop/IopHwRead.cpp),
 [register writes](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/ps2/Iop/IopHwWrite.cpp),
 and [DMA-global get/set](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/system/dmacman/src/dmacman.c).
+Cache isolation and syscall contracts:
+[LOADCORE flush routines](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/system/loadcore/src/loadcore.c),
+[PCSX2 functional IOP memory path](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopMem.cpp).

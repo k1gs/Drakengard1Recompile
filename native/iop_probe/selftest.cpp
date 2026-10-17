@@ -44,6 +44,51 @@ int main() {
         put(20, 0x1f801450);
         rejects([&] { hardware.seed(seed, memory); }, "duplicate passive hardware register");
         if (memory.read32(0xbf801578) != 0) throw std::runtime_error("Rejected seed changed hardware");
+        memory.reset(); memory.write32(0x800, 0xdeadbeef);
+        code(memory, {0x3c08fffe, 0x35080130, 0x24090c04, 0xad090000, 0x3c0a0001,
+                      0x408a6000, 0x240b0800, 0xad600000, 0x40806000, 0xad000000,
+                      0x2402002a, 0x03e00008, 0});
+        CoherentCache cache; cache.initialize(memory);
+        result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100, nullptr, &cache);
+        if (result.value != 42 || cache.isolatedStores != 1 || memory.read32(0x800) != 0xdeadbeef ||
+            memory.read32(0xfffe0130) != 0)
+            throw std::runtime_error("Cache isolation corrupted backing RAM or BIU restore");
+        code(memory, {0x3c0a0001, 0x408a6000, 0xad600000, 0x03e00008, 0});
+        rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030); }, "explicit coherent-cache mode");
+        rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030, nullptr, &cache); }, "Unsupported isolated cache access");
+        memory.reset(); QuietInterrupts interrupts; interrupts.reset(memory);
+        code(memory, {0x24020001, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
+        result = bareCall(memory, 0x1000, 0, 0xbf801078, 0x1000, 0x1030, nullptr, nullptr, &interrupts);
+        if (result.value != 1 || memory.interruptControl() != 0)
+            throw std::runtime_error("I_CTRL read must return prior value and disable interrupts");
+        memory.setInterruptStatus(0x42); memory.setInterruptMask(0x40); memory.setInterruptControl(1);
+        rejects([&] { interrupts.checkDelivery(memory); }, "requires actual exception delivery");
+        memory.setInterruptControl(0);
+        code(memory, {0xac800000, 0x8c820000, 0, 0x03e00008, 0});
+        result = bareCall(memory, 0x1000, 0, 0xbf801070, 0x1000, 0x1030, nullptr, nullptr, &interrupts);
+        if (result.value != 0 || memory.interruptStatus() != 0)
+            throw std::runtime_error("I_STAT acknowledge did not clear actual pending bits");
+        memory.reset(); QuiescentDma dma; dma.reset(memory);
+        memory.write32(0x1f8010f4, 0x03000000); // Two actual flags in the synthetic device state.
+        dma.afterWrite(memory, 0x1f8010f4, 0x03000000, 0x01810000); // Ack one; enable remaining.
+        if (memory.read32(0x1f8010f4) != 0x02810000 || memory.interruptStatus() != 0)
+            throw std::runtime_error("DMA W1C acknowledge changed wrong flags");
+        dma.afterWrite(memory, 0x1f8010f4, 0x02810000, 0x00820000);
+        if (memory.read32(0x1f8010f4) != 0x82820000 || memory.interruptStatus() != 8)
+            throw std::runtime_error("DMA enabled flag did not assert actual IRQ state");
+        rejects([&] { dma.allows(0x1f801528, 0x2b, 0x01000000); }, "requires an actual transfer engine");
+        if (!dma.allows(0x1f801528, 0x2b, 0) || dma.allows(0x1f80153c, 0x2b, 0))
+            throw std::runtime_error("DMA idle control/reserved register boundary failed");
+        memory.reset(); code(memory, {0x0000000c, 0x2402002a, 0x03e00008, 0});
+        OwnedExceptions exceptions;
+        rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100, nullptr, nullptr, nullptr, nullptr, &exceptions); },
+                "raised an exception");
+        if (!memory.zeroRam(0x80, 0x80)) throw std::runtime_error("Vector fixture range failed");
+        const uint32_t handler[] = {0x401a7000, 0, 0x275a0004, 0x03400008, 0x42000010};
+        for (unsigned index = 0; index < 5; ++index) memory.write32(0x80 + index * 4, handler[index]);
+        result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100, nullptr, nullptr, nullptr, nullptr, &exceptions);
+        if (result.value != 42 || exceptions.syscalls != 1)
+            throw std::runtime_error("Actual guest syscall vector did not return through EPC/RFE");
         memory.reset(); code(memory, {0xfc000000}); // Unsupported instruction must raise an exception.
         rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030); }, "raised an exception");
         memory.reset();
@@ -53,6 +98,13 @@ int main() {
         rejects([&] { bareCall(memory, 0x1014, 0, 0, 0x1000, 0x1030); }, "Unresolved guest import missing:7");
         memory.reset();
         rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030); }, "owned bootstrap code");
+        code(memory, {0x3c040001, 0x3c05001f, 0xac800000, 0x24840004, 0x0085102b,
+                      0x1440fffc, 0, 0x2402002a, 0x03e00008, 0});
+        memory.write32(0x1efffc, 0xdeadbeef); memory.write32(0x1f0000, 0xcafebabe);
+        result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100);
+        if (result.instructions <= 2000000 || result.value != 42 || memory.read32(0x1efffc) != 0 ||
+            memory.read32(0x1f0000) != 0xcafebabe)
+            throw std::runtime_error("Finite RAM clear was cut short or crossed its end boundary");
         code(memory, {0x1000ffff, 0}); // Deliberate bounded loop.
         rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030); }, "instruction budget");
         std::cout << "Bare IOP return, exception, MMIO, unresolved import, ownership and budget checks passed\n";

@@ -66,8 +66,28 @@ CI этого checkpoint и handoff `27fd01b` завершился успешн�
   с gate values 0/1; старт DMA channel по-прежнему запрещён.
 - Bootstrap-003 с двумя подтверждёнными registers дошёл до IOP PC `0xA0003488`,
   read `0xFFFE0130`, после 14 500 LOADCORE instructions. Это cache-control/BIU path.
-  Следующий эксперимент: проверить functional coherent-cache contract и cache isolation:
-  cache-flush stores при CP0.Status.IsC не должны менять backing RAM/code.
+- Реализован отдельный opt-in `--coherent-cache`: functional coherent instruction fetch,
+  узкий BIU shadow для flush (0/0xC04/0xC4), zero stores в cache lines при IsC не меняют RAM.
+  Начальный shadow=0 соответствует read fallback pinned PCSX2; это выбранная functional model,
+  не замер hardware BIU/reset value. Private CPU build unit изменяет только isolated word store.
+- Bootstrap-005/006 достиг PC `0x2B48`, старый 2-M instruction cap. Фактический цикл — конечный
+  word fill: SW, pointer+=4, SLTU pointer/end, branch. Это не постоянный wait; pointer двигался
+  к `0x1FF100`. После synthetic 1.875-MiB clear regression лимит стал фиксированным 8 M:
+  один 2-MiB fill сам требует ~2.62 M instructions. Бесконечный loop по-прежнему ограничен.
+- Bootstrap-007/008 прошёл fill и kernel cache flushes, дошёл до interrupt/DMA registers.
+  Добавлены quiescent controller reset, I_STAT acknowledge, I_MASK storage и read-and-disable I_CTRL;
+  DMA controls, DICR W1C flags/master-IRQ calculation, explicit rejection of actual channel start.
+  Pending IRQ требует реальной exception delivery; snapshot IRQ/timers не восстанавливаются.
+- Kernel установил фактический exception vector в RAM `0x80`. Разрешён SYSCALL trap только
+  к этому owned nonzero vector, с настоящими EPC/Cause/Status и исполнением guest handler/RFE.
+  Unknown exceptions/imports остаются blockers. Synthetic handler вернул 42 через EPC+4/RFE.
+- Bootstrap-012 исполнил 6 реальных kernel syscalls (V0=0x10/0x14), затем остановился
+  после 2 402 274 LOADCORE-call instructions: IOP PC `0xAF18`, byte read `0xBF402005`.
+  Это следующий CDVD hardware interface blocker. 10 240 isolated cache stores не изменяли RAM.
+  Все 29 модулей полностью initialized не заявляются: reaching this code не доказывает их outcomes.
+- Следующий эксперимент: проверить CDVD register 0x05 и реализовать ограниченный actual image-backed
+  controller contract, затем DMA/IRQ completion только с настоящими bytes. Не подставлять ready/status
+  без соответствующего device backend. EE reboot request пока по-прежнему явно отказывает.
 - Reference-mmio-001 не загрузил нужный профиль: PCSX2 добавляет `PCSX2/` к `-datapath`.
   Reference-mmio-002 использовал исправленный изолированный профиль и 30-second supervisor.
   Logs подтверждают boot ELF, регистрацию IOP libraries и PAL CRTC; прямой записи HW_ICFG

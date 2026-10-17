@@ -3,6 +3,10 @@
 #include "core/iop_cpu.h"
 #include "imports/iop_imports.h"
 #include "passive_hardware.h"
+#include "coherent_cache.h"
+#include "quiet_interrupts.h"
+#include "quiescent_dma.h"
+#include "owned_exceptions.h"
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -13,7 +17,9 @@ struct BareCallResult { uint32_t value{}, instructions{}; };
 // exceptions and the instruction budget are explicit blockers, never zero returns.
 inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t entry,
                               uint32_t gp, uint32_t argument, uint32_t codeBegin, uint32_t codeEnd,
-                              const PassiveHardware* hardware = nullptr) {
+                              const PassiveHardware* hardware = nullptr, CoherentCache* cache = nullptr,
+                              QuietInterrupts* interrupts = nullptr, QuiescentDma* dma = nullptr,
+                              OwnedExceptions* exceptions = nullptr) {
     using namespace ps2x::iop::detail;
     IopCpuCore core(memory);
     IopImportRegistry imports(memory);
@@ -22,36 +28,85 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
     cpu.pc = entry; cpu.gpr[4] = argument; cpu.gpr[28] = gp;
     cpu.gpr[29] = IopMemory::RamSize - 4096;
     cpu.gpr[31] = ReturnBoundary;
-    for (uint32_t steps = 0; steps < 2000000; ++steps) {
+    // A legitimate 2-MiB word fill alone uses ~2.62M instructions (five per word).
+    // Keep a finite bound that also permits the following module bootstrap work.
+    for (uint32_t steps = 0; steps < 8000000; ++steps) {
         if (cpu.pc == ReturnBoundary) return {cpu.gpr[2], steps};
         const uint32_t physical = IopMemory::physicalAddress(cpu.pc);
-        if (physical < codeBegin || uint64_t(physical) + 4 > codeEnd || (cpu.pc & 3) ||
+        const bool vector = exceptions && exceptions->vectorOwns(memory, physical);
+        if (((physical < codeBegin || uint64_t(physical) + 4 > codeEnd) && !vector) || (cpu.pc & 3) ||
             !memory.ownsRamRange(physical, 4))
             throw std::runtime_error("Execution left owned bootstrap code RAM");
         if (const auto call = imports.decode(cpu.pc))
             throw std::runtime_error("Unresolved guest import " + call->library + ":" + std::to_string(call->ordinal));
         const uint32_t instruction = memory.read32(cpu.pc);
         const uint32_t opcode = instruction >> 26;
+        uint32_t interruptRead = 0;
+        uint32_t dmaWrite = 0, dmaPrevious = 0, dmaValue = 0;
         if ((opcode >= 0x20 && opcode <= 0x26) || (opcode >= 0x28 && opcode <= 0x2b) || opcode == 0x2e) {
             const uint32_t address = cpu.gpr[(instruction >> 21) & 31] +
                 static_cast<uint32_t>(static_cast<int16_t>(instruction));
             const auto target = IopMemory::physicalAddress(address);
             const unsigned width = opcode == 0x20 || opcode == 0x24 || opcode == 0x28 ? 1 :
                 opcode == 0x21 || opcode == 0x25 || opcode == 0x29 ? 2 : 4;
+            if (cpu.cop0[12] & 0x10000u) {
+                if (!cache) throw std::runtime_error("Cache isolation requires explicit coherent-cache mode");
+                cache->isolatedAccess(memory, address, opcode, cpu.gpr[(instruction >> 16) & 31]);
+            }
             if ((target >= IopMemory::RamSize || width > IopMemory::RamSize - target) &&
-                !(hardware && hardware->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31]))) {
+                !(hardware && hardware->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
+                !(cache && cache->allows(address, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
+                !(interrupts && interrupts->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
+                !(dma && dma->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31]))) {
                 std::cerr << "[bootstrap-mmio-blocker] steps=" << steps << " pc=0x" << std::hex << cpu.pc
-                          << " instruction=0x" << instruction << " address=0x" << address << std::dec << '\n';
+                          << " instruction=0x" << instruction << " address=0x" << address << std::dec
+                          << " isolated_cache_stores=" << (cache ? cache->isolatedStores : 0) << '\n';
                 throw std::runtime_error("Non-RAM data access requires an explicit hardware contract");
+            }
+            if (interrupts && opcode == 0x23 && interrupts->allows(target, opcode, 0)) interruptRead = target;
+            if (dma && opcode == 0x2b && dma->interruptRegister(target)) {
+                dmaWrite = target; dmaPrevious = memory.read32(target); dmaValue = cpu.gpr[(instruction >> 16) & 31];
             }
         }
         const uint32_t previous = cpu.pc;
         const bool running = core.executeInstruction(cpu);
-        if (!running || cpu.exception || cpu.stopped || cpu.yielded) {
+        if (!cpu.exception && interruptRead) interrupts->afterRead(memory, interruptRead);
+        if (!cpu.exception && dmaWrite) dma->afterWrite(memory, dmaWrite, dmaPrevious, dmaValue);
+        if (interrupts) interrupts->checkDelivery(memory);
+        const bool ownedSyscall = cpu.exception && exceptions && exceptions->enterSyscall(memory, cpu, instruction);
+        if (!running || (cpu.exception && !ownedSyscall) || cpu.stopped || cpu.yielded) {
             std::cerr << "[bootstrap-cpu-blocker] steps=" << steps << " pc=0x" << std::hex << previous
                       << " instruction=0x" << instruction << " cause=0x" << cpu.cop0[13]
-                      << " badvaddr=0x" << cpu.cop0[8] << std::dec << '\n';
+                      << " badvaddr=0x" << cpu.cop0[8] << " target=0x" << cpu.pc
+                      << " status=0x" << cpu.cop0[12] << " epc=0x" << cpu.cop0[14] << std::dec << '\n';
+            if (cpu.exception)
+                for (uint32_t at = 0x80; at < 0xa0; at += 4)
+                    std::cerr << "[exception-vector] address=0x" << std::hex << at << " word=0x"
+                              << memory.read32(at) << " owned=" << memory.ownsRamRange(at, 4) << std::dec << '\n';
             throw std::runtime_error("IOP CPU stopped/raised an exception; no handler invented");
+        }
+    }
+    std::cerr << "[bootstrap-budget] pc=0x" << std::hex << cpu.pc << " instruction=0x" << memory.read32(cpu.pc)
+              << " v0=0x" << cpu.gpr[2] << " a0=0x" << cpu.gpr[4] << " a1=0x" << cpu.gpr[5]
+              << " ra=0x" << cpu.gpr[31] << " sp=0x" << cpu.gpr[29] << " status=0x" << cpu.cop0[12]
+              << std::dec << " isolated_cache_stores=" << (cache ? cache->isolatedStores : 0) << '\n';
+    for (unsigned index = 0; index < cpu.gpr.size(); ++index)
+        std::cerr << "[bootstrap-reg] r" << index << "=0x" << std::hex << cpu.gpr[index] << std::dec << '\n';
+    const auto faultPhysical = IopMemory::physicalAddress(cpu.pc);
+    if (faultPhysical >= 32 && faultPhysical < IopMemory::RamSize - 32) {
+        for (uint32_t address = faultPhysical - 32; address < faultPhysical + 24; address += 4) {
+            const auto instruction = memory.read32(address);
+            std::cerr << "[bootstrap-code] address=0x" << std::hex << address << " word=0x" << instruction;
+            const auto op = instruction >> 26;
+            if (op == 0x23) {
+                const auto operand = cpu.gpr[(instruction >> 21) & 31] +
+                    static_cast<uint32_t>(static_cast<int16_t>(instruction));
+                const auto operandPhysical = IopMemory::physicalAddress(operand);
+                std::cerr << " load_address=0x" << operand;
+                if (operandPhysical < IopMemory::RamSize - 3)
+                    std::cerr << " value=0x" << memory.read32(operand);
+            }
+            std::cerr << std::dec << '\n';
         }
     }
     throw std::runtime_error("Bootstrap call exceeded the fixed instruction budget");

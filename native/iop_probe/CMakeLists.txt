@@ -30,15 +30,26 @@ if(bootstrap_loader STREQUAL loader_source)
 endif()
 file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/private_bootstrap_loader.cpp"
     CONTENT "${bootstrap_loader}" @ONLY)
+# Match functional reference cache isolation. Bare-call validation permits only
+# reviewed zero stores into cache lines; these must never alter backing RAM.
+file(READ "${IOP_ROOT}/src/emulator/core/iop_cpu.cpp" cpu_source)
+string(REPLACE "m_memory.write32(address, cpu.gpr[rt]);"
+    "if ((cpu.cop0[12] & 0x10000u) == 0u) m_memory.write32(address, cpu.gpr[rt]);"
+    isolated_cpu "${cpu_source}")
+if(isolated_cpu STREQUAL cpu_source)
+    message(FATAL_ERROR "Pinned IOP word-store isolation contract changed")
+endif()
+file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/private_isolated_cpu.cpp"
+    CONTENT "${isolated_cpu}" @ONLY)
 add_library(iop_bootstrap_primitives STATIC
     "${IOP_ROOT}/src/ps2_path.cpp"
     "${IOP_ROOT}/src/emulator/core/iop_memory.cpp"
-    "${IOP_ROOT}/src/emulator/core/iop_cpu.cpp"
+    "${CMAKE_BINARY_DIR}/private_isolated_cpu.cpp"
     "${IOP_ROOT}/src/emulator/imports/iop_imports.cpp"
     "${CMAKE_BINARY_DIR}/private_bootstrap_loader.cpp")
 target_include_directories(iop_bootstrap_primitives PUBLIC
     "${IOP_ROOT}/include" "${IOP_ROOT}/src/emulator"
-    "${IOP_ROOT}/src/emulator/services")
+    "${IOP_ROOT}/src/emulator/services" "${IOP_ROOT}/src/emulator/core")
 add_executable(iop_sysmem_probe sysmem.cpp)
 target_link_libraries(iop_sysmem_probe PRIVATE iop_bootstrap_primitives)
 add_executable(iop_bootstrap_probe bootstrap.cpp)
