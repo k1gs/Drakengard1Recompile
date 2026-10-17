@@ -25,6 +25,9 @@ int main() {
         auto result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030);
         if (result.value != 42 || result.instructions != 3)
             throw std::runtime_error("Bare IOP return/delay-slot contract failed");
+        code(memory, {0x40807800, 0x40027800, 0, 0x03e00008, 0}); // mtc0 zero,PRId; mfc0 v0,PRId.
+        result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030);
+        if (result.value != 0x1f) throw std::runtime_error("IOP revision identity must be correct and read-only");
         memory.reset(); code(memory, {0x8c820000, 0x03e00008, 0}); // lw v0,0(a0)
         rejects([&] { bareCall(memory, 0x1000, 0, 0xbf801450, 0x1000, 0x1030); }, "hardware contract");
         std::array<uint8_t, 28> seed{'D', '1', 'H', 'W', '0', '0', '1', 0};

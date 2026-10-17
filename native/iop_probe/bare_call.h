@@ -7,6 +7,7 @@
 #include "quiet_interrupts.h"
 #include "quiescent_dma.h"
 #include "owned_exceptions.h"
+#include "cdvd_device.h"
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -19,13 +20,14 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
                               uint32_t gp, uint32_t argument, uint32_t codeBegin, uint32_t codeEnd,
                               const PassiveHardware* hardware = nullptr, CoherentCache* cache = nullptr,
                               QuietInterrupts* interrupts = nullptr, QuiescentDma* dma = nullptr,
-                              OwnedExceptions* exceptions = nullptr) {
+                              OwnedExceptions* exceptions = nullptr, drakengard::CdvdDevice* cdvd = nullptr) {
     using namespace ps2x::iop::detail;
     IopCpuCore core(memory);
     IopImportRegistry imports(memory);
     IopCpuState cpu;
     constexpr uint32_t ReturnBoundary = 0xfffffffcu;
     cpu.pc = entry; cpu.gpr[4] = argument; cpu.gpr[28] = gp;
+    cpu.cop0[15] = 0x1f; // Immutable IOP R3000A revision, pinned PCSX2 reset contract.
     cpu.gpr[29] = IopMemory::RamSize - 4096;
     cpu.gpr[31] = ReturnBoundary;
     // A legitimate 2-MiB word fill alone uses ~2.62M instructions (five per word).
@@ -37,8 +39,26 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
         if (((physical < codeBegin || uint64_t(physical) + 4 > codeEnd) && !vector) || (cpu.pc & 3) ||
             !memory.ownsRamRange(physical, 4))
             throw std::runtime_error("Execution left owned bootstrap code RAM");
-        if (const auto call = imports.decode(cpu.pc))
+        if (const auto call = imports.decode(cpu.pc)) {
+            std::cerr << "[unresolved-iop-import] library=" << call->library << " ordinal=" << call->ordinal
+                      << " version=0x" << std::hex << call->version << " pc=0x" << cpu.pc
+                      << " ra=0x" << cpu.gpr[31] << " a0=0x" << cpu.gpr[4] << std::dec << '\n';
+            for (uint32_t address = codeBegin + 12; address + 8 < codeEnd; address += 4) {
+                bool match = call->library.size() <= 8;
+                for (unsigned index = 0; match && index < 8; ++index)
+                    match = memory.read8(address + index) ==
+                        (index < call->library.size() ? static_cast<uint8_t>(call->library[index]) : 0);
+                if (!match) continue;
+                const auto table = address - 12;
+                if (uint64_t(table) + 24 + uint64_t(call->ordinal) * 4 > IopMemory::RamSize) continue;
+                const auto target = memory.read32(table + 20 + call->ordinal * 4);
+                std::cerr << "[guest-library-candidate] table=0x" << std::hex << table
+                          << " link_magic=0x" << memory.read32(table) << " version=0x" << memory.read16(table + 8)
+                          << " mode=0x" << memory.read16(table + 10) << " ordinal_target=0x" << target
+                          << " owned_target=" << memory.ownsRamRange(target, 4) << std::dec << '\n';
+            }
             throw std::runtime_error("Unresolved guest import " + call->library + ":" + std::to_string(call->ordinal));
+        }
         const uint32_t instruction = memory.read32(cpu.pc);
         const uint32_t opcode = instruction >> 26;
         uint32_t interruptRead = 0;
@@ -53,15 +73,23 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
                 if (!cache) throw std::runtime_error("Cache isolation requires explicit coherent-cache mode");
                 cache->isolatedAccess(memory, address, opcode, cpu.gpr[(instruction >> 16) & 31]);
             }
+            const bool cdvdAccess = cdvd && target >= 0x1f402000 && target < 0x1f402100 &&
+                (opcode == 0x20 || opcode == 0x24 || opcode == 0x28);
             if ((target >= IopMemory::RamSize || width > IopMemory::RamSize - target) &&
                 !(hardware && hardware->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
                 !(cache && cache->allows(address, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
                 !(interrupts && interrupts->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
-                !(dma && dma->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31]))) {
+                !(dma && dma->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) && !cdvdAccess) {
                 std::cerr << "[bootstrap-mmio-blocker] steps=" << steps << " pc=0x" << std::hex << cpu.pc
                           << " instruction=0x" << instruction << " address=0x" << address << std::dec
+                          << " rt_value=0x" << std::hex << cpu.gpr[(instruction >> 16) & 31] << std::dec
                           << " isolated_cache_stores=" << (cache ? cache->isolatedStores : 0) << '\n';
                 throw std::runtime_error("Non-RAM data access requires an explicit hardware contract");
+            }
+            if (cdvdAccess) {
+                const auto key = static_cast<uint8_t>(target);
+                if (opcode == 0x28) cdvd->writeRegister(key, static_cast<uint8_t>(cpu.gpr[(instruction >> 16) & 31]));
+                else memory.write8(address, cdvd->readRegister(key));
             }
             if (interrupts && opcode == 0x23 && interrupts->allows(target, opcode, 0)) interruptRead = target;
             if (dma && opcode == 0x2b && dma->interruptRegister(target)) {
@@ -72,6 +100,7 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
         const bool running = core.executeInstruction(cpu);
         if (!cpu.exception && interruptRead) interrupts->afterRead(memory, interruptRead);
         if (!cpu.exception && dmaWrite) dma->afterWrite(memory, dmaWrite, dmaPrevious, dmaValue);
+        if (cdvd && cdvd->takeInterruptEdge()) memory.setInterruptStatus(memory.interruptStatus() | 4u);
         if (interrupts) interrupts->checkDelivery(memory);
         const bool ownedSyscall = cpu.exception && exceptions && exceptions->enterSyscall(memory, cpu, instruction);
         if (!running || (cpu.exception && !ownedSyscall) || cpu.stopped || cpu.yielded) {

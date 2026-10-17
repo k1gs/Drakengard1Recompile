@@ -1,5 +1,6 @@
 #include "iso_media.h"
 #include "cdvd_rpc.h"
+#include "cdvd_device.h"
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -120,6 +121,27 @@ int main() {
         check(host.ram[0x2000] == 24 && host.ram[0x2004] == 6 && std::memcmp(host.ram.data() + 0x2008, "TEST.BIN;1", 10) == 0);
         check(!drive.call(0x80000593, 1, {}, response, host)); // No invented RTC or TOC.
         check(!drive.call(0x80000595, 4, {}, response, host));
+        drakengard::CdvdDevice device(media, std::array<uint8_t, 4>{1, 2, 3, 4});
+        check(device.readRegister(5) == 0x40 && device.readRegister(0x0f) == 0x14);
+        const auto request = words({24, 2});
+        for (auto byte : request) device.writeRegister(5, byte);
+        for (auto byte : {0, 0, 0}) device.writeRegister(5, uint8_t(byte));
+        device.writeRegister(4, 6);
+        check(device.pendingBytes() == 4096 && device.actualSectorsRead() == 2);
+        check(device.readRegister(5) == 0x80 && device.readRegister(8) == 0 && !device.takeInterruptEdge());
+        std::array<uint8_t, 2048> one{};
+        check(device.drainUserSectors(one) == 2048 && std::memcmp(one.data(), "abc123", 6) == 0);
+        check(device.pendingBytes() == 2048 && !device.takeInterruptEdge());
+        check(device.drainUserSectors(one) == 2048 && std::memcmp(one.data(), "xyz", 3) == 0);
+        check(device.pendingBytes() == 0 && device.readRegister(5) == 0x40 && device.takeInterruptEdge());
+        check(!device.takeInterruptEdge() && device.readRegister(8) == 1);
+        device.writeRegister(8, 1); check(device.readRegister(8) == 0);
+        device.writeRegister(0x17, 0); device.writeRegister(0x16, 3);
+        for (uint8_t expected : {1, 2, 3, 4}) check(device.readRegister(0x18) == expected);
+        check(device.readRegister(0x17) == 0x40);
+        bool rawRejected = false;
+        try { device.writeRegister(4, 8); } catch (const std::runtime_error&) { rawRejected = true; }
+        check(rawRejected && !device.takeInterruptEdge());
         auto bad = image; bad[16 * Sector + 84] ^= 1; rejects(bad);
         bad = image; bad[16 * Sector + 129] = 4; rejects(bad);
         bad = image; bad[16 * Sector + 156 + 1] = 1; rejects(bad);

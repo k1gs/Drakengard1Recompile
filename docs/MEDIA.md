@@ -50,3 +50,24 @@ On the verified Europe disc it found 2,170,432 sectors, 17 files and the boot EL
 with size 4,873,284. An independent extent read matched the exact ELF SHA-256.
 Native-run-020 passed CDVD init/ready and reached an explicitly unsupported IOP reboot.
 An actual game-initiated sector/file read, game frame and menu remain unconfirmed.
+
+## Separate IOP register-device experiment
+
+`CdvdDevice` is an original controller for the optional IOP bootstrap probe, separate from the
+EE runner's RPC service. It requires an actual indexed image; that probe verifies the full ISO
+hash before constructing it. N-command and S-command parameter FIFOs are bounded. Supported
+2048-byte reads fetch actual sectors and keep the device busy until every pending payload byte
+has been consumed. Only then is a completion IRQ edge produced. Partial drains do not complete
+the command, and an unacknowledged prior completion cannot be silently overwritten.
+
+The synchronous virtual drive models logical nop/reset/standby/stop/pause/seek. Optical timings
+are not claimed. A caller-provided four-byte reference mecha property can answer the corresponding
+version request; no SCE/physical revision is invented. Raw 2064-byte frames, key/TOC/authentication,
+unknown commands/registers and unconsumed FIFO replies fail explicitly. No padded raw metadata,
+RTC or console identifiers are supplied. The IOP DMA transfer engine is still a separate gate.
+
+The synthetic ISO test verifies exact data from two sectors, partial consumption, pending/busy
+state, one final IRQ edge/ack, supplied property bytes and raw-command refusal. Actual bootstrap
+passed the initial ready read; game-initiated payload/DMA reads through this device remain unproven.
+Register reference: [PCSX2 2.8.2 CDVD implementation](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/CDVD/CDVD.cpp)
+and [command/status definitions](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/CDVD/CDVD_internal.h).

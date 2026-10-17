@@ -39,21 +39,33 @@ string(REPLACE "m_memory.write32(address, cpu.gpr[rt]);"
 if(isolated_cpu STREQUAL cpu_source)
     message(FATAL_ERROR "Pinned IOP word-store isolation contract changed")
 endif()
+string(REPLACE "cpu.cop0[rd] = cpu.gpr[rt];"
+    "{ if (rd != 15u) cpu.cop0[rd] = cpu.gpr[rt]; }"
+    identified_cpu "${isolated_cpu}")
+if(identified_cpu STREQUAL isolated_cpu)
+    message(FATAL_ERROR "Pinned IOP read-only CP0.PRId contract changed")
+endif()
 file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/private_isolated_cpu.cpp"
-    CONTENT "${isolated_cpu}" @ONLY)
+    CONTENT "${identified_cpu}" @ONLY)
 add_library(iop_bootstrap_primitives STATIC
     "${IOP_ROOT}/src/ps2_path.cpp"
     "${IOP_ROOT}/src/emulator/core/iop_memory.cpp"
     "${CMAKE_BINARY_DIR}/private_isolated_cpu.cpp"
     "${IOP_ROOT}/src/emulator/imports/iop_imports.cpp"
+    "${REPO_ROOT}/native/runner/iso_media.cpp"
+    "${REPO_ROOT}/native/runner/cdvd_device.cpp"
     "${CMAKE_BINARY_DIR}/private_bootstrap_loader.cpp")
 target_include_directories(iop_bootstrap_primitives PUBLIC
     "${IOP_ROOT}/include" "${IOP_ROOT}/src/emulator"
-    "${IOP_ROOT}/src/emulator/services" "${IOP_ROOT}/src/emulator/core")
+    "${IOP_ROOT}/src/emulator/services" "${IOP_ROOT}/src/emulator/core" "${REPO_ROOT}/native/runner")
 add_executable(iop_sysmem_probe sysmem.cpp)
 target_link_libraries(iop_sysmem_probe PRIVATE iop_bootstrap_primitives)
 add_executable(iop_bootstrap_probe bootstrap.cpp)
+target_sources(iop_bootstrap_probe PRIVATE "${REPO_ROOT}/native/runner/verify_input.cpp")
 target_link_libraries(iop_bootstrap_probe PRIVATE iop_bootstrap_primitives)
+if(WIN32)
+    target_link_libraries(iop_bootstrap_probe PRIVATE bcrypt)
+endif()
 add_executable(iop_bootstrap_checks selftest.cpp)
 target_link_libraries(iop_bootstrap_checks PRIVATE iop_bootstrap_primitives)
 enable_testing()

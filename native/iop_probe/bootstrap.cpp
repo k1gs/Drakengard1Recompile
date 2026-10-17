@@ -1,11 +1,13 @@
 #include "bare_call.h"
 #include "services/iop_module_loader.h"
+#include "verify_input.h"
 #include <algorithm>
 #include <array>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <span>
 #include <vector>
 
@@ -24,12 +26,38 @@ int main(int argc, char** argv) {
     try {
         using namespace ps2x::iop::detail;
         const char* hardwarePath = nullptr;
+        const char* discPath = nullptr;
+        const char* mechaPath = nullptr;
         bool coherent = false;
         for (int index = 3; index < argc; ++index) {
             if (std::string(argv[index]) == "--hardware-state" && !hardwarePath && index + 1 < argc)
                 hardwarePath = argv[++index];
+            else if (std::string(argv[index]) == "--disc" && !discPath && index + 1 < argc)
+                discPath = argv[++index];
+            else if (std::string(argv[index]) == "--mecha-profile" && !mechaPath && index + 1 < argc)
+                mechaPath = argv[++index];
             else if (std::string(argv[index]) == "--coherent-cache" && !coherent) coherent = true;
             else throw std::runtime_error("Unknown/duplicate bootstrap option");
+        }
+        if (mechaPath && !discPath) throw std::runtime_error("Mecha profile requires an actual disc backend");
+        std::unique_ptr<drakengard::IsoMedia> media;
+        std::unique_ptr<drakengard::CdvdDevice> cdvd;
+        if (discPath) {
+            if (!verifyEuropeIso(discPath)) throw std::runtime_error("CDVD hardware input refused: wrong Europe ISO SHA-256");
+            media = std::make_unique<drakengard::IsoMedia>(discPath);
+            std::optional<std::array<uint8_t, 4>> mecha;
+            if (mechaPath) {
+                std::ifstream input(mechaPath, std::ios::binary);
+                std::array<uint8_t, 5> bytes{};
+                if (!input) throw std::runtime_error("Cannot open reference mecha profile");
+                input.read(reinterpret_cast<char*>(bytes.data()), bytes.size());
+                if (input.gcount() != 4 || !input.eof() || input.bad())
+                    throw std::runtime_error("Reference mecha profile must contain exactly four bytes");
+                mecha = std::array<uint8_t, 4>{bytes[0], bytes[1], bytes[2], bytes[3]};
+            }
+            cdvd = std::make_unique<drakengard::CdvdDevice>(*media, mecha);
+            std::cerr << "[cdvd-hardware] verified ISO; actual sectors=" << media->sectors()
+                      << " files=" << media->fileCount() << " reference_mecha=" << mecha.has_value() << '\n';
         }
         const auto size = std::filesystem::file_size(argv[2]);
         if (size < 16 || size > 512 * 1024) throw std::runtime_error("Unsupported boot bundle size");
@@ -82,7 +110,7 @@ int main(int argc, char** argv) {
             sysmem.base + uint64_t(sysmem.size) >= SourcePool)
             throw std::runtime_error("SYSMEM bootstrap image refused");
         const auto initialized = bareCall(memory, sysmem.entry, sysmem.gp, IopMemory::RamSize, start, SourcePool,
-                                          &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions);
+                                          &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions, cdvd.get());
         std::cout << "[bootstrap-sysmem] steps=" << initialized.instructions << " free_start=0x"
                   << std::hex << initialized.value << std::dec << '\n';
         if (initialized.value % 16 || initialized.value >= SourcePool - 0x30)
@@ -94,7 +122,7 @@ int main(int argc, char** argv) {
         std::cout << "[bootstrap-loadcore] base=0x" << std::hex << loadcore.base << " entry=0x"
                   << loadcore.entry << " reset_data=0x" << SourcePool << std::dec << " modules=" << count << '\n';
         const auto result = bareCall(memory, loadcore.entry, loadcore.gp, SourcePool, start, SourcePool,
-                                     &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions);
+                                     &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions, cdvd.get());
         std::cout << "[bootstrap-loadcore-return] value=0x" << std::hex << result.value << std::dec
                   << " steps=" << result.instructions << "\nNo EE notification or BOOTEND has been issued\n";
     } catch (const std::exception& error) {

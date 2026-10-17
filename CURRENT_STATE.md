@@ -3,7 +3,8 @@
 Дата: 2026-10-17. Пользователь возобновил работу; разрешены дальнейшие эксперименты и focused commits/pushes.
 M3 EE startup выполнен до service layer. M4: SIF, read-only FileIO и ISO/CDVD backend; меню ещё не получено.
 
-Последний опубликованный implementation checkpoint: `903d5cb` (strict IOP probes), перед ним `b9d67c9`
+Implementation checkpoints перед текущим обновлением: `15d6caf` (cache/owned kernel traps),
+`3cc2f41` (passive reference registers), `903d5cb` (strict IOP probes), перед ним `b9d67c9`
 (ISO/CDVD/SIF0). CI для `903d5cb` запущен: https://github.com/k1gs/Drakengard1Recompile/actions/runs/39012376077.
 CI этого checkpoint и handoff `27fd01b` завершился успешно. Собственные исходники
 сохранены; unrelated untracked `.vscode/` не включалась в commits.
@@ -88,6 +89,23 @@ CI этого checkpoint и handoff `27fd01b` завершился успешн�
 - Следующий эксперимент: проверить CDVD register 0x05 и реализовать ограниченный actual image-backed
   controller contract, затем DMA/IRQ completion только с настоящими bytes. Не подставлять ready/status
   без соответствующего device backend. EE reboot request пока по-прежнему явно отказывает.
+- Добавлен отдельный portable CDVD register controller поверх actual IsoMedia: bounded parameter
+  FIFOs, 2048-byte read payload, busy до полного consumption, единственный completion IRQ edge после
+  последнего sector, logical controls и caller-supplied reference mecha property. Raw 2064-byte DVD,
+  TOC/key/auth, unknown S-commands не синтезируются. Synthetic actual-sector/FIFO/IRQ checks прошли.
+  В bootstrap он подключается только через `--disc` с полным Europe ISO SHA gate до guest execution;
+  synthetic wrong ISO отвергнут. Main EE runner использует прежний RPC backend, не этот device.
+- Bootstrap-013/014 прошёл CDVD ready read, затем остановился на `timrman:18`, import version 1.03.
+  Диагностика нашла зарегистрированный export version 1.01. Причина: bare CPU CP0.PRId был 0,
+  поэтому реальный boot code выбирал PS1/P kernel variants. Эти более ранние PS2-boot conclusions
+  superseded; сами instruction traces сохраняются как история эксперимента.
+- CP0.PRId исправлен на read-only `0x1F` по pinned PCSX2 reset contract. Synthetic MTC0 attempt
+  не меняет identity; MFC0 возвращает 0x1F. Native optional probes пересобраны и C++ checks прошли.
+- Текущий правильный checkpoint bootstrap-017: actual SYSMEM return `0x1800`, затем 3 922 376
+  LOADCORE-call instructions и 14 080 isolated cache stores; halfword write value 0 к timer-5 mode
+  `0xBF8014A4`, IOP PC `0x860C`. Первый blocker теперь timer register/counter semantics.
+  Следующий эксперимент: реализовать проверенный internal-clock timer subset, counter/mode/target
+  reset/read flags и реальные IRQ events. Не заменять timer reads константой или готовым успехом.
 - Reference-mmio-001 не загрузил нужный профиль: PCSX2 добавляет `PCSX2/` к `-datapath`.
   Reference-mmio-002 использовал исправленный изолированный профиль и 30-second supervisor.
   Logs подтверждают boot ELF, регистрацию IOP libraries и PAL CRTC; прямой записи HW_ICFG

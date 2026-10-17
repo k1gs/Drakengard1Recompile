@@ -102,6 +102,26 @@ cache stores without corrupting backing RAM. The next experiment is the actual C
 interface backed by verified media, including real DMA bytes/IRQ completion. This does not yet
 establish that all selected modules initialized, that EE reboot completes, or that a menu renders.
 
+## CPU identity correction and current blocker
+
+The initial bare CPU left CP0.PRId zero. That incorrectly selected PS1/P variants in the real
+kernel's conditional startup, including timrman export 1.01. After CDVD register access was added,
+bootstrap-014 reached an unresolved timrman:18 import requiring 1.03. The export/import version
+diagnostic exposed the identity error. Those earlier PS2 bootstrap conclusions are superseded;
+the traces remain historical instruction-execution evidence.
+
+The probe now starts with immutable IOP revision 0x1F, following pinned PCSX2 reset code.
+A synthetic MTC0 write cannot alter it. With the correct kernel variants, bootstrap-017 stopped
+at a halfword write of zero to timer-5 mode 0xBF8014A4, PC 0x860C, after 3,922,376 instructions
+and 14,080 isolated cache stores. Timer counting/mode/target and actual IRQ events are next.
+No constant timer result or host success stub has been added.
+
+An optional `--disc LOCAL_ISO` verifies the entire Europe ISO SHA-256 before any bootstrap
+instructions, then connects the separate register-level device described in [MEDIA.md](MEDIA.md).
+`--mecha-profile LOCAL.mec` supplies exactly four bytes from a local reference model profile;
+this is an explicit virtual device property, not a claim about a physical console revision.
+Unknown commands remain fatal. These optional inputs and all derived snapshots stay private.
+
 Strict synthetic C++ checks cover normal return/delay slot, exception, non-RAM access, unresolved
 import, unowned instruction fetch and instruction-budget exhaustion. Python tests cover ROMFS
 extents/versions, explicit table offsets, extraction isolation and boot-plan selection.
@@ -119,3 +139,5 @@ and [DMA-global get/set](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af
 Cache isolation and syscall contracts:
 [LOADCORE flush routines](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/system/loadcore/src/loadcore.c),
 [PCSX2 functional IOP memory path](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopMem.cpp).
+CPU identity: [PCSX2 IOP reset](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/R3000A.cpp).
+Variant selection: [PS2SDK timer manager startup](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/system/timrman/src/timrman.c).
