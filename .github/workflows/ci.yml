@@ -21,5 +21,8 @@ jobs:
       - run: cmake -S native/sif_smoke -B build/sif-smoke
       - run: cmake --build build/sif-smoke --config Release
       - run: ctest --test-dir build/sif-smoke -C Release --output-on-failure
+      - run: cmake -S native/iso_smoke -B build/iso-smoke
+      - run: cmake --build build/iso-smoke --config Release
+      - run: ctest --test-dir build/iso-smoke -C Release --output-on-failure
       - run: python scripts/check_public_tree.py
       - run: git diff --check

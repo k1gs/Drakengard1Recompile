@@ -6,7 +6,7 @@
 #include <memory>
 
 int main(int argc, char** argv) {
-    if (argc != 2) {
+    if (argc != 2 && argc != 3) {
         std::cerr << "Pass the locally verified boot ELF; use scripts/run_native.py\n";
         return 2;
     }
@@ -15,7 +15,17 @@ int main(int argc, char** argv) {
             std::cerr << "Native input refused: cannot hash file or wrong Europe ELF SHA-256\n";
             return 2;
         }
-        std::cout << "Verified Europe ELF SHA-256\n";
+        std::cout << "Verified Europe ELF SHA-256" << std::endl;
+        if (argc == 3) {
+            if (!verifyEuropeIso(argv[2])) {
+                std::cerr << "Native input refused: cannot hash file or wrong Europe ISO SHA-256\n";
+                return 2;
+            }
+            std::cout << "Verified Europe ISO SHA-256" << std::endl;
+            PS2Runtime::IoPaths paths;
+            paths.cdImage = argv[2];
+            PS2Runtime::setIoPaths(paths);
+        }
         auto runtime = std::make_unique<PS2Runtime>();
         unsigned frames = 0;
         runtime->setDebugUiCallbacks(

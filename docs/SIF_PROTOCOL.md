@@ -78,8 +78,19 @@ negotiated reply buffers, unavailable binding, real backend payload/results, no-
 completion, reset, actual file bytes, unaligned reads, EOF, seek, close and explicit refusals.
 Native FileIO binding/probe was observed; an actual game file/sector read was not yet observed.
 
-The next service is CDVD SID `0x80000592`, currently unavailable. Connect verified media and
-implement only established wire commands with actual operations. Then repeat a bounded native run.
+CDVD is now backed by a SHA-verified read-only image; see [MEDIA.md](MEDIA.md) for supported
+wire commands and limits. Native-run-020 passed its init/ready and SIF0 stop, then reached
+IOP reboot CID `0x80000003`. Its 104-byte packet carries a length-bounded argument string
+and mode. The request is decoded, logged and explicitly refused until actual requested module
+initialization exists. No transport reset alone is treated as successful IOP boot.
+
+SIF0 stop is void and leaves the guest return register untouched. The synchronous transport
+refuses a stop with a pending interrupt or unconsumed packet, blocks further RPC/replies while
+stopped, and resumes reception through SetDChain. CHCR STR reflects enabled/disabled reception;
+the model does not guess DMA tag addresses or timing. Synthetic checks cover stop/refusal/resume.
+Contracts: [kernel declarations](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/ee/kernel/include/kernel.h),
+[EE reboot request](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/ee/kernel/src/iopcontrol.c),
+and the pinned EE command implementation linked above.
 
 ## Original experiment plan (historical)
 

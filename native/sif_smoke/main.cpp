@@ -20,6 +20,12 @@ struct Backend : drakengard::SifBackend {
     std::array<uint8_t, 16384> ee{}, iop{};
     unsigned interrupts{}, calls{};
     bool supportCall = true;
+    std::string rebootArguments;
+    uint32_t rebootMode{};
+    void rebootIop(std::string_view arguments, uint32_t mode) override {
+        rebootArguments = arguments; rebootMode = mode;
+        throw std::runtime_error("Synthetic reboot endpoint intentionally unavailable");
+    }
     bool range(uint32_t address, size_t size) { return address <= ee.size() && size <= ee.size() - address; }
     bool readIop(uint32_t address, void* data, size_t size) override {
         if (!range(address, size)) return false;
@@ -90,9 +96,21 @@ int main() {
         rejects([&] { link.receive(0, 64, host); }); check(host.result(0x1000, 0) == 0);
         host.request(0x8000000c); host.field(8, 0x400); host.field(9, 0x2900); host.field(10, 4);
         link.receive(0, 64, host); check(host.ee[0x2900] == 42);
+        rejects([&] { link.stopReceive(host); }); // Never discard a completed packet.
+        host.consume(); link.stopReceive(host);
+        host.request(0x80000009); host.field(8, 7);
+        const auto stopped = host.ee;
+        rejects([&] { link.receive(0, 64, host); }); check(host.ee == stopped);
+        link.startReceive(); link.receive(0, 64, host);
+        check(host.result(0x1000, 9) == 0x100);
         host.consume(); host.request(0x80000009); host.field(0, 12);
         rejects([&] { link.receive(0, 64, host); });
         host.request(0x80000003); rejects([&] { link.receive(0, 64, host); });
+        host.request(0x80000003, 104); host.field(4, 5); host.field(5, 0);
+        std::memcpy(host.iop.data() + 24, "hello", 5);
+        rejects([&] { link.receive(0, 104, host); });
+        check(host.rebootArguments == "hello" && host.rebootMode == 0);
+        host.field(4, 81); rejects([&] { link.receive(0, 104, host); });
         host.request(0x80000001, 24); host.field(4, 32); rejects([&] { link.receive(0, 24, host); });
         link.reset(); check(!link.ready() && link.receiveAddress() == 0);
         host.request(0x80000009); rejects([&] { link.receive(0, 64, host); });

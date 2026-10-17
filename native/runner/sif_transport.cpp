@@ -1,6 +1,7 @@
 #include "sif_transport.h"
 #include "sif_channel.h"
 #include "fileio_rpc.h"
+#include "cdvd_rpc.h"
 #include "runtime/ps2_memory.h"
 #include "ps2_iop_transport.h"
 #include <cstring>
@@ -16,9 +17,10 @@
 namespace drakengard {
 namespace {
 struct Copy { uint32_t source{}, size{}; };
-struct Binding { uint32_t sid{}; SifServer server; };
+enum class Provider { Iop, FileIo, Cdvd };
+struct Binding { uint32_t sid{}; Provider provider{}; SifServer server; };
 
-class RuntimeBackend final : public SifBackend, public FileIoHost {
+class RuntimeBackend final : public SifBackend, public FileIoHost, public CdvdHost {
 public:
     explicit RuntimeBackend(PS2Runtime* value) : runtime(value) {}
     PS2Runtime* runtime;
@@ -28,6 +30,19 @@ public:
     unsigned logs{};
     std::unordered_map<uint32_t, Copy> copies;
     std::unordered_map<uint32_t, Binding> bindings;
+    std::unique_ptr<IsoMedia> media;
+    std::unique_ptr<CdvdRpc> drive;
+
+    void rebootIop(std::string_view arguments, uint32_t mode) override {
+        std::cerr << "[iop-reboot-request] mode=" << mode << " bytes=" << arguments.size()
+                  << " arguments=";
+        for (unsigned char byte : arguments) {
+            if (byte >= 0x20 && byte <= 0x7e) std::cerr << char(byte);
+            else std::cerr << "<" << unsigned(byte) << ">";
+        }
+        std::cerr << '\n';
+        throw std::runtime_error("IOP reboot requires actual requested module initialization; no BOOTEND fabricated");
+    }
 
     int32_t fileOpen(const std::string& path, uint32_t flags) override {
         const auto& paths = PS2Runtime::getIoPaths();
@@ -83,7 +98,18 @@ public:
     SifServer bind(uint32_t sid) override {
         auto previous = bindings.find(sid);
         if (previous != bindings.end()) return previous->second.server;
-        const bool available = sid == 0x80000001u || PS2IopTransport::canBindRpc(runtime, sid);
+        const bool nativeRoute = PS2IopTransport::canBindRpc(runtime, sid);
+        Provider provider = nativeRoute ? Provider::Iop : sid == 0x80000001u ? Provider::FileIo : Provider::Cdvd;
+        bool available = nativeRoute || sid == 0x80000001u;
+        if (!available && CdvdRpc::supports(sid) && !PS2Runtime::getIoPaths().cdImage.empty()) {
+            if (!media) {
+                media = std::make_unique<IsoMedia>(PS2Runtime::getIoPaths().cdImage);
+                drive = std::make_unique<CdvdRpc>(*media);
+                std::cerr << "[cdvd-media] actual sectors=" << media->sectors()
+                          << " files=" << media->fileCount() << '\n';
+            }
+            available = true;
+        }
         if (logs++ < 64)
             std::cerr << "[sif-bind] sid=0x" << std::hex << sid
                       << " available=" << available << std::dec << '\n';
@@ -101,7 +127,7 @@ public:
         words[0] = sid; words[2] = buffer;
         if (!runtime->writeIopMemory(record, words, sizeof(words)))
             throw std::runtime_error("Cannot initialize IOP RPC server record");
-        Binding binding{sid, {record, buffer, capacity}};
+        Binding binding{sid, provider, {record, buffer, capacity}};
         bindings.emplace(sid, binding);
         return binding.server;
     }
@@ -124,7 +150,7 @@ public:
                 throw std::runtime_error("RPC copied payload differs from its EE source");
             copies.erase(copy);
         }
-        if (binding->sid == 0x80000001u) {
+        if (binding->provider == Provider::FileIo) {
             if (logs++ < 64)
                 std::cerr << "[fileio-rpc] function=0x" << std::hex << function
                           << " send=0x" << sendSize << " receive=0x" << receiveSize << std::dec << '\n';
@@ -137,6 +163,23 @@ public:
             writeEe(receive, response.data(), response.size());
             if (function == 0xff)
                 std::cerr << "[fileio-rpc] newer callback-buffer extension rejected; no version advertised\n";
+            return true;
+        }
+        if (binding->provider == Provider::Cdvd) {
+            if (!drive || receiveSize > 64) throw std::runtime_error("Unsupported CDVD RPC reply shape");
+            std::vector<uint8_t> response(receiveSize, 0);
+            const auto previousReads = drive->readCount();
+            const auto previousSectors = drive->sectorsRead();
+            const bool handled = drive->call(binding->sid, function, snapshot, response, *this);
+            if (logs++ < 64)
+                std::cerr << "[cdvd-rpc] sid=0x" << std::hex << binding->sid
+                          << " function=0x" << function << " send=0x" << sendSize
+                          << " receive=0x" << receiveSize << " handled=" << handled << std::dec << '\n';
+            if (!handled) return false;
+            if (receiveSize) writeEe(receive, response.data(), response.size());
+            if (drive->readCount() != previousReads && drive->readCount() <= 512)
+                std::cerr << "[cdvd-read] actual lsn=" << drive->lastLsn()
+                          << " sectors=" << drive->sectorsRead() - previousSectors << '\n';
             return true;
         }
         ps2x::iop::RpcRequest request{};
@@ -191,5 +234,27 @@ bool takeSifReplyInterrupt(PS2Runtime* runtime) {
 void resetSifChannel(PS2Runtime* runtime) {
     std::lock_guard lock(channelsMutex);
     channels.erase(runtime);
+}
+
+void stopSifReceive(PS2Runtime* runtime) {
+    if (!runtime) throw std::runtime_error("SIF0 stop without runtime");
+    std::lock_guard lock(channelsMutex);
+    auto& state = channels[runtime];
+    if (!state) state = std::make_shared<RuntimeBackend>(runtime);
+    if (state->interrupt) throw std::runtime_error("SIF0 stop with a pending reply interrupt");
+    state->channel.stopReceive(*state);
+    // PS2SDK identifies SIF0 CHCR at 0x1000c000 and STR as bit 8.
+    runtime->memory().write32(0x1000c000u, runtime->memory().read32(0x1000c000u) & ~0x100u);
+    std::cerr << "[sif0-stop] receive disabled; no pending reply\n";
+}
+
+void startSifReceive(PS2Runtime* runtime) {
+    if (!runtime) throw std::runtime_error("SIF0 start without runtime");
+    std::lock_guard lock(channelsMutex);
+    auto& state = channels[runtime];
+    if (!state) state = std::make_shared<RuntimeBackend>(runtime);
+    state->channel.startReceive();
+    // Packet transport models reception synchronously; no guessed DMA tag is installed.
+    runtime->memory().write32(0x1000c000u, runtime->memory().read32(0x1000c000u) | 0x100u);
 }
 }

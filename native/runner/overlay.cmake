@@ -29,6 +29,8 @@ function(drakengard_configure_runner)
         "${REPO_ROOT}/native/runner/kernel_functions.cpp"
         "${REPO_ROOT}/native/runner/sif_channel.cpp"
         "${REPO_ROOT}/native/runner/fileio_rpc.cpp"
+        "${REPO_ROOT}/native/runner/iso_media.cpp"
+        "${REPO_ROOT}/native/runner/cdvd_rpc.cpp"
         "${REPO_ROOT}/native/runner/sif_transport.cpp")
     set_source_files_properties("${REPO_ROOT}/native/runner/sif_transport.cpp"
         TARGET_DIRECTORY ps2EntryRunner PROPERTIES
@@ -69,12 +71,19 @@ function(drakengard_configure_runner)
         message(FATAL_ERROR "Pinned SetSyscall contract changed; review first")
     endif()
     set(strict_system "${guarded_system}")
+    string(REPLACE "if (syscallId == 0x04u)"
+        "if (syscallId == 0x6bu) { drakengard::stopSifReceive(runtime); return; }\n        if (syscallId == 0x04u)"
+        stopped_system "${strict_system}")
+    if(stopped_system STREQUAL strict_system)
+        message(FATAL_ERROR "Pinned syscall fallback dispatch contract changed")
+    endif()
+    set(strict_system "${stopped_system}")
     set(strict_file "${CMAKE_BINARY_DIR}/private_strict_System.cpp")
     string(REPLACE "throw std::runtime_error(\"No generated code for installed syscall handler\");"
         "diagnoseMissingHandler(rdram, PS2_RAM_SIZE, handler); throw std::runtime_error(\"No generated code for installed syscall handler\");"
         strict_system "${strict_system}")
     file(CONFIGURE OUTPUT "${strict_file}"
-        CONTENT "#include <stdexcept>\n#include \"diagnostic.h\"\n${strict_system}" @ONLY)
+        CONTENT "#include <stdexcept>\n#include \"sif_transport.h\"\n#include \"diagnostic.h\"\n${strict_system}" @ONLY)
     get_target_property(runtime_sources ps2_runtime SOURCES)
     list(FILTER runtime_sources EXCLUDE REGEX "Syscalls/System[.]cpp$")
     set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
@@ -130,6 +139,13 @@ function(drakengard_configure_runner)
     if(sif_directional STREQUAL sif_original)
         message(FATAL_ERROR "Pinned SIF DMA interrupt contract changed")
     endif()
+    string(REPLACE "(void)rdram;\n        (void)runtime;\n        setReturnS32(ctx, 0);"
+        "(void)rdram; (void)ctx; drakengard::startSifReceive(runtime);"
+        sif_started "${sif_directional}")
+    if(sif_started STREQUAL sif_directional)
+        message(FATAL_ERROR "Pinned SIF receive-chain entry contract changed")
+    endif()
+    set(sif_directional "${sif_started}")
     set(sif_file "${CMAKE_BINARY_DIR}/private_directional_SIF.cpp")
     file(CONFIGURE OUTPUT "${sif_file}"
         CONTENT "#include \"sif_transport.h\"\n${sif_directional}" @ONLY)

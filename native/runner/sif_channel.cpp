@@ -29,11 +29,22 @@ Packet completion(const Packet& request, uint32_t command) {
 }
 
 void SifChannel::reset() {
-    m_receive = 0; m_ready = false; m_sregs.fill(0); m_servers.clear();
+    m_receive = 0; m_ready = false; m_receiveEnabled = true;
+    m_sregs.fill(0); m_servers.clear();
+}
+
+void SifChannel::stopReceive(SifBackend& backend) {
+    if (m_receive) {
+        Packet header{};
+        require(backend.readEe(m_receive, header.data(), 4), "Cannot inspect SIF0 stop state");
+        require((word(header, 0) & 0xffu) == 0, "SIF0 stop with an unconsumed packet is unsupported");
+    }
+    m_receiveEnabled = false;
 }
 
 void SifChannel::emit(const Packet& packet, uint32_t size, uint32_t destination,
                       bool commandBuffer, SifBackend& backend) {
+    require(m_receiveEnabled, "SIF reply attempted while SIF0 receive is stopped");
     require(backend.validEe(destination, size), "Invalid EE SIF reply range");
     if (commandBuffer) {
         Packet previous{};
@@ -55,6 +66,18 @@ void SifChannel::receive(uint32_t destination, uint32_t size, SifBackend& backen
     const uint32_t command = word(packet, 2), option = word(packet, 3);
     require(packetSize >= 16 && packetSize <= 112 && packetSize <= size && packetSize % 4 == 0,
             "Invalid SIF packet header size");
+
+    if (command == 0x80000003u) {
+        require(packetSize == 104 && dataSize == 0 && word(packet, 1) == 0 && option == 0,
+                "Unsupported IOP reboot packet shape");
+        const uint32_t length = word(packet, 4);
+        require(length <= 80, "IOP reboot argument length exceeds packet");
+        const auto* arguments = reinterpret_cast<const char*>(packet.data() + 24);
+        require(std::find(arguments, arguments + length, '\0') == arguments + length,
+                "Embedded NUL in IOP reboot arguments");
+        backend.rebootIop(std::string_view(arguments, length), word(packet, 5));
+        return;
+    }
 
     if (command == Init || command == ChangeAddress) {
         require(dataSize == 0 && word(packet, 1) == 0, "Unexpected SIF initialization payload");
@@ -83,6 +106,7 @@ void SifChannel::receive(uint32_t destination, uint32_t size, SifBackend& backen
     }
     require(m_ready, "RPC command before SIF channel initialization");
     require(command == Bind || command == Call || command == Other, "Unsupported native SIF command");
+    require(m_receiveEnabled, "RPC attempted while SIF0 receive is stopped");
     const uint32_t minimumSize = command == Bind ? 36 : command == Call ? 56 : 44;
     require(packetSize >= minimumSize && backend.validEe(word(packet, 5), 64), "Invalid RPC packet address or size");
     const uint32_t client = word(packet, 7);

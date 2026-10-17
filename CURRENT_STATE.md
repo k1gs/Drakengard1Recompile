@@ -1,7 +1,7 @@
 # Состояние проекта
 
 Дата: 2026-10-17. Работа возобновлена пользователем.
-M3 EE startup выполнен до service layer. M4: SIF channel и read-only FileIO backend; меню ещё не получено.
+M3 EE startup выполнен до service layer. M4: SIF, read-only FileIO и ISO/CDVD backend; меню ещё не получено.
 
 ## Сейчас
 
@@ -18,17 +18,31 @@ M3 EE startup выполнен до service layer. M4: SIF channel и read-only 
   bind CDVD SID `0x80000592`, available=false. Последние snapshots: PC `0x0030AE18`, RA `0x0030AD64`,
   SP `0x0011FD70`, thread 1. Exit — supervisor timeout, без подтверждённого кадра/меню.
   Binary SHA-256: `41fbeb10835e7c9185d6d42c815dde0067f330608087888e65642ab1daaa58fa`.
-- Первый текущий blocker: отсутствует native CDVD RPC backend `0x80000592`. Следующий эксперимент:
-  проверить wire ABI команды, подключить SHA-verified original ISO read-only и обслужить реальные
-  CDVD requests. Не использовать fake disc-ready, fabricated LSN/TOC или guessed timing.
-- Проверено: 19 Python tests, C++ exact kernel dispatch smoke, C++ SIF packet smoke, C++ real-file
-  FileIO smoke. Actual game file/sector reads, графика, звук, ввод и сохранения ещё не подтверждены.
-- Build-028 пересобирает тот же source checkpoint после дополнительной проверки metadata/data overlap.
+- Blocker run-016 устранён: native runner проверяет полный SHA-256 ISO перед runtime initialization;
+  read-only ISO reader разбирает реальные directory extents и обслуживает ограниченный CDVD RPC ABI.
+  Init/ready относятся к проверенному синхронному virtual drive; RTC/TOC/raw sectors не выдумываются.
+- Actual ISO probe: 2 170 432 sectors, 17 files, boot ELF LSN 287, size 4 873 284.
+  Байты ELF из ISO extent независимо совпали с закреплённым ELF SHA-256. Это probe, не guest read.
+- Native-run-017 прошёл CDVD init/ready и остановился на syscall `0x6B`, PC `0x0031FD38`.
+  Run-018 с synthetic ISO отвергнут до окна/guest execution: exit 2, ISO verification=false.
+- `0x6B` — void `sceSifStopDma`: реализована остановка входящего SIF0 без изменения return register.
+  Pending/unconsumed replies запрещают остановку; последующие RPC replies при остановленном
+  канале запрещены. SetDChain возобновляет синхронный receive transport; STR отражён в CHCR.
+- Native-run-019/020 прошли stop и дошли до реального SIF RESET CID `0x80000003`, packet size `0x68`.
+  Run-020 декодировал mode 0 и 40-byte request: `rom0:UDNL cdrom0:\MODULES\IOPRP280.IMG;1`.
+  Backend явно остановился перед перезапуском; BOOTEND не выставляется. Exit 5, без timeout.
+  Build-031 binary SHA-256: `8319df6c24d14359e5576bd4c4ec4e64cb214d16cc2d121f98567655521de002`.
+- Первый текущий blocker: actual IOP reboot/module initialization по этому запросу.
+  Следующий эксперимент: проверить ROMDIR/EXTINFO IOPRP280, порядок и зависимости модулей,
+  затем проверить фактическую загрузку/выполнение вместо unconditional reset-success.
+- Проверено: 19 Python tests, C++ exact kernel dispatch, SIF packet, real-file FileIO и ISO/CDVD
+  smoke. Actual game file/sector reads, графика, звук, ввод и сохранения ещё не подтверждены.
 
 ## История runtime checkpoint
 
-- Source-only public checkpoint: `b666696`; CI прошёл четыре комбинации Windows/Linux × Python 3.10/3.13,
-  включая C++ kernel-dispatch smoke: https://github.com/k1gs/Drakengard1Recompile/actions/runs/39009134734.
+- Последний опубликованный source checkpoint перед ISO/CDVD: `cb27445`; CI прошёл четыре комбинации
+  Windows/Linux × Python 3.10/3.13, включая C++ kernel/SIF/FileIO checks:
+  https://github.com/k1gs/Drakengard1Recompile/actions/runs/39010188639.
 - Native build успешно слинкован без `/FORCE:MULTIPLE`: пустая upstream registration unit
   заменена нашим input verifier, generated registration используется единожды.
 - Native runner сам проверяет точный ELF SHA-256 до инициализации окна. Неверный ELF

@@ -153,6 +153,10 @@ Runner проверяет ELF SHA-256 самостоятельно через Wi
 Scheduler snapshots читаются через штатный snapshot API. Счётчик diagnostic frames отражает
 host render loop, а не количество отрисованных кадров игры.
 Packet-level SIF bridge и read-only FileIO RPC backend описаны в SIF_PROTOCOL.md.
+ISO/CDVD backend и границы проверки: MEDIA.md. При передаче диска runner сам проверяет полный
+ISO SHA-256 до окна; `run_native.py` передаёт исходный диск read-only (путь можно задать `--disc`).
+Рекомендуемый diagnostic budget 60 секунд включает проверку полного ISO; результат отдельно
+содержит `disc_verified_by_native`. Ошибка hash даёт exit 2, без исполнения guest code.
 Private SIF build unit отделяет outgoing DMA от incoming reply IRQ; upstream checkout остаётся чистым.
 Дополнительные C++ checks без game/BIOS: `cmake -S native/sif_smoke -B build/sif-smoke`,
 build Release и `ctest --test-dir build/sif-smoke -C Release --output-on-failure`.
@@ -169,7 +173,7 @@ $nativeArgs = @(
 )
 cmake @nativeArgs
 cmake --build build/native --config Release --target ps2EntryRunner --parallel 4
-python scripts/run_native.py --input-complete --seconds 20 --run 1
+python scripts/run_native.py --input-complete --seconds 60 --run 1
 ```
 
 raylib-minimal использует sparse checkout `src cmake`; full assets/examples не нужны.
