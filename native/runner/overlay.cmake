@@ -32,6 +32,18 @@ function(drakengard_configure_runner)
         "${REPO_ROOT}/native/runner/iso_media.cpp"
         "${REPO_ROOT}/native/runner/cdvd_rpc.cpp"
         "${REPO_ROOT}/native/runner/sif_transport.cpp")
+    set(IOP_ROOT "${CMAKE_SOURCE_DIR}/ps2xIOP")
+    include("${REPO_ROOT}/native/iop_probe/primitives.cmake")
+    drakengard_add_iop_primitives(drakengard_strict_iop)
+    # Separate namespace prevents strict CPU/cache semantics from replacing the
+    # upstream pre-reset HLE subsystem through duplicate linker symbols.
+    target_compile_definitions(drakengard_strict_iop PRIVATE ps2x=drakengard_strict_iop)
+    add_library(drakengard_iop_engine STATIC "${REPO_ROOT}/native/runner/iop_boot.cpp")
+    target_compile_definitions(drakengard_iop_engine PRIVATE ps2x=drakengard_strict_iop)
+    target_include_directories(drakengard_iop_engine PRIVATE "${REPO_ROOT}/native/iop_probe")
+    target_link_libraries(drakengard_iop_engine PRIVATE drakengard_strict_iop)
+    target_sources(ps2EntryRunner PRIVATE "${REPO_ROOT}/native/runner/iop_bridge.cpp")
+    target_link_libraries(ps2EntryRunner PRIVATE drakengard_iop_engine)
     set_source_files_properties("${REPO_ROOT}/native/runner/sif_transport.cpp"
         TARGET_DIRECTORY ps2EntryRunner PROPERTIES
         INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
@@ -146,9 +158,25 @@ function(drakengard_configure_runner)
         message(FATAL_ERROR "Pinned SIF receive-chain entry contract changed")
     endif()
     set(sif_directional "${sif_started}")
+    foreach(reg_entry IN ITEMS
+        "void sceSifGetReg(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)"
+        "void sceSifSetReg(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)")
+        if(reg_entry MATCHES "sceSifGetReg")
+            set(reg_route "drakengard::cooperativeSifGetReg(getRegU32(ctx, 4))")
+        else()
+            set(reg_route "drakengard::cooperativeSifSetReg(getRegU32(ctx, 4), getRegU32(ctx, 5))")
+        endif()
+        string(REPLACE "${reg_entry}\n    {"
+            "${reg_entry}\n    {\n        if (auto value = ${reg_route}) { setReturnU32(ctx, *value); return; }"
+            sif_reg_guarded "${sif_directional}")
+        if(sif_reg_guarded STREQUAL sif_directional)
+            message(FATAL_ERROR "Pinned HLE SIF register entry changed")
+        endif()
+        set(sif_directional "${sif_reg_guarded}")
+    endforeach()
     set(sif_file "${CMAKE_BINARY_DIR}/private_directional_SIF.cpp")
     file(CONFIGURE OUTPUT "${sif_file}"
-        CONTENT "#include \"sif_transport.h\"\n${sif_directional}" @ONLY)
+        CONTENT "#include \"sif_transport.h\"\n#include \"iop_bridge.h\"\n${sif_directional}" @ONLY)
     set_source_files_properties("${sif_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
         INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/Kernel/Stubs")
     get_target_property(runtime_sources ps2_runtime SOURCES)
@@ -161,14 +189,21 @@ function(drakengard_configure_runner)
     file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/ps2_memory.cpp" memory_original)
     set(memory_entry "bool PS2Memory::writeIORegister(uint32_t address, uint32_t value)\n{")
     string(REPLACE "${memory_entry}"
-        "${memory_entry}\n    diagnoseEeSifRegisterWrite(address, value);"
+        "${memory_entry}\n    diagnoseEeSifRegisterWrite(address, value);\n    if (drakengard::cooperativeSifWrite(address, value)) return true;"
         memory_traced "${memory_original}")
     if(memory_traced STREQUAL memory_original)
         message(FATAL_ERROR "Pinned EE memory register-write entry changed")
     endif()
+    set(memory_read "uint32_t PS2Memory::readIORegister(uint32_t address)\n{")
+    string(REPLACE "${memory_read}"
+        "${memory_read}\n    if (auto value = drakengard::cooperativeSifRead(address)) return *value;"
+        memory_bridged "${memory_traced}")
+    if(memory_bridged STREQUAL memory_traced)
+        message(FATAL_ERROR "Pinned EE memory register-read entry changed")
+    endif()
     set(memory_file "${CMAKE_BINARY_DIR}/private_traced_Memory.cpp")
     file(CONFIGURE OUTPUT "${memory_file}"
-        CONTENT "#include \"sif_diagnostic.h\"\n${memory_traced}" @ONLY)
+        CONTENT "#include \"sif_diagnostic.h\"\n#include \"iop_bridge.h\"\n${memory_bridged}" @ONLY)
     set_source_files_properties("${memory_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
         INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
     get_target_property(runtime_sources ps2_runtime SOURCES)

@@ -15,6 +15,7 @@ def main(argv=None):
     parser.add_argument("--input-complete", action="store_true")
     parser.add_argument("--seconds", type=int, default=20, choices=range(1, 61))
     parser.add_argument("--run", type=int, default=1)
+    parser.add_argument("--iop-bootstrap", action="store_true", help="Use the verified local strict IOP bootstrap experiment")
     parser.add_argument("--disc", type=Path, default=ROOT / "game/Drakengard (Europe) (En,Fr,De,Es,It).iso")
     args = parser.parse_args(argv)
     if not args.input_complete:
@@ -35,9 +36,22 @@ def main(argv=None):
         result = {"elf_sha256": ELF_SHA256, "disc_expected_sha256": ISO_SHA256, "executable": executable,
                   "timeout_seconds": args.seconds, "timed_out": False,
                   "note": "Diagnostic execution only; no playable-port claim"}
+        command = [str(exe), str(elf), str(disc)]
+        if args.iop_bootstrap:
+            result["iop_inputs"] = {}
+            for name, relative in (
+                ("bundle", "work/iop-boot-plan-001/boot-plan.bin"),
+                ("hardware", "work/iop-hardware-002/hardware-state.bin"),
+                ("rom", "work/pcsx2-reference/bios/Europe.bin"),
+                ("mecha", "work/pcsx2-reference/bios/Europe.mec"),
+            ):
+                path = ROOT / relative
+                metadata = fingerprint(path)
+                result["iop_inputs"][name] = metadata
+                command.extend((str(path), metadata["sha256"]))
         with (run / "runtime.log").open("x", encoding="utf-8") as log:
             try:
-                child = subprocess.run([str(exe), str(elf), str(disc)], cwd=elf.parent,
+                child = subprocess.run(command, cwd=elf.parent,
                                        stdout=log, stderr=subprocess.STDOUT, timeout=args.seconds)
                 result["exit_code"] = child.returncode
             except subprocess.TimeoutExpired:

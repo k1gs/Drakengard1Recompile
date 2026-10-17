@@ -2,6 +2,7 @@
 #include "sif_channel.h"
 #include "fileio_rpc.h"
 #include "cdvd_rpc.h"
+#include "iop_bridge.h"
 #include "runtime/ps2_memory.h"
 #include "ps2_iop_transport.h"
 #include <cstring>
@@ -28,6 +29,7 @@ public:
     SifChannel channel;
     bool interrupt{};
     unsigned logs{};
+    bool rebooted{};
     std::unordered_map<uint32_t, Copy> copies;
     std::unordered_map<uint32_t, Binding> bindings;
     std::unique_ptr<IsoMedia> media;
@@ -41,7 +43,8 @@ public:
             else std::cerr << "<" << unsigned(byte) << ">";
         }
         std::cerr << '\n';
-        throw std::runtime_error("IOP reboot requires actual requested module initialization; no BOOTEND fabricated");
+        activateCooperativeIop(arguments, mode);
+        rebooted = true; channel.reset(); copies.clear(); bindings.clear(); interrupt = false;
     }
 
     int32_t fileOpen(const std::string& path, uint32_t flags) override {
@@ -215,6 +218,7 @@ void processSifTransfer(PS2Runtime* runtime, uint8_t* ram, const ps2x::iop::SifT
         channels[runtime] = state;
     }
     state->ram = ram;
+    if (state->rebooted) throw std::runtime_error("Post-reset EE-to-IOP DMA requires strict IOP transfer routing");
     for (const auto& binding : state->bindings)
         if ((binding.second.server.buffer & 0x1fffffffu) == (transfer.destinationAddress & 0x1fffffffu) &&
             transfer.size <= binding.second.server.capacity)

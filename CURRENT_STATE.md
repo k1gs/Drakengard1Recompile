@@ -3,7 +3,9 @@
 Дата: 2026-10-17. Пользователь возобновил работу; разрешены дальнейшие эксперименты и focused commits/pushes.
 M3 EE startup выполнен до service layer. M4: SIF, read-only FileIO и ISO/CDVD backend; меню ещё не получено.
 
-Latest published checkpoint: `22f2123` (verified ROM data and SIF register contracts).
+Latest published checkpoint before this update: `19f9c74` (persistent instruction slices),
+CI passed: https://github.com/k1gs/Drakengard1Recompile/actions/runs/39030638086.
+Prior `22f2123` (verified ROM data and SIF register contracts).
 Prior `21ebdd3` (internal timers and owned IRQ delivery),
 CI passed: https://github.com/k1gs/Drakengard1Recompile/actions/runs/39029964607.
 Prior checkpoints: `5cd093b` (image-backed CDVD and CPU identity), `15d6caf` (cache/owned kernel traps),
@@ -14,12 +16,15 @@ CI этого checkpoint и handoff `27fd01b` завершился успешн�
 
 ## Сейчас
 
-- Latest isolated bootstrap-022 passes the BIOS data read and SIF register initialization.
-  It reaches the fixed 8M instruction bound waiting for the absent EE peer: SIF F220 is zero,
-  PC `0x1AEE8`, Status `0x401`, 27,904 isolated cache stores. No peer flags are injected.
-  Main EE runner run-021 still stops at actual IOP reboot; this probe is not yet integrated.
-  Persistent bounded IOP slices and directional EE/IOP bus methods are implemented/tested.
-  Next: attach the persistent bootstrap to the main EE runtime and deliver actual DMA events.
+- Main native-run-026 now executes persistent strict IOP alongside EE, accepts the exact reboot
+  after actual SYSMEM execution, and routes post-reset SIF MMIO/kernel-register calls to one bus.
+  Actual EE writes clear SMFLAG 0x10000/0x20000 and reset software RPC/SUBADDR registers.
+  It reaches the unchanged 8M IOP cap: PC 0x1AEE8, F220 remains zero; EE polls SMFLAG for BOOTEND.
+  No actual EE MSFLAG/SIFINIT write was observed, including before reset (run-024 instrumentation).
+- Current blocker: missing initial EE-side SIF hardware initialization in the pre-entry profile.
+  A verified BIOS kernel candidate at 0x80006240 performs that initialization and writes F220=0x10000.
+  It has only been analyzed, not invoked by native code. Next: translate/execute the actual EE
+  firmware initialization with explicit input/code gates and cooperative scheduling, then real DMA.
 
 - Native-run-014 прошёл SIF/RPC initialization через реальный SET_SREG reply и гостевой SIF0 handler;
   ready flag напрямую не менялся. Следующий FileIO SID `0x80000001` изначально отсутствовал.
@@ -312,3 +317,36 @@ M2 частично выполнен: визуальный baseline ещё не 
   reviewed EE control bit 8. Unsupported IRQ/reset strobes fail before changing state.
 - Validation: standalone bootstrap interfaces and optional bare-CPU suite passed. Existing 31
   Python checks pass; prior published timer/ROM CI checked separately. No game/BIOS bytes published.
+
+### Cooperative EE/IOP checkpoint
+
+- `python scripts/run_native.py --input-complete --iop-bootstrap --seconds 60 --run N`
+  enables the optional private experiment. The launcher records hashes; the native side independently
+  verifies ISO, boot bundle, passive seed, ROM and mecha profile before any guest instruction.
+  Local paths remain in ignored files. Default launch still explicitly refuses reboot without inputs.
+- `BootstrapSession` retains actual CPU/device state through SYSMEM then LOADCORE. Common CMake
+  primitives preserve the pinned loader/cache/PRId contracts. The main strict core is compiled into
+  a separate namespace, leaving the upstream pre-reset HLE core intact. Upstream checkout is clean.
+- The exact mode-0/40-byte request is accepted only with configured inputs and actual SYSMEM return
+  (703 instructions, 0x1800); no BOOTEND is generated. SIF MMIO and GetReg/SetReg both share actual
+  registers after reset. Kernel ids 1..4 map to F200/F210/F220/F230 per pinned PS2SDK sifdma.h.
+  Three software sysregs preserve observed actual writes, including before reset. Unsupported ids,
+  repeated/different reboot and post-reset HLE command DMA remain explicit blockers.
+- Run-022 proved the first guarded HLE-register boundary. Runs-023/024/026 execute both CPUs, pass
+  actual timer IRQ and reach the unchanged total 8M IOP cap at PC 0x1AEE8, Status 0x401,
+  27,904 cache stores. Real EE writes: clear SMFLAG 0x10000 then 0x20000; software 0x80000002 and
+  0x80000000 receive zero. Only the pre-reset clear SMFLAG 0x40000 was observed; no MSFLAG set.
+  Thus EE waits for BOOTEND while IOP waits for EE SIFINIT. No active flag is supplied from a snapshot.
+- Final build-037 / run-026 binary SHA-256:
+  0fab4a5770b4a4ee30c2e96851ea9aa4b3ab6e3c09268c0918a9ff487265deb9. Exit 5, no timeout.
+  Run-025 validates default refusal. Native wrong-bundle and final wrong-ROM hash refusals occur
+  before window/guest execution (iop-native-input-refusal-001/002.log).
+- Next experiment evidence: local BIOS KERNEL is 93,544 bytes, SHA-256
+  7caa05e1a4e1a6b81ed38016039e6d865567faf5af2b842afff55781da7d5a21. Its first 4 KiB match uniquely
+  at physical EE RAM 0 in reviewed snapshot 01; the entire 0x6200..0x6340 window matches as well.
+  Ghidra candidate 0x80006240 writes the missing F220 0x10000, configures SIF0/SIF1 and polls peer
+  SIFINIT, with helpers at 0x80006348/0x800063B0/0x80006B90/0x80005F00.
+  These are analyzed candidates, not new runtime bindings. Private evidence: ee-bios-kernel-001,
+  provenance.json, analysis.log, sif-candidates.c. No firmware bytes/decompilation are public.
+- Validation: 31 Python tests, strict bare-CPU checks and portable bootstrap interface checks pass;
+  actual integration/negative runs above. Native picture, audio content and menu remain unverified.

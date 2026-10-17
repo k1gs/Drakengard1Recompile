@@ -33,6 +33,10 @@ int main() {
             refuses([&] { rom.stage(bus, address, 0x23); });
         refuses([&] { rom.stage(bus, 0xbfc00000, 0x2b); });
         SifRegisters sif;
+        require(SifRegisters::kernelAddress(1) == 0x1000f200 && SifRegisters::kernelAddress(2) == 0x1000f210 &&
+                SifRegisters::kernelAddress(3) == 0x1000f220 && SifRegisters::kernelAddress(4) == 0x1000f230);
+        refuses([] { SifRegisters::kernelAddress(0); });
+        refuses([] { SifRegisters::kernelAddress(0x80000000); });
         sif.write(0x1d000000, 0xffffffff); sif.write(0x1d000010, 0x12345678);
         sif.write(0x1d000030, 0x10000); sif.write(0x1d000030, 0x40000);
         sif.write(0x1d000020, 0xffffffff);

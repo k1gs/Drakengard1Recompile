@@ -218,3 +218,39 @@ following [PCSX2 2.8.2 EE reads](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx
 These are reusable integration primitives. The main EE runner still refuses reboot because
 its persistent IOP peer and DMA engine have not yet been connected. Never replay synthetic
 peer writes into the real boot or let a constant upstream ready value complete that reset.
+
+## Optional cooperative native experiment
+
+The main runner can now attach a separate strict IOP core:
+
+```powershell
+python scripts/run_native.py --input-complete --iop-bootstrap --seconds 60 --run 27
+```
+
+This requires the existing private boot plan, reviewed passive seed, local reference BIOS/profile
+and verified Europe ISO. Their paths are local launcher configuration; each fingerprint is recorded
+in the ignored run manifest and independently verified by native code before guest execution.
+Wrong bundle/ROM hashes were rejected before opening a window. Default launch still refuses reboot
+without these inputs. All binaries, firmware, game files, generated code and logs remain private.
+
+The actual reset request activates persistent SYSMEM/LOADCORE execution. After reset both MMIO and
+kernel register APIs use the same directional bus; ids 1..4 are MAINADDR/SUBADDR/MSFLAG/SMFLAG.
+Software sysregs retain explicit guest writes. Old constant ready replies cannot satisfy reset.
+Only the reviewed mode/request is accepted. Repeated reboot, unknown registers and post-reset HLE
+command transfers fail explicitly. Progress occurs in bounded slices at SIF API boundaries; no
+physical cycle ratio, PAL timing or complete scheduler implementation is claimed.
+
+Native-run-026 proves that EE and IOP both advance, but exposes the missing initial EE SIF state.
+EE clears IOP status bits and polls BOOTEND. IOP waits for EE SIFINIT in F220, which has no observed
+writer in the pre-entry profile. The unchanged total instruction cap stops this mutual wait.
+This does not establish DMA, full module initialization, rendered menu or audio content.
+
+The next experiment is the actual firmware EE initialization routine. A private hash-gated kernel
+image matches the reviewed reference RAM at physical zero (unique first 4 KiB plus the relevant code
+window). Ghidra candidate `0x80006240` writes F220=0x10000 and waits for IOP SIFINIT after setting up
+DMA registers. It and its helpers have only been analyzed; they are not currently native bindings.
+They need explicit translation/code verification and real cooperative device behavior, rather
+than copying active reference flags into the bus.
+
+Primary kernel-register ABI: [PS2SDK sifdma.h](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/ee/kernel/include/sifdma.h).
+Reset sequencing: [PS2SDK iopcontrol.c](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/ee/kernel/src/iopcontrol.c).

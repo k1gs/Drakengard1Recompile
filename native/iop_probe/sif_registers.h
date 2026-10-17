@@ -6,6 +6,10 @@
 // contracts. Only explicit peer writes change flags; completion is not synthesized.
 class SifRegisters {
 public:
+    static uint32_t kernelAddress(uint32_t number) {
+        if (number < 1 || number > 4) throw std::runtime_error("Unreviewed SIF kernel register number");
+        return 0x1000f200u + (number - 1) * 16;
+    }
     bool allows(uint32_t address, uint32_t opcode) const {
         if (opcode != 0x23 && opcode != 0x2b) return false;
         switch (address) {

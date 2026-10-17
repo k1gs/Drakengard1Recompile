@@ -1,12 +1,13 @@
 #include "ps2_runtime.h"
 #include "verify_input.h"
+#include "iop_bridge.h"
 #include "runtime/ee_scheduler.h"
 #include <exception>
 #include <iostream>
 #include <memory>
 
 int main(int argc, char** argv) {
-    if (argc != 2 && argc != 3) {
+    if (argc != 2 && argc != 3 && argc != 11) {
         std::cerr << "Pass the locally verified boot ELF; use scripts/run_native.py\n";
         return 2;
     }
@@ -16,7 +17,7 @@ int main(int argc, char** argv) {
             return 2;
         }
         std::cout << "Verified Europe ELF SHA-256" << std::endl;
-        if (argc == 3) {
+        if (argc >= 3) {
             if (!verifyEuropeIso(argv[2])) {
                 std::cerr << "Native input refused: cannot hash file or wrong Europe ISO SHA-256\n";
                 return 2;
@@ -25,6 +26,10 @@ int main(int argc, char** argv) {
             PS2Runtime::IoPaths paths;
             paths.cdImage = argv[2];
             PS2Runtime::setIoPaths(paths);
+        }
+        if (argc == 11) {
+            drakengard::prepareCooperativeIop({argv[3], argv[4], argv[5], argv[6],
+                argv[7], argv[8], argv[9], argv[10], argv[2]});
         }
         auto runtime = std::make_unique<PS2Runtime>();
         unsigned frames = 0;
