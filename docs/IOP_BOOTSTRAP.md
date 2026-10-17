@@ -285,3 +285,28 @@ exceptions into guest address errors/zero reads; the private build rethrows stri
 The original failing reproduction timed out on repeated errors; the corrected run stops at its first
 unsupported instruction, exit 6 without timeout. This is still component initialization, with no
 confirmed game image, complete boot or game audio.
+
+## Completed SIFINIT component and post-initialization startup
+
+Native-run-032 completed the actual two-sided SIF initialization: original EE code writes
+MSFLAG/SIFINIT, the IOP arms its SIF1 chain receiver and writes its own SIFINIT, then the original
+EE routine returns. The exact reviewed empty receiver configuration retains STR and waits for
+actual tags. No payload bytes, DMA completion or IRQ are fabricated. BCR halfword reads/writes
+preserve the opposite half. Unsupported modes and active rearm remain explicit failures.
+
+The experiment now continues real IOP startup after that return, within the same cumulative
+instruction budget, until guest-owned BOOTEND or the next unsupported operation. The ordinary
+entry/reboot path remains separate; a full cold boot followed by game entry is not established.
+
+The CDVD empty SDATAOUT read follows the pinned reference: zero data with the FIFO still empty,
+no consumption and no completion. Firmware mode also explicitly selects a read-only host-backed
+RTC, using the documented CDVD GMT+9 calendar and validated BCD fields. It does not modify the OS
+clock or emulate persistent console NVM. Other profiles without a configured clock still refuse
+that command. See [MEDIA.md](MEDIA.md) for the device contracts and limits.
+
+Native-run-035 passes that RTC read and stops at CDVD SCMD `0x1B`, no parameters, PC `0x27A08`.
+No BOOTEND or native game frame is yet verified. A changed private BIOS copy, even supplied with
+its own matching intake hash, was rejected by the specific firmware binding before guest execution.
+
+Primary receive behavior: [PS2SDK SIF manager](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/system/sifman/src/sifman.c),
+[PCSX2 SIF1 FIFO/transfer logic](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/Sif1.cpp).

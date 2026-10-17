@@ -5,6 +5,7 @@
 #include <fstream>
 #include <filesystem>
 #include <iterator>
+#include <ctime>
 
 namespace drakengard {
 namespace {
@@ -39,6 +40,23 @@ struct IopBoot::Impl {
 };
 IopBoot::IopBoot(const IopBootInputs& inputs) : impl(std::make_unique<Impl>(inputs)) {}
 IopBoot::~IopBoot() = default;
+void IopBoot::enableSif1Receiver() { impl->session->enableSif1Receiver(); }
+void IopBoot::enableHostRtc() {
+    impl->session->setClockSource([] {
+        const auto now = std::time(nullptr);
+        if (now == std::time_t(-1)) throw StrictDeviceError("Host RTC source unavailable");
+        const std::time_t shifted = now + 9 * 60 * 60; // CDVD internal calendar is GMT+9, per pinned reference.
+        std::tm date{};
+#ifdef _WIN32
+        if (gmtime_s(&date, &shifted)) throw StrictDeviceError("Host RTC conversion failed");
+#else
+        if (!gmtime_r(&shifted, &date)) throw StrictDeviceError("Host RTC conversion failed");
+#endif
+        return CdvdCalendar{date.tm_year + 1900, date.tm_mon + 1, date.tm_mday,
+            date.tm_hour, date.tm_min, date.tm_sec};
+    });
+    std::cerr << "[cdvd-rtc] read-only host wall clock, CDVD GMT+9 calendar; no physical RTC/NVM claim\n";
+}
 void IopBoot::advance(uint32_t instructions) {
     try { impl->session->advance(instructions); }
     catch (const std::exception& error) { throw StrictDeviceError(error.what()); }

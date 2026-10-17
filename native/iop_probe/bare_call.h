@@ -127,7 +127,7 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
                 !(hardware && hardware->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
                 !(cache && cache->allows(address, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
                 !(interrupts && interrupts->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
-                !(dma && dma->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
+                !(dma && dma->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31], &memory)) &&
                 !cdvdAccess && !timerAccess && !romAccess && !sifAccess) {
                 std::cerr << "[bootstrap-mmio-blocker] steps=" << steps << " pc=0x" << std::hex << cpu.pc
                           << " instruction=0x" << instruction << " address=0x" << address << std::dec
@@ -145,8 +145,15 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
             }
             if (cdvdAccess) {
                 const auto key = static_cast<uint8_t>(target);
-                if (opcode == 0x28) cdvd->writeRegister(key, static_cast<uint8_t>(cpu.gpr[(instruction >> 16) & 31]));
-                else memory.write8(address, cdvd->readRegister(key));
+                try {
+                    if (opcode == 0x28) cdvd->writeRegister(key, static_cast<uint8_t>(cpu.gpr[(instruction >> 16) & 31]));
+                    else memory.write8(address, cdvd->readRegister(key));
+                } catch (const std::exception&) {
+                    std::cerr << "[iop-cdvd-blocker] pc=0x" << std::hex << cpu.pc << " register=0x" << target
+                              << " opcode=0x" << opcode << " value=0x" << cpu.gpr[(instruction >> 16) & 31]
+                              << std::dec << " steps=" << steps << '\n';
+                    throw;
+                }
             }
             if (timerAccess) {
                 if (timerWrite) timers->write(target, width, cpu.gpr[(instruction >> 16) & 31]);

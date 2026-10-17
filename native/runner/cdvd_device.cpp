@@ -34,7 +34,9 @@ uint8_t CdvdDevice::readRegister(uint8_t index) {
     case 0x16: return m_scommand;
     case 0x17: return m_responsePosition < m_response.size() ? 0 : 0x40;
     case 0x18:
-        deviceCheck(m_responsePosition < m_response.size(), "CDVD response FIFO is empty");
+        // Pinned functional controller returns zero without consuming anything
+        // when SDATAOUT is empty. This is not a successful S-command response.
+        if (m_responsePosition == m_response.size()) return 0;
         return m_response[m_responsePosition++];
     default: unknownDevice("register read", index);
     }
@@ -99,6 +101,19 @@ void CdvdDevice::scommand(uint8_t command) {
     if (command == 3 && m_sparameters.size() == 1 && m_sparameters[0] == 0 && m_mecha) {
         // Caller-supplied reference device property; no hardcoded SCE/physical revision.
         m_response.assign(m_mecha->begin(), m_mecha->end()); m_responsePosition = 0;
+    } else if (command == 8 && m_sparameters.empty() && m_clock) {
+        const auto date = m_clock();
+        deviceCheck(date.year >= 2000 && date.year <= 2099 && date.month >= 1 && date.month <= 12 &&
+            date.hour >= 0 && date.hour <= 23 && date.minute >= 0 && date.minute <= 59 &&
+            date.second >= 0 && date.second <= 59, "CDVD clock calendar outside supported range");
+        constexpr int days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        const bool leap = date.year % 400 == 0 || (date.year % 4 == 0 && date.year % 100 != 0);
+        deviceCheck(date.day >= 1 && date.day <= days[date.month - 1] + (date.month == 2 && leap),
+            "Invalid CDVD clock calendar day");
+        const auto bcd = [](int value) { return uint8_t((value / 10) * 16 + value % 10); };
+        m_response = {0, bcd(date.second), bcd(date.minute), bcd(date.hour), 0,
+            bcd(date.day), bcd(date.month), bcd(date.year - 2000)};
+        m_responsePosition = 0;
     } else unknownDevice("S-command", command, m_sparameters);
     m_scommand = command; m_sparameters.clear();
 }

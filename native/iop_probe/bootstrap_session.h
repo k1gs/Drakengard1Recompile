@@ -28,6 +28,8 @@ class BootstrapSession {
     }
 public:
     SifRegisters sif;
+    void enableSif1Receiver() { dma.enableSif1Receiver(); }
+    void setClockSource(std::function<drakengard::CdvdCalendar()> source) { cdvd.setClockSource(std::move(source)); }
     BootstrapSession(std::span<const uint8_t> bundle, std::span<const uint8_t> seed,
                      std::vector<uint8_t> romBytes, drakengard::IsoMedia& media,
                      std::array<uint8_t, 4> mecha)

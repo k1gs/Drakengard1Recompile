@@ -62,6 +62,7 @@ void runFirmwareInitialization(PS2Runtime& runtime, const char* path) {
         function(ram, &context, &runtime);
     }
     std::cerr << "[ee-firmware-init] actual guest return; not a complete boot/menu acceptance\n";
+    drakengard::finishFirmwareExperiment();
 }
 #else
 PS2Runtime::RecompiledFunction lookupFirmwareFunction(uint32_t) { return nullptr; }

@@ -71,3 +71,21 @@ state, one final IRQ edge/ack, supplied property bytes and raw-command refusal. 
 passed the initial ready read; game-initiated payload/DMA reads through this device remain unproven.
 Register reference: [PCSX2 2.8.2 CDVD implementation](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/CDVD/CDVD.cpp)
 and [command/status definitions](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/CDVD/CDVD_internal.h).
+
+## Register-level FIFO and RTC subset
+
+Empty SDATAOUT (`0x18`) returns zero while leaving SREADY empty; it neither consumes a reply nor
+creates an IRQ. A later supported command still returns all of its actual response bytes.
+This follows pinned `cdvdRead18`, and does not turn an unsupported S-command into success.
+
+SCMD `0x08` is supported only with an explicit clock source. The firmware experiment selects the
+actual host wall clock, converted to CDVD's internal GMT+9 calendar. One read samples the source
+once and returns the eight-byte BCD record: status, seconds, minutes, hours, reserved, day, month,
+year offset from 2000. Invalid dates/times or years outside 2000..2099 fail before publishing data.
+Clock/NVM writes and physical-console RTC state remain unsupported. No host clock setting is changed.
+Synthetic fixtures cover BCD order, leap days, invalid calendar refusal, FIFO state and no IRQ.
+
+The current next SCMD is `0x1B` (cancel power-off readiness); it remains explicitly unsupported.
+Its control-state contract must be reviewed before adding a successful response.
+
+Primary contracts: [PCSX2 2.8.2 CDVD FIFO, RTC setup and command implementation](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/CDVD/CDVD.cpp).

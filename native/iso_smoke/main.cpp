@@ -122,6 +122,8 @@ int main() {
         check(!drive.call(0x80000593, 1, {}, response, host)); // No invented RTC or TOC.
         check(!drive.call(0x80000595, 4, {}, response, host));
         drakengard::CdvdDevice device(media, std::array<uint8_t, 4>{1, 2, 3, 4});
+        for (unsigned i = 0; i < 32; ++i) check(device.readRegister(0x18) == 0);
+        check(device.readRegister(0x17) == 0x40 && !device.takeInterruptEdge());
         check(device.readRegister(5) == 0x40 && device.readRegister(0x0f) == 0x14);
         const auto request = words({24, 2});
         for (auto byte : request) device.writeRegister(5, byte);
@@ -138,7 +140,22 @@ int main() {
         device.writeRegister(8, 1); check(device.readRegister(8) == 0);
         device.writeRegister(0x17, 0); device.writeRegister(0x16, 3);
         for (uint8_t expected : {1, 2, 3, 4}) check(device.readRegister(0x18) == expected);
+        unsigned clockReads = 0;
+        device.setClockSource([&] { ++clockReads; return drakengard::CdvdCalendar{2000, 2, 29, 23, 59, 58}; });
+        device.writeRegister(0x16, 8);
+        check(clockReads == 1 && device.readRegister(0x17) == 0);
+        for (uint8_t expected : {0, 0x58, 0x59, 0x23, 0, 0x29, 2, 0})
+            check(device.readRegister(0x18) == expected);
+        check(device.readRegister(0x17) == 0x40 && !device.takeInterruptEdge());
+        device.setClockSource([] { return drakengard::CdvdCalendar{2025, 2, 29, 0, 0, 0}; });
+        bool badDate = false;
+        try { device.writeRegister(0x16, 8); } catch (const std::runtime_error&) { badDate = true; }
+        check(badDate && device.readRegister(0x17) == 0x40 && !device.takeInterruptEdge());
         check(device.readRegister(0x17) == 0x40);
+        for (unsigned i = 0; i < 32; ++i) check(device.readRegister(0x18) == 0);
+        check(device.readRegister(0x17) == 0x40 && !device.takeInterruptEdge());
+        device.writeRegister(0x17, 0); device.writeRegister(0x16, 3);
+        for (uint8_t expected : {1, 2, 3, 4}) check(device.readRegister(0x18) == expected);
         bool rawRejected = false;
         try { device.writeRegister(4, 8); } catch (const std::runtime_error&) { rawRejected = true; }
         check(rawRejected && !device.takeInterruptEdge());

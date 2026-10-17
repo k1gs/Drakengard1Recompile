@@ -38,9 +38,25 @@ void activateCooperativeIop(std::string_view arguments, uint32_t mode) {
 void beginFirmwareExperiment() {
     std::lock_guard lock(mutex);
     if (!boot || active) throw std::runtime_error("Firmware experiment requires a fresh configured strict IOP");
+    boot->enableSif1Receiver();
+    boot->enableHostRtc();
     boot->advance(4096);
     active = true; firmwareExperiment = true;
     std::cerr << "[firmware-experiment] selected IOP boot plan active; bounded functional scheduling, not a full BIOS reset\n";
+}
+void finishFirmwareExperiment() {
+    std::lock_guard lock(mutex);
+    if (!firmwareExperiment) throw StrictDeviceError("Firmware continuation without an active component experiment");
+    std::cerr << "[post-firmware-iop] continue actual IOP startup; wait for guest-owned BOOTEND\n";
+    for (unsigned slice = 0; slice < 2048; ++slice) {
+        const auto status = boot->readEe(0x1000f230);
+        if (status & 0x40000) {
+            std::cerr << "[post-firmware-iop] actual guest BOOTEND; SMFLAG=0x" << std::hex << status << std::dec << '\n';
+            return;
+        }
+        boot->advance(4096);
+    }
+    throw StrictDeviceError("Post-firmware IOP slice bound exhausted");
 }
 std::optional<uint32_t> firmwareDmaRead(uint32_t address) {
     std::lock_guard lock(mutex);

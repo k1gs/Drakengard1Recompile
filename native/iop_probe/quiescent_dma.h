@@ -3,10 +3,12 @@
 #include <cstdint>
 #include <stdexcept>
 
-// Register/acknowledgement model with no transfers in flight. A channel start
-// requires an actual DMA engine; it must never be accepted as completed here.
+// Register/acknowledgement model. An explicitly enabled empty SIF1 chain receiver
+// may be armed and wait for tags. No bytes, completion flags or IRQs are fabricated.
 class QuiescentDma {
+    bool m_sif1Receiver{};
 public:
+    void enableSif1Receiver() { m_sif1Receiver = true; }
     static bool interruptRegister(uint32_t address) {
         return address == 0x1f8010f4 || address == 0x1f801574;
     }
@@ -26,10 +28,20 @@ public:
             if (interruptRegister(address) || priorityRegister(address) || channelRegister(address))
                 memory.write32(address, 0);
     }
-    bool allows(uint32_t address, uint32_t opcode, uint32_t value) const {
+    bool allows(uint32_t address, uint32_t opcode, uint32_t value,
+                const ps2x::iop::detail::IopMemory* memory = nullptr) const {
+        const auto offset = address & 15;
+        if ((opcode == 0x21 || opcode == 0x25 || opcode == 0x29) &&
+            (offset == 4 || offset == 6) && channelRegister(address & ~3u)) return true;
         if (opcode != 0x23 && opcode != 0x2b) return false;
         if (interruptRegister(address) || priorityRegister(address)) return true;
         if (!channelRegister(address)) return false;
+        if (opcode == 0x2b && address == 0x1f801538 && value == 0x41000300 && m_sif1Receiver) {
+            if (!memory || memory->read32(0x1f801534) != 0x20 || memory->read32(0x1f801530) != 0 ||
+                (memory->read32(address) & 0x01000000))
+                throw std::runtime_error("Unreviewed SIF1 receiver configuration or active rearm");
+            return true; // The core stores STR; it remains set until stop or an actual future transfer.
+        }
         if (opcode == 0x2b && (address & 15) == 8 && (value & 0x01000000))
             throw std::runtime_error("IOP DMA channel start requires an actual transfer engine");
         return true;

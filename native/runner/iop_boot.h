@@ -12,6 +12,8 @@ public:
     explicit IopBoot(const IopBootInputs& inputs);
     ~IopBoot();
     void advance(uint32_t instructions);
+    void enableSif1Receiver();
+    void enableHostRtc();
     uint32_t readEe(uint32_t address) const;
     void writeEe(uint32_t address, uint32_t value);
 private:

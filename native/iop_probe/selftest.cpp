@@ -96,6 +96,28 @@ int main() {
         if (result.value != 0 || memory.interruptStatus() != 0)
             throw std::runtime_error("I_STAT acknowledge did not clear actual pending bits");
         memory.reset(); QuiescentDma dma; dma.reset(memory);
+        memory.write32(0x1f801534, 0xabcd0000);
+        code(memory, {0x24020020, 0xa4820000, 0x8c820000, 0, 0x03e00008, 0});
+        result = bareCall(memory, 0x1000, 0, 0xbf801534, 0x1000, 0x1100,
+                          nullptr, nullptr, nullptr, &dma);
+        if (result.value != 0xabcd0020 || memory.interruptStatus())
+            throw std::runtime_error("DMA halfword BCR write corrupted upper half or fabricated an IRQ");
+        code(memory, {0x94820002, 0, 0x03e00008, 0}); // lhu v0,2(a0)
+        result = bareCall(memory, 0x1000, 0, 0xbf801534, 0x1000, 0x1100,
+                          nullptr, nullptr, nullptr, &dma);
+        if (result.value != 0xabcd || dma.allows(0x1f801538, 0x29, 0))
+            throw std::runtime_error("DMA halfword BCR read or CHCR width guard failed");
+        memory.write32(0x1f801534, 0x20); memory.write32(0x800, 0xdeadbeef);
+        dma.enableSif1Receiver();
+        code(memory, {0x3c024100, 0x34420300, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
+        result = bareCall(memory, 0x1000, 0, 0xbf801538, 0x1000, 0x1100,
+                          nullptr, nullptr, nullptr, &dma);
+        if (result.value != 0x41000300 || memory.read32(0x1f801538) != 0x41000300 ||
+            memory.read32(0x1f801534) != 0x20 || memory.read32(0x800) != 0xdeadbeef || memory.interruptStatus())
+            throw std::runtime_error("Empty SIF1 receiver fabricated bytes/completion/IRQ or lost STR");
+        rejects([&] { dma.allows(0x1f801538, 0x2b, 0x41000300, &memory); }, "active rearm");
+        memory.write32(0x1f801538, 0); memory.write32(0x1f801534, 0x21);
+        rejects([&] { dma.allows(0x1f801538, 0x2b, 0x41000300, &memory); }, "receiver configuration");
         memory.write32(0x1f8010f4, 0x03000000); // Two actual flags in the synthetic device state.
         dma.afterWrite(memory, 0x1f8010f4, 0x03000000, 0x01810000); // Ack one; enable remaining.
         if (memory.read32(0x1f8010f4) != 0x02810000 || memory.interruptStatus() != 0)
