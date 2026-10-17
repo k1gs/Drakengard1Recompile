@@ -1,11 +1,11 @@
 # Состояние проекта
 
-Дата: 2026-10-17. Пользователь попросил плавно завершить сеанс при остатке лимитов 7%.
+Дата: 2026-10-17. Пользователь возобновил работу; разрешены дальнейшие эксперименты и focused commits/pushes.
 M3 EE startup выполнен до service layer. M4: SIF, read-only FileIO и ISO/CDVD backend; меню ещё не получено.
 
 Последний опубликованный implementation checkpoint: `903d5cb` (strict IOP probes), перед ним `b9d67c9`
 (ISO/CDVD/SIF0). CI для `903d5cb` запущен: https://github.com/k1gs/Drakengard1Recompile/actions/runs/39012376077.
-На момент этой записи он ещё выполнялся; предыдущий checkpoint прошёл CI. Собственные исходники
+CI этого checkpoint и handoff `27fd01b` завершился успешно. Собственные исходники
 сохранены; unrelated untracked `.vscode/` не включалась в commits.
 
 ## Сейчас
@@ -53,16 +53,27 @@ M3 EE startup выполнен до service layer. M4: SIF, read-only FileIO и 
   read address `0xBF801450` (HW_ICFG по PCSX2 2.8.2). Значение не подставлялось.
   RAM-only probe не исполняет HLE success-fallback, запрещает unknown imports/MMIO/exceptions
   и имеет фиксированный instruction budget. Он пока не подключён к EE reboot request.
-- Следующий эксперимент: подтвердить HW_ICFG state/semantics именно на IOP update reboot,
-  затем реализовать только проверенный MMIO contract и повторить strict bootstrap.
-  Cold-reset zeroing в reference emulator не доказывает значение этого register после BIOS init.
+- HW_ICFG blocker устранён в отдельном probe: PINE reference capture с изолированным профилем,
+  PCSX2 v2.8.2, serial SLES-52322, CRC 79585776, patches disabled. Шесть actual savestates
+  на 2.235/3/5/7/10/13.016 wall seconds дали HW_ICFG=1; `iopHwRegs.bin` извлечён через ZIP reader.
+  Эти snapshots подтверждают observed register state, не native game frame или full reboot.
+- `scripts/reference_state.py` требует exact reviewed snapshot SHA-256, pinned savestate layout,
+  уникальные компоненты/точные размеры и fresh output внутри work/. Он экспортирует только
+  HW_ICFG и DMA-global gate; DMA channel/IRQ/timer snapshots не превращаются в устройства.
+- Bootstrap-002 прошёл HW_ICFG и остановился на `0xBF801578`, PC `0xA0003470`.
+  Primary PS2SDK dmacman содержит точные get/set этого register, startup=1/shutdown=0.
+  Во всех шести reference snapshots его значение=1. Probe разрешает только word storage
+  с gate values 0/1; старт DMA channel по-прежнему запрещён.
+- Bootstrap-003 с двумя подтверждёнными registers дошёл до IOP PC `0xA0003488`,
+  read `0xFFFE0130`, после 14 500 LOADCORE instructions. Это cache-control/BIU path.
+  Следующий эксперимент: проверить functional coherent-cache contract и cache isolation:
+  cache-flush stores при CP0.Status.IsC не должны менять backing RAM/code.
 - Reference-mmio-001 не загрузил нужный профиль: PCSX2 добавляет `PCSX2/` к `-datapath`.
   Reference-mmio-002 использовал исправленный изолированный профиль и 30-second supervisor.
   Logs подтверждают boot ELF, регистрацию IOP libraries и PAL CRTC; прямой записи HW_ICFG
   не получено, видимое меню не проверялось. Оба собственных процесса завершены supervisor.
-  Официальные PINE/SaveState sources 2.8.2 просмотрены как возможный следующий способ чтения
-  `iopHwRegs.bin` из локального reference snapshot. PINE experiment/snapshot ещё не запускался.
-- Проверено: 28 Python tests, C++ exact kernel dispatch, SIF packet, real-file FileIO, ISO/CDVD
+  Затем PINE experiment reference-pine-001 успешно получил отдельные snapshots; исходный профиль не менялся.
+- Проверено: 31 Python tests, C++ exact kernel dispatch, SIF packet, real-file FileIO, ISO/CDVD
   и strict bare IOP checks. Actual game file/sector reads, графика, звук, ввод и сохранения ещё
   не подтверждены. Полного IOP reboot, меню и playable build нет.
 

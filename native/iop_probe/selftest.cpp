@@ -27,6 +27,23 @@ int main() {
             throw std::runtime_error("Bare IOP return/delay-slot contract failed");
         memory.reset(); code(memory, {0x8c820000, 0x03e00008, 0}); // lw v0,0(a0)
         rejects([&] { bareCall(memory, 0x1000, 0, 0xbf801450, 0x1000, 0x1030); }, "hardware contract");
+        std::array<uint8_t, 28> seed{'D', '1', 'H', 'W', '0', '0', '1', 0};
+        const auto put = [&](size_t at, uint32_t value) {
+            for (unsigned n = 0; n < 4; ++n) seed[at + n] = uint8_t(value >> (8 * n));
+        };
+        put(8, 2); put(12, 0x1f801450); put(16, 0x12345678); put(20, 0x1f801578); put(24, 1);
+        PassiveHardware hardware; hardware.seed(seed, memory);
+        result = bareCall(memory, 0x1000, 0, 0xbf801450, 0x1000, 0x1030, &hardware);
+        if (result.value != 0x12345678) throw std::runtime_error("Passive hardware read lost actual state");
+        code(memory, {0xac800000, 0x8c820000, 0, 0x03e00008, 0}); // sw zero,0(a0); lw v0,0(a0)
+        result = bareCall(memory, 0x1000, 0, 0xbf801578, 0x1000, 0x1030, &hardware);
+        if (result.value != 0 || memory.read32(0xbf801578) != 0)
+            throw std::runtime_error("DMA-global gate storage did not change");
+        code(memory, {0x24020002, 0xac820000, 0x03e00008, 0}); // Unreviewed gate bits.
+        rejects([&] { bareCall(memory, 0x1000, 0, 0xbf801578, 0x1000, 0x1030, &hardware); }, "hardware contract");
+        put(20, 0x1f801450);
+        rejects([&] { hardware.seed(seed, memory); }, "duplicate passive hardware register");
+        if (memory.read32(0xbf801578) != 0) throw std::runtime_error("Rejected seed changed hardware");
         memory.reset(); code(memory, {0xfc000000}); // Unsupported instruction must raise an exception.
         rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030); }, "raised an exception");
         memory.reset();

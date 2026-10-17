@@ -2,6 +2,7 @@
 #include "core/iop_memory.h"
 #include "core/iop_cpu.h"
 #include "imports/iop_imports.h"
+#include "passive_hardware.h"
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -11,7 +12,8 @@ struct BareCallResult { uint32_t value{}, instructions{}; };
 // Execute only owned RAM code with RAM data accesses. Unknown imports, hardware,
 // exceptions and the instruction budget are explicit blockers, never zero returns.
 inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t entry,
-                              uint32_t gp, uint32_t argument, uint32_t codeBegin, uint32_t codeEnd) {
+                              uint32_t gp, uint32_t argument, uint32_t codeBegin, uint32_t codeEnd,
+                              const PassiveHardware* hardware = nullptr) {
     using namespace ps2x::iop::detail;
     IopCpuCore core(memory);
     IopImportRegistry imports(memory);
@@ -36,7 +38,8 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
             const auto target = IopMemory::physicalAddress(address);
             const unsigned width = opcode == 0x20 || opcode == 0x24 || opcode == 0x28 ? 1 :
                 opcode == 0x21 || opcode == 0x25 || opcode == 0x29 ? 2 : 4;
-            if (target >= IopMemory::RamSize || width > IopMemory::RamSize - target) {
+            if ((target >= IopMemory::RamSize || width > IopMemory::RamSize - target) &&
+                !(hardware && hardware->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31]))) {
                 std::cerr << "[bootstrap-mmio-blocker] steps=" << steps << " pc=0x" << std::hex << cpu.pc
                           << " instruction=0x" << instruction << " address=0x" << address << std::dec << '\n';
                 throw std::runtime_error("Non-RAM data access requires an explicit hardware contract");

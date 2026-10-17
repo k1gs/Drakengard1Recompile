@@ -53,10 +53,23 @@ at 0x890, loaded at 0x830, returned 0x1800 after 703 instructions. LOADCORE was 
 0x1830 and called with the prepared ResetData. After 14,485 instructions it attempted a read
 at 0xBF801450, IOP PC 0xA000344C. The strict RAM-only guard stopped before the read.
 
-The reference names this register HW_ICFG. Its update-reboot state has not been confirmed.
-Cold-reset zeroing of the emulator's hardware array does not establish the BIOS-initialized value;
-the probe does not inject a guessed zero. Next: establish this specific register contract/state,
-then repeat bootstrap and record its next actual blocker.
+The reference names this register HW_ICFG. A subsequent local PINE experiment captured six
+PCSX2 2.8.2 states at 2.235/3/5/7/10/13.016 wall seconds. Each snapshot stored HW_ICFG=1,
+with serial SLES-52322 and CRC 79585776 confirmed through PINE; patches were disabled.
+The emulator's cold-reset zero was therefore not used as an initialized state.
+
+`scripts/reference_state.py --input-complete --state LOCAL.p2s --expected-sha256 REVIEWED_HASH
+--output work/FRESH_ID` verifies the reviewed snapshot hash, exact version/layout, component
+uniqueness and bounded sizes before exporting minimal register state. The optional bootstrap
+argument `--hardware-state work/FRESH_ID/hardware-state.bin` permits only reviewed word access
+to HW_ICFG and DMA-global gate 0x1F801578. Gate values other than 0/1 remain unsupported.
+The gate's value was 1 in every snapshot; primary dmacman source implements get/set and writes
+1 on startup and 0 on shutdown. No channel DMA, IRQ, timer state or completion is restored.
+
+Bootstrap-002 passed HW_ICFG, then stopped at the DMA-global gate, PC 0xA0003470. Bootstrap-003
+with both registers stopped at 0xFFFE0130, PC 0xA0003488, after 14,500 LOADCORE instructions.
+Next: establish the coherent instruction-cache/cache-isolation contract. Flush stores with
+CP0.Status.IsC must not overwrite backing RAM. Cache-control is still an explicit blocker.
 
 Strict synthetic C++ checks cover normal return/delay slot, exception, non-RAM access, unresolved
 import, unowned instruction fetch and instruction-budget exhaustion. Python tests cover ROMFS
@@ -67,3 +80,8 @@ Primary references pinned to PS2SDK `329e2bb43287e16af16c4dde1c614e2662c24468`:
 [ROMFS records](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/fs/romdrv/include/romdrv.h),
 [UDNL selection, ResetData and bootstrap sequence](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/system/udnl/src/udnl.c).
 Hardware identifier: [PCSX2 2.8.2 IOP register definitions](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopHw.h).
+Reference capture: [loopback PINE protocol](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/PINE.cpp),
+[savestate component layout](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SaveState.cpp),
+[register reads](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/ps2/Iop/IopHwRead.cpp),
+[register writes](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/ps2/Iop/IopHwWrite.cpp),
+and [DMA-global get/set](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/system/dmacman/src/dmacman.c).
