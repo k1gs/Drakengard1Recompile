@@ -198,3 +198,23 @@ restored backing words and refusal to execute ROM. None of this establishes a na
 
 Primary bus contracts: [PCSX2 2.8.2 IOP memory access](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopMem.cpp),
 [EE writes](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/HwWrite.cpp).
+
+## Persistent instruction slices
+
+`BareCallState` retains CPU, pending loads, branch-delay state and a cumulative bounded
+instruction count. A partial slice returns `completed=false`; only the actual return boundary
+produces completion. Resume rejects a changed memory or call contract. Devices remain owned
+by the caller and persist alongside the CPU. Each decoded instruction still advances one
+modeled timer cycle, regardless of the slice boundary.
+
+Bootstrap-022 runs 4,096-instruction slices and reproduces the unsliced trace/blocker exactly
+apart from its scheduling-policy line. One-instruction synthetic tests retain an uncommitted
+load and a pending branch; a separate flag-polling guest waits until an explicit synthetic EE
+write between slices. The bus now exposes directional EE flag/address writes as well as the
+IOP view. Unsupported EE IRQ/reset control strobes fail before modifying state.
+The EE control read has its own forced bit 8, separate from stored bit 8 observed by IOP,
+following [PCSX2 2.8.2 EE reads](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/HwRead.cpp).
+
+These are reusable integration primitives. The main EE runner still refuses reboot because
+its persistent IOP peer and DMA engine have not yet been connected. Never replay synthetic
+peer writes into the real boot or let a constant upstream ready value complete that reset.

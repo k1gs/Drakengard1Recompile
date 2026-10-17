@@ -25,6 +25,29 @@ int main() {
         auto result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030);
         if (result.value != 42 || result.instructions != 3)
             throw std::runtime_error("Bare IOP return/delay-slot contract failed");
+        memory.reset(); memory.write32(0x800, 42);
+        code(memory, {0x8c820000, 0, 0x03e00008, 0x24420001}); // lw; nop; jr ra; addiu v0,1.
+        BareCallState sliced;
+        const auto step = [&] {
+            return bareCall(memory, 0x1000, 0, 0x800, 0x1000, 0x1100,
+                            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &sliced, 1);
+        };
+        result = step();
+        if (result.completed || !sliced.cpu.pendingLoad || sliced.cpu.gpr[2] != 0)
+            throw std::runtime_error("IOP slice lost its pending load or claimed completion");
+        result = step();
+        if (result.completed || sliced.cpu.pendingLoad || sliced.cpu.gpr[2] != 42)
+            throw std::runtime_error("IOP slice failed to commit a delayed load");
+        result = step();
+        if (result.completed || !sliced.cpu.branchPending)
+            throw std::runtime_error("IOP slice lost the branch delay slot");
+        result = step();
+        if (!result.completed || result.value != 43 || result.instructions != 4)
+            throw std::runtime_error("IOP sliced return differs from actual delay-slot semantics");
+        rejects([&] { bareCall(memory, 0x1000, 0, 0x801, 0x1000, 0x1100,
+            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &sliced, 1); }, "call contract");
+        rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100,
+            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 1); }, "instruction slice");
         code(memory, {0x40807800, 0x40027800, 0, 0x03e00008, 0}); // mtc0 zero,PRId; mfc0 v0,PRId.
         result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030);
         if (result.value != 0x1f) throw std::runtime_error("IOP revision identity must be correct and read-only");
@@ -136,6 +159,19 @@ int main() {
         result = bareCall(memory, 0x1000, 0, 0xbd000030, 0x1000, 0x1100,
                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &sif);
         if (result.value != 0x50000) throw std::runtime_error("SIF set flags were overwritten by CPU SW backing storage");
+        memory.reset(); SifRegisters peerBus; BareCallState waiting;
+        code(memory, {0x3c08bd00, 0x8d020020, 0, 0x1040fffd, 0, 0x03e00008, 0});
+        const auto poll = [&] {
+            return bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100,
+                nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &peerBus, &waiting, 16);
+        };
+        result = poll();
+        if (result.completed || result.instructions != 16 || peerBus.read(0x1d000020))
+            throw std::runtime_error("Waiting IOP fabricated a peer flag/completion");
+        peerBus.writeEe(0x1000f220, 0x10000); // Explicit synthetic peer event between CPU slices.
+        result = poll();
+        if (!result.completed || result.value != 0x10000)
+            throw std::runtime_error("Persistent IOP did not observe the actual peer write");
         romBytes[0] = 0x78; romBytes[1] = 0x56; romBytes[2] = 0x34; romBytes[3] = 0x92;
         romBytes.back() = 0xa5;
         ReadOnlyRom rom(std::move(romBytes));

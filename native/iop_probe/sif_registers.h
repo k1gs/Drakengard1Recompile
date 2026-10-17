@@ -2,8 +2,8 @@
 #include <cstdint>
 #include <stdexcept>
 
-// Isolated IOP view of a quiescent SIF bus, following the pinned functional
-// register contract. No EE command, DMA completion or BOOTEND is synthesized.
+// Directional SIF bus, initially quiescent, following pinned functional register
+// contracts. Only explicit peer writes change flags; completion is not synthesized.
 class SifRegisters {
 public:
     bool allows(uint32_t address, uint32_t opcode) const {
@@ -40,6 +40,24 @@ public:
             break;
         }
         case 0x60: break;
+        }
+    }
+    uint32_t readEe(uint32_t address) const {
+        if (address < 0x1000f200 || address > 0x1000f240 || (address & 15))
+            throw std::runtime_error("Unsupported EE SIF register read");
+        if (address == 0x1000f240) return m_control | 0xf0000102u;
+        return read(0x1d000000u + address - 0x1000f200u);
+    }
+    void writeEe(uint32_t address, uint32_t value) {
+        switch (address) {
+        case 0x1000f200: m_eeAddress = value; break;
+        case 0x1000f220: m_eeFlags |= value; break;
+        case 0x1000f230: m_iopFlags &= ~value; break;
+        case 0x1000f240:
+            if (value & ~0x100u) throw std::runtime_error("EE SIF control strobe requires actual IRQ/reset delivery");
+            m_control = (m_control & ~0x100u) | value;
+            break;
+        default: throw std::runtime_error("Unsupported EE SIF register write");
         }
     }
 private:

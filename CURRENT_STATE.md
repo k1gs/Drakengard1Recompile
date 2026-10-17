@@ -3,7 +3,8 @@
 Дата: 2026-10-17. Пользователь возобновил работу; разрешены дальнейшие эксперименты и focused commits/pushes.
 M3 EE startup выполнен до service layer. M4: SIF, read-only FileIO и ISO/CDVD backend; меню ещё не получено.
 
-Latest published checkpoint: `21ebdd3` (internal timers and owned IRQ delivery),
+Latest published checkpoint: `22f2123` (verified ROM data and SIF register contracts).
+Prior `21ebdd3` (internal timers and owned IRQ delivery),
 CI passed: https://github.com/k1gs/Drakengard1Recompile/actions/runs/39029964607.
 Prior checkpoints: `5cd093b` (image-backed CDVD and CPU identity), `15d6caf` (cache/owned kernel traps),
 `3cc2f41` (passive reference registers), `903d5cb` (strict IOP probes), перед ним `b9d67c9`
@@ -13,11 +14,12 @@ CI этого checkpoint и handoff `27fd01b` завершился успешн�
 
 ## Сейчас
 
-- Latest isolated bootstrap-021 passes the BIOS data read and SIF register initialization.
+- Latest isolated bootstrap-022 passes the BIOS data read and SIF register initialization.
   It reaches the fixed 8M instruction bound waiting for the absent EE peer: SIF F220 is zero,
   PC `0x1AEE8`, Status `0x401`, 27,904 isolated cache stores. No peer flags are injected.
   Main EE runner run-021 still stops at actual IOP reboot; this probe is not yet integrated.
-  Next: persistent cooperative IOP execution and a shared directional SIF register bus.
+  Persistent bounded IOP slices and directional EE/IOP bus methods are implemented/tested.
+  Next: attach the persistent bootstrap to the main EE runtime and deliver actual DMA events.
 
 - Native-run-014 прошёл SIF/RPC initialization через реальный SET_SREG reply и гостевой SIF0 handler;
   ready flag напрямую не менялся. Следующий FileIO SID `0x80000001` изначально отсутствовал.
@@ -294,3 +296,19 @@ M2 частично выполнен: визуальный baseline ещё не 
   DMA START still requires a real engine; main BOOTEND remains fail-closed.
 - New game-free bootstrap interface checks run in CI. Local standalone checks and optional CPU
   checks passed. Upstream stays pinned/clean; inputs, binaries and all logs stay ignored.
+
+### Persistent IOP execution checkpoint
+
+- BareCallState preserves CPU registers, CP0, pending loads, branch delay and cumulative instruction
+  budget across explicit bounded slices. The same memory/call contract is required on resume.
+  Partial completion is distinct from guest return. The fixed total 8M cap is not reset per slice.
+- Bootstrap-022 uses 4,096-instruction slices. Its trace matches unsliced bootstrap-021 after
+  excluding the new scheduling-policy line: same IRQ, CPU registers, PC, cache stores and blocker.
+  Private build evidence: build-iop-probe-029.log; peer tests build-iop-probe-030.log.
+- A synthetic IOP flag-poll loop remains pending without an EE event, then sees an explicit
+  synthetic EE write between slices and returns through its original guest code. No real game
+  EE/IOP integration or BOOTEND is claimed. This is preparation for that integration.
+- SIF bus now provides EE address assignment, EE-set/IOP-clear and IOP-set/EE-clear flags and
+  reviewed EE control bit 8. Unsupported IRQ/reset strobes fail before changing state.
+- Validation: standalone bootstrap interfaces and optional bare-CPU suite passed. Existing 31
+  Python checks pass; prior published timer/ROM CI checked separately. No game/BIOS bytes published.

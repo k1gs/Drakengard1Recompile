@@ -101,6 +101,17 @@ int main(int argc, char** argv) {
         if (hardwarePath) hardware.load(hardwarePath, memory);
         CoherentCache cache;
         if (coherent) cache.initialize(memory);
+        const auto execute = [&](uint32_t entry, uint32_t gp, uint32_t argument) {
+            BareCallState state;
+            BareCallResult result;
+            do {
+                result = bareCall(memory, entry, gp, argument, start, SourcePool,
+                    &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions,
+                    cdvd.get(), &timers, rom.get(), &sif, &state, 4096);
+            } while (!result.completed);
+            return result;
+        };
+        std::cerr << "[iop-slices] persistent CPU state; at most 4096 decoded instructions per slice\n";
         const uint32_t pointers = SourcePool + 32;
         uint32_t source = (pointers + (count + 1) * 4 + 15) & ~15u;
         size_t position = 16;
@@ -132,8 +143,7 @@ int main(int argc, char** argv) {
         if (!sysmem || !sysmem.relocationsComplete || sysmem.base != start + 0x30 ||
             sysmem.base + uint64_t(sysmem.size) >= SourcePool)
             throw std::runtime_error("SYSMEM bootstrap image refused");
-        const auto initialized = bareCall(memory, sysmem.entry, sysmem.gp, IopMemory::RamSize, start, SourcePool,
-                                          &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions, cdvd.get(), &timers, rom.get(), &sif);
+        const auto initialized = execute(sysmem.entry, sysmem.gp, IopMemory::RamSize);
         std::cout << "[bootstrap-sysmem] steps=" << initialized.instructions << " free_start=0x"
                   << std::hex << initialized.value << std::dec << '\n';
         if (initialized.value % 16 || initialized.value >= SourcePool - 0x30)
@@ -144,8 +154,7 @@ int main(int argc, char** argv) {
             throw std::runtime_error("LOADCORE bootstrap image refused");
         std::cout << "[bootstrap-loadcore] base=0x" << std::hex << loadcore.base << " entry=0x"
                   << loadcore.entry << " reset_data=0x" << SourcePool << std::dec << " modules=" << count << '\n';
-        const auto result = bareCall(memory, loadcore.entry, loadcore.gp, SourcePool, start, SourcePool,
-                                     &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions, cdvd.get(), &timers, rom.get(), &sif);
+        const auto result = execute(loadcore.entry, loadcore.gp, SourcePool);
         std::cout << "[bootstrap-loadcore-return] value=0x" << std::hex << result.value << std::dec
                   << " steps=" << result.instructions << "\nNo EE notification or BOOTEND has been issued\n";
     } catch (const std::exception& error) {

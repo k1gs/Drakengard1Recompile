@@ -43,6 +43,16 @@ int main() {
         sif.write(0x1d000060, 0xffffffff); require(!sif.read(0x1d000060));
         refuses([&] { sif.read(0x1d000050); });
         require(!sif.allows(0x1d000000, 0x25));
+        sif.writeEe(0x1000f200, 0x123400); require(sif.read(0x1d000000) == 0x123400);
+        sif.writeEe(0x1000f220, 0x10000); sif.writeEe(0x1000f220, 0x40000);
+        sif.write(0x1d000020, 0x10000); require(sif.readEe(0x1000f220) == 0x40000);
+        sif.writeEe(0x1000f230, 0x10000); require(sif.read(0x1d000030) == 0x40000);
+        sif.writeEe(0x1000f240, 0x100); require(sif.read(0x1d000040) == 0xf0002102);
+        refuses([&] { sif.writeEe(0x1000f240, 1u << 18); });
+        require(sif.readEe(0x1000f240) == 0xf0002102); // Rejected strobe has no side effect.
+        sif.writeEe(0x1000f240, 0);
+        require(sif.read(0x1d000040) == 0xf0002002 && sif.readEe(0x1000f240) == 0xf0002102);
+        refuses([&] { sif.writeEe(0x1000f210, 0x1234); });
         std::cout << "Read-only ROM bounds/aliases and directional SIF registers passed\n";
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }
