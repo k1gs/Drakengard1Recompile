@@ -7,7 +7,7 @@ from kernel_image import translation_elf
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('kind', choices=['pointers', 'shared-epilogue'])
+    parser.add_argument('kind', choices=['pointers', 'shared-epilogue', 'long-nop'])
     args = parser.parse_args()
     return42 = bytes.fromhex('2a0002240800e00300000000')
     if args.kind == 'pointers':
@@ -18,10 +18,14 @@ def main():
         struct.pack_into('<I', image, 52 + 2 * 32 + 24, 6)
         sections = struct.unpack_from('<I', image, 32)[0]
         struct.pack_into('<I', image, sections + 3 * 40 + 8, 3)
-    else:
+    elif args.kind == 'shared-epilogue':
         # beq zero,zero,0x1010; nop; eight-byte gap; return42.
         image = translation_elf([(0x1000, struct.pack('<4I', 0x10000003, 0, 0xFFFFFFFF, 0xFFFFFFFF)
                                  + return42)], 0x1000)
+    else:
+        # A real fallthrough through 64 original NOPs, beyond automatic cutoff.
+        image = translation_elf([(0x1000, struct.pack('<I', 0x2402002a) + bytes(64 * 4) +
+                                  struct.pack('<2I', 0x03e00008, 0))], 0x1000)
     directory = ROOT / 'work' / f'analysis-{args.kind}-001'
     directory.mkdir(exist_ok=False)
     path = directory / f'{args.kind}.elf'

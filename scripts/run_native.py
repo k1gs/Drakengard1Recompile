@@ -16,10 +16,13 @@ def main(argv=None):
     parser.add_argument("--seconds", type=int, default=20, choices=range(1, 61))
     parser.add_argument("--run", type=int, default=1)
     parser.add_argument("--iop-bootstrap", action="store_true", help="Use the verified local strict IOP bootstrap experiment")
+    parser.add_argument("--ee-firmware-init", action="store_true", help="Execute reviewed EE firmware initialization before game entry")
     parser.add_argument("--disc", type=Path, default=ROOT / "game/Drakengard (Europe) (En,Fr,De,Es,It).iso")
     args = parser.parse_args(argv)
     if not args.input_complete:
         parser.error("--input-complete is required")
+    if args.ee_firmware_init and not args.iop_bootstrap:
+        parser.error("--ee-firmware-init requires --iop-bootstrap")
     if not 1 <= args.run <= 999:
         parser.error("run must be 1..999")
     try:
@@ -49,6 +52,9 @@ def main(argv=None):
                 metadata = fingerprint(path)
                 result["iop_inputs"][name] = metadata
                 command.extend((str(path), metadata["sha256"]))
+        if args.ee_firmware_init:
+            command.append("--ee-firmware-init")
+            result["ee_firmware_init_experiment"] = True
         with (run / "runtime.log").open("x", encoding="utf-8") as log:
             try:
                 child = subprocess.run(command, cwd=elf.parent,

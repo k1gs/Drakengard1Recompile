@@ -64,3 +64,24 @@ so the new reachability pass must leave it out. This was rerun successfully loca
 These are local Ghidra checks, separate from Python/CI and native gameplay. The raw pointer
 pass can still discover false code candidates from ordinary numeric data. Native execution
 must validate real call paths; generated code and loader success do not establish a menu.
+
+## Explicit selection and bounded long-NOP leaf flow
+
+`ExportRecompMap.java OUTPUT.csv [ENTRY ...]` can restrict export to exact existing function
+entries. Unknown/duplicate entries are rejected. Without entries its original full export is retained;
+selected functions still include explicitly reached shared code and preserve holes.
+
+`RecoverLeafFunctionFlow.java ENTRY EXCLUSIVE_BOUND` follows actual instructions from an existing
+leaf entry through fallthrough, branch edges and delay slots. It rejects calls, other owners,
+uninitialized/non-executable input and flow outside the explicit bound. The limit is an analysis
+bound, not a request to include every byte inside a bounding interval.
+
+```powershell
+python scripts/make_analysis_fixture.py long-nop
+# Import this original fixture with the pinned R5900 processor and seed entry 0x1000.
+# Then run RecoverLeafFunctionFlow.java 0x1000 0x110c before exporting entry 0x1000.
+```
+
+Expected coverage: exactly `[0x1000,0x110c)`, 268 bytes including 64 original NOPs and the real
+return/delay slot. This fixture passed locally. Selected and full pointer exports produced the
+expected one/two records, and both shared-epilogue modes retained the eight-byte hole.

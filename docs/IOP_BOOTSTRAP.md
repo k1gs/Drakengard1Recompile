@@ -254,3 +254,34 @@ than copying active reference flags into the bus.
 
 Primary kernel-register ABI: [PS2SDK sifdma.h](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/ee/kernel/include/sifdma.h).
 Reset sequencing: [PS2SDK iopcontrol.c](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/ee/kernel/src/iopcontrol.c).
+
+## Executed EE firmware component (2026-10-18)
+
+An additional isolated mode executes the reviewed EE kernel SIF initialization before game entry:
+
+```powershell
+python scripts/run_native.py --input-complete --iop-bootstrap --ee-firmware-init --seconds 60 --run 31
+```
+
+It requires the private verified firmware lift. `prepare_firmware.py --input-complete` prepares
+build units only after checking the exact BIOS, KERNEL extent, translation image and selected code
+coverage. CMake includes those units only when the local `generated/firmware-003` registration
+exists. The runtime rereads KERNEL from the reviewed BIOS and checks translated instruction bytes
+before every firmware entry. The temporary harness stack/return boundary are explicit diagnostics,
+not a claim that the entire EE BIOS reset state has been reproduced. This mode stops before game entry.
+
+The five translated procedures now cover 656 actual instruction bytes. An initial 80-byte function
+body ended inside a long NOP run; actual PC `0x80005F50` exposed the truncation. Bounded leaf-flow
+recovery finds its real return and preserves disjoint coverage. All five procedures recompiled
+without stubs, skips, decode failures or warnings. Generated firmware remains private.
+
+Native-run-030 executes the actual firmware write F220=0x10000. IOP then advances beyond its prior
+mutual wait to a halfword BCR write at `0xBF801534`, PC `0x1B140`, 4,207,994 instructions.
+An armed EE SIF0 chain receiver retains STR while no data arrives; no empty DMA completion/IRQ is
+invented. The next implementation is the actual IOP BCR access and SIF1 receive path.
+
+Strict device errors now use a distinct fatal type. Upstream memory wrappers normally turn standard
+exceptions into guest address errors/zero reads; the private build rethrows strict device failures.
+The original failing reproduction timed out on repeated errors; the corrected run stops at its first
+unsupported instruction, exit 6 without timeout. This is still component initialization, with no
+confirmed game image, complete boot or game audio.

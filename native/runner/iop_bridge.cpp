@@ -4,12 +4,16 @@
 #include <stdexcept>
 #include <array>
 #include "../iop_probe/sif_registers.h"
+#include "../iop_probe/ee_sif_dma.h"
+#include "strict_device_error.h"
 
 namespace drakengard {
 namespace {
 std::recursive_mutex mutex;
 std::unique_ptr<IopBoot> boot;
 bool active{};
+bool firmwareExperiment{};
+EeSifDma firmwareDma;
 unsigned reads{};
 std::array<uint32_t, 3> softwareRegisters{};
 uint32_t busRegister(uint32_t number) {
@@ -30,6 +34,27 @@ void activateCooperativeIop(std::string_view arguments, uint32_t mode) {
     boot->advance(4096); // Actually execute SYSMEM before accepting this request.
     active = true;
     std::cerr << "[cooperative-iop] reboot accepted; real CPU active; no BOOTEND injected\n";
+}
+void beginFirmwareExperiment() {
+    std::lock_guard lock(mutex);
+    if (!boot || active) throw std::runtime_error("Firmware experiment requires a fresh configured strict IOP");
+    boot->advance(4096);
+    active = true; firmwareExperiment = true;
+    std::cerr << "[firmware-experiment] selected IOP boot plan active; bounded functional scheduling, not a full BIOS reset\n";
+}
+std::optional<uint32_t> firmwareDmaRead(uint32_t address) {
+    std::lock_guard lock(mutex);
+    if (!firmwareExperiment || !EeSifDma::contains(address)) return std::nullopt;
+    try { return firmwareDma.read(address); }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+}
+bool firmwareDmaWrite(uint32_t address, uint32_t value) {
+    std::lock_guard lock(mutex);
+    if (!firmwareExperiment || !EeSifDma::contains(address)) return false;
+    try { firmwareDma.write(address, value); }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+    std::cerr << "[firmware-ee-dma] address=0x" << std::hex << address << " value=0x" << value << std::dec << '\n';
+    return true;
 }
 std::optional<uint32_t> cooperativeSifRead(uint32_t address) {
     std::lock_guard lock(mutex);

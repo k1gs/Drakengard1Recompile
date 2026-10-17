@@ -43,13 +43,14 @@ public:
             else m_control |= mask;
             break;
         }
-        case 0x60: break;
+        case 0x60: m_unused = 0; break;
         }
     }
     uint32_t readEe(uint32_t address) const {
-        if (address < 0x1000f200 || address > 0x1000f240 || (address & 15))
+        if (address < 0x1000f200 || address > 0x1000f260 || address == 0x1000f250 || (address & 15))
             throw std::runtime_error("Unsupported EE SIF register read");
         if (address == 0x1000f240) return m_control | 0xf0000102u;
+        if (address == 0x1000f260) return m_unused;
         return read(0x1d000000u + address - 0x1000f200u);
     }
     void writeEe(uint32_t address, uint32_t value) {
@@ -57,6 +58,7 @@ public:
         case 0x1000f200: m_eeAddress = value; break;
         case 0x1000f220: m_eeFlags |= value; break;
         case 0x1000f230: m_iopFlags &= ~value; break;
+        case 0x1000f260: m_unused = value; break;
         case 0x1000f240:
             if (value & ~0x100u) throw std::runtime_error("EE SIF control strobe requires actual IRQ/reset delivery");
             m_control = (m_control & ~0x100u) | value;
@@ -65,5 +67,5 @@ public:
         }
     }
 private:
-    uint32_t m_eeAddress{}, m_iopAddress{}, m_eeFlags{}, m_iopFlags{}, m_control{};
+    uint32_t m_eeAddress{}, m_iopAddress{}, m_eeFlags{}, m_iopFlags{}, m_control{}, m_unused{};
 };

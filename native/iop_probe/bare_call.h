@@ -116,6 +116,13 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
                 timers->supports(target, width, timerWrite);
             const bool romAccess = rom && rom->allows(address, opcode);
             const bool sifAccess = sif && sif->allows(target, opcode);
+            if (dma && opcode == 0x2b && dma->channelRegister(target) && (target & 15) == 8 &&
+                (cpu.gpr[(instruction >> 16) & 31] & 0x01000000)) {
+                const auto base = target & ~15u;
+                std::cerr << "[strict-iop-dma-start] pc=0x" << std::hex << cpu.pc << " register=0x" << target
+                          << " chcr=0x" << cpu.gpr[(instruction >> 16) & 31] << " madr=0x" << memory.read32(base)
+                          << " bcr=0x" << memory.read32(base + 4) << std::dec << " steps=" << steps << '\n';
+            }
             if ((target >= IopMemory::RamSize || width > IopMemory::RamSize - target) &&
                 !(hardware && hardware->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
                 !(cache && cache->allows(address, opcode, cpu.gpr[(instruction >> 16) & 31])) &&

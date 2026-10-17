@@ -1,5 +1,6 @@
 #include "read_only_rom.h"
 #include "sif_registers.h"
+#include "ee_sif_dma.h"
 #include <iostream>
 
 namespace {
@@ -57,6 +58,19 @@ int main() {
         sif.writeEe(0x1000f240, 0);
         require(sif.read(0x1d000040) == 0xf0002002 && sif.readEe(0x1000f240) == 0xf0002102);
         refuses([&] { sif.writeEe(0x1000f210, 0x1234); });
+        sif.writeEe(0x1000f260, 0xff);
+        require(sif.readEe(0x1000f260) == 0xff && sif.read(0x1d000060) == 0);
+        sif.write(0x1d000060, 0xffffffff); require(sif.readEe(0x1000f260) == 0);
+        refuses([&] { sif.readEe(0x1000f250); });
+        EeSifDma receiver;
+        receiver.write(0x1000c000, 0x184);
+        require(receiver.read(0x1000c000) == 0x184 && receiver.read(0x1000c000) == 0x184 &&
+                receiver.read(0x1000c020) == 0); // Reading never completes an empty receiver.
+        receiver.write(0x1000c430, 0x212c0); require(receiver.read(0x1000c430) == 0x212c0);
+        refuses([&] { receiver.write(0x1000c400, 0x184); });
+        require(receiver.read(0x1000c400) == 0);
+        refuses([&] { receiver.write(0x1000c000, 0x101); });
+        refuses([&] { receiver.read(0x1000c040); });
         std::cout << "Read-only ROM bounds/aliases and directional SIF registers passed\n";
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

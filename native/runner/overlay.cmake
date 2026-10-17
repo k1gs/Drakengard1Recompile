@@ -44,6 +44,22 @@ function(drakengard_configure_runner)
     target_link_libraries(drakengard_iop_engine PRIVATE drakengard_strict_iop)
     target_sources(ps2EntryRunner PRIVATE "${REPO_ROOT}/native/runner/iop_bridge.cpp")
     target_link_libraries(ps2EntryRunner PRIVATE drakengard_iop_engine)
+    set(firmware_host "${REPO_ROOT}/native/runner/firmware_functions.cpp")
+    target_sources(ps2EntryRunner PRIVATE "${firmware_host}")
+    if(EXISTS "${REPO_ROOT}/generated/firmware-003/register_functions.cpp")
+        set(firmware_units "${CMAKE_BINARY_DIR}/firmware_translation")
+        execute_process(COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/scripts/prepare_firmware.py"
+            --input-complete "${firmware_units}" RESULT_VARIABLE firmware_result)
+        if(NOT firmware_result EQUAL 0)
+            message(FATAL_ERROR "Verified firmware preparation failed")
+        endif()
+        file(GLOB firmware_sources CONFIGURE_DEPENDS "${firmware_units}/*.cpp")
+        target_sources(ps2EntryRunner PRIVATE ${firmware_sources})
+        set_source_files_properties(${firmware_sources} "${firmware_host}"
+            TARGET_DIRECTORY ps2EntryRunner PROPERTIES INCLUDE_DIRECTORIES "${firmware_units}")
+        set_source_files_properties("${firmware_host}" TARGET_DIRECTORY ps2EntryRunner PROPERTIES
+            COMPILE_DEFINITIONS DRAKENGARD_HAVE_FIRMWARE SKIP_UNITY_BUILD_INCLUSION ON)
+    endif()
     set_source_files_properties("${REPO_ROOT}/native/runner/sif_transport.cpp"
         TARGET_DIRECTORY ps2EntryRunner PROPERTIES
         INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
@@ -108,13 +124,13 @@ function(drakengard_configure_runner)
     # application table across the unused 2GB guest virtual-address interval.
     file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/ps2_runtime.cpp" runtime_original)
     string(REPLACE "return generatedFunctionTableSlot(address, slot) && g_ps2RecompiledFunctionTable[slot] != nullptr;"
-        "return lookupKernelFunction(address) != nullptr || (generatedFunctionTableSlot(address, slot) && g_ps2RecompiledFunctionTable[slot] != nullptr);"
+        "return lookupFirmwareFunction(address) != nullptr || lookupKernelFunction(address) != nullptr || (generatedFunctionTableSlot(address, slot) && g_ps2RecompiledFunctionTable[slot] != nullptr);"
         runtime_guarded "${runtime_original}")
     if(runtime_guarded STREQUAL runtime_original)
         message(FATAL_ERROR "Pinned hasFunction contract changed")
     endif()
     string(REPLACE "pushDispatchPc(address);"
-        "pushDispatchPc(address);\n    if (auto kernel = lookupKernelFunction(address)) return kernel;"
+        "pushDispatchPc(address);\n    if (auto firmware = lookupFirmwareFunction(address)) return firmware;\n    if (auto kernel = lookupKernelFunction(address)) return kernel;"
         runtime_extended "${runtime_guarded}")
     if(runtime_extended STREQUAL runtime_guarded)
         message(FATAL_ERROR "Pinned lookupFunction contract changed")
@@ -131,9 +147,15 @@ function(drakengard_configure_runner)
     if(runtime_reset STREQUAL runtime_traced)
         message(FATAL_ERROR "Pinned IOP reset contract changed")
     endif()
+    string(REPLACE "catch (const std::exception &)\n    {"
+        "catch (const drakengard::StrictDeviceError&) { throw; }\n    catch (const std::exception &)\n    {"
+        runtime_fatal_devices "${runtime_reset}")
+    if(runtime_fatal_devices STREQUAL runtime_reset)
+        message(FATAL_ERROR "Pinned runtime memory exception contract changed")
+    endif()
     set(runtime_file "${CMAKE_BINARY_DIR}/private_extended_Runtime.cpp")
     file(CONFIGURE OUTPUT "${runtime_file}"
-        CONTENT "#include \"kernel_functions.h\"\n#include \"sif_diagnostic.h\"\n#include \"sif_transport.h\"\n${runtime_reset}" @ONLY)
+        CONTENT "#include \"kernel_functions.h\"\n#include \"firmware_functions.h\"\n#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"sif_transport.h\"\n${runtime_fatal_devices}" @ONLY)
     set_source_files_properties("${runtime_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
         INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
     get_target_property(runtime_sources ps2_runtime SOURCES)
@@ -189,14 +211,14 @@ function(drakengard_configure_runner)
     file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/ps2_memory.cpp" memory_original)
     set(memory_entry "bool PS2Memory::writeIORegister(uint32_t address, uint32_t value)\n{")
     string(REPLACE "${memory_entry}"
-        "${memory_entry}\n    diagnoseEeSifRegisterWrite(address, value);\n    if (drakengard::cooperativeSifWrite(address, value)) return true;"
+        "${memory_entry}\n    diagnoseEeSifRegisterWrite(address, value);\n    if (drakengard::firmwareDmaWrite(address, value)) return true;\n    if (drakengard::cooperativeSifWrite(address, value)) return true;"
         memory_traced "${memory_original}")
     if(memory_traced STREQUAL memory_original)
         message(FATAL_ERROR "Pinned EE memory register-write entry changed")
     endif()
     set(memory_read "uint32_t PS2Memory::readIORegister(uint32_t address)\n{")
     string(REPLACE "${memory_read}"
-        "${memory_read}\n    if (auto value = drakengard::cooperativeSifRead(address)) return *value;"
+        "${memory_read}\n    if (auto value = drakengard::firmwareDmaRead(address)) return *value;\n    if (auto value = drakengard::cooperativeSifRead(address)) return *value;"
         memory_bridged "${memory_traced}")
     if(memory_bridged STREQUAL memory_traced)
         message(FATAL_ERROR "Pinned EE memory register-read entry changed")

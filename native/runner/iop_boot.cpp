@@ -1,6 +1,7 @@
 #include "iop_boot.h"
 #include "verify_input.h"
 #include "bootstrap_session.h"
+#include "strict_device_error.h"
 #include <fstream>
 #include <filesystem>
 #include <iterator>
@@ -38,7 +39,16 @@ struct IopBoot::Impl {
 };
 IopBoot::IopBoot(const IopBootInputs& inputs) : impl(std::make_unique<Impl>(inputs)) {}
 IopBoot::~IopBoot() = default;
-void IopBoot::advance(uint32_t instructions) { impl->session->advance(instructions); }
-uint32_t IopBoot::readEe(uint32_t address) const { return impl->session->sif.readEe(address); }
-void IopBoot::writeEe(uint32_t address, uint32_t value) { impl->session->sif.writeEe(address, value); }
+void IopBoot::advance(uint32_t instructions) {
+    try { impl->session->advance(instructions); }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+}
+uint32_t IopBoot::readEe(uint32_t address) const {
+    try { return impl->session->sif.readEe(address); }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+}
+void IopBoot::writeEe(uint32_t address, uint32_t value) {
+    try { impl->session->sif.writeEe(address, value); }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+}
 }

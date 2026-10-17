@@ -14,6 +14,7 @@ import ghidra.program.model.address.AddressRangeIterator;
 import java.util.TreeMap;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.HashSet;
 import java.util.ArrayDeque;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -22,6 +23,10 @@ import java.nio.file.StandardOpenOption;
 import java.io.BufferedWriter;
 
 public class ExportRecompMap extends GhidraScript {
+    private final HashSet<Long> selected = new HashSet<>();
+    private boolean selectedFunction(Function f) {
+        return f != null && (selected.isEmpty() || selected.contains(f.getEntryPoint().getOffset()));
+    }
     private void addInstruction(AddressSet coverage, Instruction instruction) {
         if (instruction.getLength() != 4 || (instruction.getAddress().getOffset() & 3) != 0)
             throw new IllegalStateException("Not an aligned EE instruction: " + instruction.getAddress());
@@ -31,7 +36,13 @@ public class ExportRecompMap extends GhidraScript {
     @Override
     public void run() throws Exception {
         String[] args = getScriptArgs();
-        if (args.length != 1) throw new IllegalArgumentException("Pass a fresh local CSV path");
+        selected.clear();
+        if (args.length < 1) throw new IllegalArgumentException("Pass a fresh local CSV path and optional exact function entries");
+        for (int i = 1; i < args.length; i++) {
+            long entry = Long.decode(args[i]);
+            if (getFunctionAt(toAddr(entry)) == null || !selected.add(entry))
+                throw new IllegalArgumentException("Missing or duplicate selected function: " + args[i]);
+        }
         Path output = Path.of(args[0]);
         Files.createDirectories(output.toAbsolutePath().getParent());
         int count = 0;
@@ -49,7 +60,7 @@ public class ExportRecompMap extends GhidraScript {
         while (instructions.hasNext()) {
             monitor.checkCancelled();
             Instruction instruction = instructions.next();
-            if (getFunctionContaining(instruction.getAddress()) == null) continue;
+            if (!selectedFunction(getFunctionContaining(instruction.getAddress()))) continue;
             for (Address target : instruction.getFlows())
                 if (executable.contains(target) && getFunctionContaining(target) == null &&
                     getInstructionAt(target) != null) {
@@ -90,6 +101,7 @@ public class ExportRecompMap extends GhidraScript {
         while (functions.hasNext()) {
             monitor.checkCancelled();
             Function f = functions.next();
+            if (!selectedFunction(f)) continue;
             if (f.isExternal() || f.getBody().isEmpty()) continue;
             AddressSetView codeBody = f.getBody().intersect(executable);
             if (codeBody.isEmpty()) continue;
