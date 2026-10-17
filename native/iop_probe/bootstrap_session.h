@@ -73,8 +73,12 @@ public:
         entry = loaded.entry; gp = loaded.gp;
     }
     void advance(uint32_t instructions) {
+        const IopDevices devices{
+            .hardware = &hardware, .cache = &cache, .interrupts = &interrupts,
+            .dma = &dma, .exceptions = &exceptions, .cdvd = &cdvd,
+            .timers = &timers, .rom = &rom, .sif = &sif};
         const auto result = bareCall(memory, entry, gp, argument, start, SourcePool,
-            &hardware, &cache, &interrupts, &dma, &exceptions, &cdvd, &timers, &rom, &sif, &state, instructions);
+                                    devices, &state, instructions);
         if (!result.completed) return;
         if (inLoadcore) throw std::runtime_error("LOADCORE returned without a supported scheduler handoff");
         std::cerr << "[cooperative-sysmem] steps=" << result.instructions << " free_start=0x"

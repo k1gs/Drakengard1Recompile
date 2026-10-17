@@ -30,7 +30,7 @@ int main() {
         BareCallState sliced;
         const auto step = [&] {
             return bareCall(memory, 0x1000, 0, 0x800, 0x1000, 0x1100,
-                            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &sliced, 1);
+                {}, &sliced, 1);
         };
         result = step();
         if (result.completed || !sliced.cpu.pendingLoad || sliced.cpu.gpr[2] != 0)
@@ -45,9 +45,9 @@ int main() {
         if (!result.completed || result.value != 43 || result.instructions != 4)
             throw std::runtime_error("IOP sliced return differs from actual delay-slot semantics");
         rejects([&] { bareCall(memory, 0x1000, 0, 0x801, 0x1000, 0x1100,
-            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &sliced, 1); }, "call contract");
+            {}, &sliced, 1); }, "call contract");
         rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100,
-            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 1); }, "instruction slice");
+            {}, nullptr, 1); }, "instruction slice");
         code(memory, {0x40807800, 0x40027800, 0, 0x03e00008, 0}); // mtc0 zero,PRId; mfc0 v0,PRId.
         result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030);
         if (result.value != 0x1f) throw std::runtime_error("IOP revision identity must be correct and read-only");
@@ -59,14 +59,17 @@ int main() {
         };
         put(8, 2); put(12, 0x1f801450); put(16, 0x12345678); put(20, 0x1f801578); put(24, 1);
         PassiveHardware hardware; hardware.seed(seed, memory);
-        result = bareCall(memory, 0x1000, 0, 0xbf801450, 0x1000, 0x1030, &hardware);
+        result = bareCall(memory, 0x1000, 0, 0xbf801450, 0x1000, 0x1030,
+            {.hardware = &hardware});
         if (result.value != 0x12345678) throw std::runtime_error("Passive hardware read lost actual state");
         code(memory, {0xac800000, 0x8c820000, 0, 0x03e00008, 0}); // sw zero,0(a0); lw v0,0(a0)
-        result = bareCall(memory, 0x1000, 0, 0xbf801578, 0x1000, 0x1030, &hardware);
+        result = bareCall(memory, 0x1000, 0, 0xbf801578, 0x1000, 0x1030,
+            {.hardware = &hardware});
         if (result.value != 0 || memory.read32(0xbf801578) != 0)
             throw std::runtime_error("DMA-global gate storage did not change");
         code(memory, {0x24020002, 0xac820000, 0x03e00008, 0}); // Unreviewed gate bits.
-        rejects([&] { bareCall(memory, 0x1000, 0, 0xbf801578, 0x1000, 0x1030, &hardware); }, "hardware contract");
+        rejects([&] { bareCall(memory, 0x1000, 0, 0xbf801578, 0x1000, 0x1030,
+            {.hardware = &hardware}); }, "hardware contract");
         put(20, 0x1f801450);
         rejects([&] { hardware.seed(seed, memory); }, "duplicate passive hardware register");
         if (memory.read32(0xbf801578) != 0) throw std::runtime_error("Rejected seed changed hardware");
@@ -75,16 +78,19 @@ int main() {
                       0x408a6000, 0x240b0800, 0xad600000, 0x40806000, 0xad000000,
                       0x2402002a, 0x03e00008, 0});
         CoherentCache cache; cache.initialize(memory);
-        result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100, nullptr, &cache);
+        result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100,
+            {.cache = &cache});
         if (result.value != 42 || cache.isolatedStores != 1 || memory.read32(0x800) != 0xdeadbeef ||
             memory.read32(0xfffe0130) != 0)
             throw std::runtime_error("Cache isolation corrupted backing RAM or BIU restore");
         code(memory, {0x3c0a0001, 0x408a6000, 0xad600000, 0x03e00008, 0});
         rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030); }, "explicit coherent-cache mode");
-        rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030, nullptr, &cache); }, "Unsupported isolated cache access");
+        rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030,
+            {.cache = &cache}); }, "Unsupported isolated cache access");
         memory.reset(); QuietInterrupts interrupts; interrupts.reset(memory);
         code(memory, {0x24020001, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
-        result = bareCall(memory, 0x1000, 0, 0xbf801078, 0x1000, 0x1030, nullptr, nullptr, &interrupts);
+        result = bareCall(memory, 0x1000, 0, 0xbf801078, 0x1000, 0x1030,
+            {.interrupts = &interrupts});
         if (result.value != 1 || memory.interruptControl() != 0)
             throw std::runtime_error("I_CTRL read must return prior value and disable interrupts");
         memory.setInterruptStatus(0x42); memory.setInterruptMask(0x40); memory.setInterruptControl(1);
@@ -92,26 +98,27 @@ int main() {
         rejects([&] { interrupts.checkDelivery(memory); }, "requires actual exception delivery");
         memory.setInterruptControl(0);
         code(memory, {0xac800000, 0x8c820000, 0, 0x03e00008, 0});
-        result = bareCall(memory, 0x1000, 0, 0xbf801070, 0x1000, 0x1030, nullptr, nullptr, &interrupts);
+        result = bareCall(memory, 0x1000, 0, 0xbf801070, 0x1000, 0x1030,
+            {.interrupts = &interrupts});
         if (result.value != 0 || memory.interruptStatus() != 0)
             throw std::runtime_error("I_STAT acknowledge did not clear actual pending bits");
         memory.reset(); QuiescentDma dma; dma.reset(memory);
         memory.write32(0x1f801534, 0xabcd0000);
         code(memory, {0x24020020, 0xa4820000, 0x8c820000, 0, 0x03e00008, 0});
         result = bareCall(memory, 0x1000, 0, 0xbf801534, 0x1000, 0x1100,
-                          nullptr, nullptr, nullptr, &dma);
+            {.dma = &dma});
         if (result.value != 0xabcd0020 || memory.interruptStatus())
             throw std::runtime_error("DMA halfword BCR write corrupted upper half or fabricated an IRQ");
         code(memory, {0x94820002, 0, 0x03e00008, 0}); // lhu v0,2(a0)
         result = bareCall(memory, 0x1000, 0, 0xbf801534, 0x1000, 0x1100,
-                          nullptr, nullptr, nullptr, &dma);
+            {.dma = &dma});
         if (result.value != 0xabcd || dma.allows(0x1f801538, 0x29, 0))
             throw std::runtime_error("DMA halfword BCR read or CHCR width guard failed");
         memory.write32(0x1f801534, 0x20); memory.write32(0x800, 0xdeadbeef);
         dma.enableSif1Receiver();
         code(memory, {0x3c024100, 0x34420300, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
         result = bareCall(memory, 0x1000, 0, 0xbf801538, 0x1000, 0x1100,
-                          nullptr, nullptr, nullptr, &dma);
+            {.dma = &dma});
         if (result.value != 0x41000300 || memory.read32(0x1f801538) != 0x41000300 ||
             memory.read32(0x1f801534) != 0x20 || memory.read32(0x800) != 0xdeadbeef || memory.interruptStatus())
             throw std::runtime_error("Empty SIF1 receiver fabricated bytes/completion/IRQ or lost STR");
@@ -130,12 +137,14 @@ int main() {
             throw std::runtime_error("DMA idle control/reserved register boundary failed");
         memory.reset(); code(memory, {0x0000000c, 0x2402002a, 0x03e00008, 0});
         OwnedExceptions exceptions;
-        rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100, nullptr, nullptr, nullptr, nullptr, &exceptions); },
+        rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100,
+            {.exceptions = &exceptions}); },
                 "raised an exception");
         if (!memory.zeroRam(0x80, 0x80)) throw std::runtime_error("Vector fixture range failed");
         const uint32_t handler[] = {0x401a7000, 0, 0x275a0004, 0x03400008, 0x42000010};
         for (unsigned index = 0; index < 5; ++index) memory.write32(0x80 + index * 4, handler[index]);
-        result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100, nullptr, nullptr, nullptr, nullptr, &exceptions);
+        result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100,
+            {.exceptions = &exceptions});
         if (result.value != 42 || exceptions.syscalls != 1)
             throw std::runtime_error("Actual guest syscall vector did not return through EPC/RFE");
         memory.reset(); interrupts.reset(memory); memory.setInterruptStatus(0x10);
@@ -146,7 +155,8 @@ int main() {
                                        0xaf600000, 0x03400008, 0x42000010};
         for (unsigned index = 0; index < 7; ++index) memory.write32(0x80 + index * 4, irqHandler[index]);
         OwnedExceptions irqExceptions;
-        result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100, nullptr, nullptr, &interrupts, nullptr, &irqExceptions);
+        result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100,
+            {.interrupts = &interrupts, .exceptions = &irqExceptions});
         if (result.value != 42 || irqExceptions.interrupts != 1 || memory.interruptStatus() != 0)
             throw std::runtime_error("Actual guest IRQ vector/acknowledge/EPC return failed");
         ps2x::iop::detail::IopCpuState branchCpu;
@@ -179,13 +189,13 @@ int main() {
             throw std::runtime_error("SIF toggle, reserved register or width guard failed");
         memory.reset(); code(memory, {0xac800000, 0x8c820000, 0, 0x03e00008, 0});
         result = bareCall(memory, 0x1000, 0, 0xbd000030, 0x1000, 0x1100,
-                          nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &sif);
+            {.sif = &sif});
         if (result.value != 0x50000) throw std::runtime_error("SIF set flags were overwritten by CPU SW backing storage");
         memory.reset(); SifRegisters peerBus; BareCallState waiting;
         code(memory, {0x3c08bd00, 0x8d020020, 0, 0x1040fffd, 0, 0x03e00008, 0});
         const auto poll = [&] {
             return bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100,
-                nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &peerBus, &waiting, 16);
+                {.sif = &peerBus}, &waiting, 16);
         };
         result = poll();
         if (result.completed || result.instructions != 16 || peerBus.read(0x1d000020))
@@ -200,21 +210,21 @@ int main() {
         for (uint32_t base : {0x1fc00000u, 0x9fc00000u, 0xbfc00000u}) {
             memory.reset(); code(memory, {0x8c820000, 0, 0x03e00008, 0});
             result = bareCall(memory, 0x1000, 0, base, 0x1000, 0x1100,
-                              nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &rom);
+                {.rom = &rom});
             if (result.value != 0x92345678 || memory.read32(base) != 0)
                 throw std::runtime_error("Read-only ROM alias/load delay or staging restoration failed");
         }
         code(memory, {0x90820000, 0, 0x03e00008, 0});
         result = bareCall(memory, 0x1000, 0, 0xbfffffffu, 0x1000, 0x1100,
-                          nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &rom);
+            {.rom = &rom});
         if (result.value != 0xa5 || rom.allows(0xc0000000, 0x24) || rom.allows(0xfffe0130, 0x23) ||
             rom.allows(0x7fc00000, 0x23) || rom.allows(0xbfc00000, 0x2b))
             throw std::runtime_error("ROM bounds, write protection or KSEG3 exclusion failed");
         code(memory, {0xac800000, 0x03e00008, 0});
         rejects([&] { bareCall(memory, 0x1000, 0, 0xbfc00000, 0x1000, 0x1100,
-                               nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &rom); }, "hardware contract");
+            {.rom = &rom}); }, "hardware contract");
         rejects([&] { bareCall(memory, 0xbfc00000, 0, 0, 0x1000, 0x1100,
-                               nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &rom); }, "owned bootstrap code");
+            {.rom = &rom}); }, "owned bootstrap code");
         code(memory, {0x3c040001, 0x3c05001f, 0xac800000, 0x24840004, 0x0085102b,
                       0x1440fffc, 0, 0x2402002a, 0x03e00008, 0});
         memory.write32(0x1efffc, 0xdeadbeef); memory.write32(0x1f0000, 0xcafebabe);

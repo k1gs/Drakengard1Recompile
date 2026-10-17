@@ -1,0 +1,131 @@
+#pragma once
+#include "core/iop_memory.h"
+#include "core/iop_cpu.h"
+#include "passive_hardware.h"
+#include "coherent_cache.h"
+#include "quiet_interrupts.h"
+#include "quiescent_dma.h"
+#include "owned_exceptions.h"
+#include "cdvd_device.h"
+#include "iop_timers.h"
+#include "read_only_rom.h"
+#include "sif_registers.h"
+#include <iostream>
+#include <stdexcept>
+#include <optional>
+#include <utility>
+
+// Optional devices are named at call sites; absent devices remain unsupported.
+struct IopDevices {
+    const PassiveHardware* hardware{};
+    CoherentCache* cache{};
+    QuietInterrupts* interrupts{};
+    QuiescentDma* dma{};
+    OwnedExceptions* exceptions{};
+    drakengard::CdvdDevice* cdvd{};
+    drakengard::IopTimers* timers{};
+    const ReadOnlyRom* rom{};
+    SifRegisters* sif{};
+};
+
+// Adapts explicit device contracts to the pinned CPU's backing memory.
+// prepare() runs before the instruction; complete() preserves the existing
+// post-instruction order, load delays, acknowledgements and one-cycle timer tick.
+class IopDataBus {
+    using Memory = ps2x::iop::detail::IopMemory;
+    using Cpu = ps2x::iop::detail::IopCpuState;
+    Memory& memory;
+    const IopDevices devices;
+public:
+    struct Effects {
+        uint32_t interruptRead{}, dmaWrite{}, dmaPrevious{}, dmaValue{}, sifWrite{};
+        std::optional<std::pair<uint32_t, uint32_t>> romRestore;
+    };
+    IopDataBus(Memory& memory, const IopDevices& devices) : memory(memory), devices(devices) {}
+    Effects prepare(const Cpu& cpu, uint32_t instruction, uint32_t steps) {
+        using ps2x::iop::detail::IopMemory;
+        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif] = devices;
+        const uint32_t opcode = instruction >> 26;
+        Effects effects;
+        auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore] = effects;
+        if ((opcode >= 0x20 && opcode <= 0x26) || (opcode >= 0x28 && opcode <= 0x2b) || opcode == 0x2e) {
+            const uint32_t address = cpu.gpr[(instruction >> 21) & 31] +
+                static_cast<uint32_t>(static_cast<int16_t>(instruction));
+            const auto target = IopMemory::physicalAddress(address);
+            const unsigned width = opcode == 0x20 || opcode == 0x24 || opcode == 0x28 ? 1 :
+                opcode == 0x21 || opcode == 0x25 || opcode == 0x29 ? 2 : 4;
+            if (cpu.cop0[12] & 0x10000u) {
+                if (!cache) throw std::runtime_error("Cache isolation requires explicit coherent-cache mode");
+                cache->isolatedAccess(memory, address, opcode, cpu.gpr[(instruction >> 16) & 31]);
+            }
+            const bool cdvdAccess = cdvd && target >= 0x1f402000 && target < 0x1f402100 &&
+                (opcode == 0x20 || opcode == 0x24 || opcode == 0x28);
+            const bool timerWrite = opcode == 0x29 || opcode == 0x2b;
+            const bool timerAccess = timers && (timerWrite || opcode == 0x21 || opcode == 0x25 || opcode == 0x23) &&
+                timers->supports(target, width, timerWrite);
+            const bool romAccess = rom && rom->allows(address, opcode);
+            const bool sifAccess = sif && sif->allows(target, opcode);
+            if (dma && opcode == 0x2b && dma->channelRegister(target) && (target & 15) == 8 &&
+                (cpu.gpr[(instruction >> 16) & 31] & 0x01000000)) {
+                const auto base = target & ~15u;
+                std::cerr << "[strict-iop-dma-start] pc=0x" << std::hex << cpu.pc << " register=0x" << target
+                          << " chcr=0x" << cpu.gpr[(instruction >> 16) & 31] << " madr=0x" << memory.read32(base)
+                          << " bcr=0x" << memory.read32(base + 4) << std::dec << " steps=" << steps << '\n';
+            }
+            if ((target >= IopMemory::RamSize || width > IopMemory::RamSize - target) &&
+                !(hardware && hardware->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
+                !(cache && cache->allows(address, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
+                !(interrupts && interrupts->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
+                !(dma && dma->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31], &memory)) &&
+                !cdvdAccess && !timerAccess && !romAccess && !sifAccess) {
+                std::cerr << "[bootstrap-mmio-blocker] steps=" << steps << " pc=0x" << std::hex << cpu.pc
+                          << " instruction=0x" << instruction << " address=0x" << address << std::dec
+                          << " rt_value=0x" << std::hex << cpu.gpr[(instruction >> 16) & 31] << std::dec
+                          << " isolated_cache_stores=" << (cache ? cache->isolatedStores : 0) << '\n';
+                throw std::runtime_error("Non-RAM data access requires an explicit hardware contract");
+            }
+            if (romAccess) romRestore = rom->stage(memory, address, opcode);
+            if (sifAccess) {
+                if (opcode == 0x2b) {
+                    sif->write(target, cpu.gpr[(instruction >> 16) & 31]);
+                    sifWrite = target;
+                }
+                memory.write32(address, sif->read(target));
+            }
+            if (cdvdAccess) {
+                const auto key = static_cast<uint8_t>(target);
+                try {
+                    if (opcode == 0x28) cdvd->writeRegister(key, static_cast<uint8_t>(cpu.gpr[(instruction >> 16) & 31]));
+                    else memory.write8(address, cdvd->readRegister(key));
+                } catch (const std::exception&) {
+                    std::cerr << "[iop-cdvd-blocker] pc=0x" << std::hex << cpu.pc << " register=0x" << target
+                              << " opcode=0x" << opcode << " value=0x" << cpu.gpr[(instruction >> 16) & 31]
+                              << std::dec << " steps=" << steps << '\n';
+                    throw;
+                }
+            }
+            if (timerAccess) {
+                if (timerWrite) timers->write(target, width, cpu.gpr[(instruction >> 16) & 31]);
+                else if (width == 2) memory.write16(address, static_cast<uint16_t>(timers->read(target, width)));
+                else memory.write32(address, timers->read(target, width));
+            }
+            if (interrupts && opcode == 0x23 && interrupts->allows(target, opcode, 0)) interruptRead = target;
+            if (dma && opcode == 0x2b && dma->interruptRegister(target)) {
+                dmaWrite = target; dmaPrevious = memory.read32(target); dmaValue = cpu.gpr[(instruction >> 16) & 31];
+            }
+        }
+        return effects;
+    }
+    void complete(const Cpu& cpu, const Effects& effects) {
+        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif] = devices;
+        const auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore] = effects;
+        // Temporary staging preserves the upstream core's load-delay behavior
+        // without leaving ROM words in the masked hardware map (BIU aliases).
+        if (romRestore) memory.write32(romRestore->first, romRestore->second);
+        if (sifWrite) memory.write32(sifWrite, sif->read(sifWrite));
+        if (!cpu.exception && interruptRead) interrupts->afterRead(memory, interruptRead);
+        if (!cpu.exception && dmaWrite) dma->afterWrite(memory, dmaWrite, dmaPrevious, dmaValue);
+        if (cdvd && cdvd->takeInterruptEdge()) memory.setInterruptStatus(memory.interruptStatus() | 4u);
+        if (timers) memory.setInterruptStatus(memory.interruptStatus() | timers->advance(1));
+    }
+};

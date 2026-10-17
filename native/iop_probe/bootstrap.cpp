@@ -105,9 +105,12 @@ int main(int argc, char** argv) {
             BareCallState state;
             BareCallResult result;
             do {
+                const IopDevices devices{
+                    .hardware = &hardware, .cache = coherent ? &cache : nullptr,
+                    .interrupts = &interrupts, .dma = &dma, .exceptions = &exceptions,
+                    .cdvd = cdvd.get(), .timers = &timers, .rom = rom.get(), .sif = &sif};
                 result = bareCall(memory, entry, gp, argument, start, SourcePool,
-                    &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions,
-                    cdvd.get(), &timers, rom.get(), &sif, &state, 4096);
+                                  devices, &state, 4096);
             } while (!result.completed);
             return result;
         };

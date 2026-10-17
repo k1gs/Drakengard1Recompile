@@ -22,6 +22,31 @@ Windows x64 — первая платформа. C++20/CMake — предпол�
 bring-up, а не окончательный выбор renderer/audio architecture. Runner не возвращает
 код успеха как доказательство working port; остановки и unsupported paths диагностируются отдельно.
 
+## Карта исходников runtime
+
+| Область | Ответственность |
+| --- | --- |
+| `native/runner/main.cpp`, `verify_input.*` | Приёмка точных входов и выбор режима запуска |
+| `native/runner/iop_boot.*` | Проверенные входы IOP, владение сессией и явный источник RTC |
+| `native/runner/iop_bridge.cpp` | Один владелец состояния EE/IOP: режим запуска, SIF и экспериментальный DMA; синхронизация внешних hooks |
+| `native/iop_probe/bootstrap_session.h` | Размещение модулей, переход SYSMEM → LOADCORE и сохраняемое состояние CPU |
+| `native/iop_probe/bare_call.h` | Ограниченный цикл CPU, владение кодом, доставка исключений и возобновление |
+| `native/iop_probe/iop_data_bus.h` | Именованная конфигурация устройств, проверка доступа, staging до инструкции и эффекты после неё |
+| `native/iop_probe/iop_diagnostics.h` | Описания остановок CPU, unresolved imports и исчерпания бюджета |
+| `native/runner/sif_channel.*`, `sif_transport.cpp` | Протокол пакетов SIF и адаптация к upstream runtime/VFS |
+| `native/runner/fileio_rpc.*`, `cdvd_rpc.*`, `cdvd_device.*`, `iso_media.*` | Сервисы файлов и диска, регистры контроллера и чтение ISO |
+| `native/runner/overlay.cmake`, `cmake/*.cmake` | Сборка host glue и отдельные проверяемые адаптации syscalls, dispatch, SIF и memory |
+
+IOP получает устройства через `IopDevices`: например, `{.interrupts = &interrupts, .dma = &dma}`.
+Отсутствующий указатель оставляет устройство неподдержанным. Шина сохраняет порядок операций:
+подготовка данных → инструкция CPU → восстановление временных ROM/SIF значений → acknowledge
+контроллеров → события CDVD и tick таймеров. Проверки исключений остаются в цикле CPU.
+
+Внешний API моста SIF сохранён. Внутренний `CooperativeIopBridge` хранит режимы Prepared,
+Reboot и Firmware вместо независимых флагов; входы и переходы остаются прежними.
+Четыре CMake-адаптации выполняются в прежнем порядке и scope, а upstream checkout не меняется.
+Сгенерированный guest code и производные прошивки остаются в локальных ignored-каталогах.
+
 ## Контракты диагностики
 
 Каждый неподдержанный путь завершает ограниченный запуск с ненулевым кодом и описанием:
