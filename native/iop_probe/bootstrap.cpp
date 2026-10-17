@@ -74,6 +74,8 @@ int main(int argc, char** argv) {
         QuietInterrupts interrupts; interrupts.reset(memory);
         QuiescentDma dma; dma.reset(memory);
         OwnedExceptions exceptions;
+        drakengard::IopTimers timers;
+        std::cerr << "[iop-clock] one modeled cycle per decoded instruction; no physical/PAL timing claim\n";
         PassiveHardware hardware;
         if (hardwarePath) hardware.load(hardwarePath, memory);
         CoherentCache cache;
@@ -110,7 +112,7 @@ int main(int argc, char** argv) {
             sysmem.base + uint64_t(sysmem.size) >= SourcePool)
             throw std::runtime_error("SYSMEM bootstrap image refused");
         const auto initialized = bareCall(memory, sysmem.entry, sysmem.gp, IopMemory::RamSize, start, SourcePool,
-                                          &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions, cdvd.get());
+                                          &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions, cdvd.get(), &timers);
         std::cout << "[bootstrap-sysmem] steps=" << initialized.instructions << " free_start=0x"
                   << std::hex << initialized.value << std::dec << '\n';
         if (initialized.value % 16 || initialized.value >= SourcePool - 0x30)
@@ -122,7 +124,7 @@ int main(int argc, char** argv) {
         std::cout << "[bootstrap-loadcore] base=0x" << std::hex << loadcore.base << " entry=0x"
                   << loadcore.entry << " reset_data=0x" << SourcePool << std::dec << " modules=" << count << '\n';
         const auto result = bareCall(memory, loadcore.entry, loadcore.gp, SourcePool, start, SourcePool,
-                                     &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions, cdvd.get());
+                                     &hardware, coherent ? &cache : nullptr, &interrupts, &dma, &exceptions, cdvd.get(), &timers);
         std::cout << "[bootstrap-loadcore-return] value=0x" << std::hex << result.value << std::dec
                   << " steps=" << result.instructions << "\nNo EE notification or BOOTEND has been issued\n";
     } catch (const std::exception& error) {

@@ -8,6 +8,7 @@
 #include "quiescent_dma.h"
 #include "owned_exceptions.h"
 #include "cdvd_device.h"
+#include "iop_timers.h"
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -20,7 +21,8 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
                               uint32_t gp, uint32_t argument, uint32_t codeBegin, uint32_t codeEnd,
                               const PassiveHardware* hardware = nullptr, CoherentCache* cache = nullptr,
                               QuietInterrupts* interrupts = nullptr, QuiescentDma* dma = nullptr,
-                              OwnedExceptions* exceptions = nullptr, drakengard::CdvdDevice* cdvd = nullptr) {
+                              OwnedExceptions* exceptions = nullptr, drakengard::CdvdDevice* cdvd = nullptr,
+                              drakengard::IopTimers* timers = nullptr) {
     using namespace ps2x::iop::detail;
     IopCpuCore core(memory);
     IopImportRegistry imports(memory);
@@ -34,6 +36,17 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
     // Keep a finite bound that also permits the following module bootstrap work.
     for (uint32_t steps = 0; steps < 8000000; ++steps) {
         if (cpu.pc == ReturnBoundary) return {cpu.gpr[2], steps};
+        if (interrupts) {
+            const bool pending = interrupts->pending(memory);
+            if (pending) cpu.cop0[13] |= 0x400u;
+            else cpu.cop0[13] &= ~0x400u;
+            // Poll at retired instruction boundaries, after any pending load has committed.
+            // Branch-delay IRQ entry uses the core's actual BD/EPC handling.
+            if (pending && (cpu.cop0[12] & 0x401u) == 0x401u && !cpu.pendingLoad) {
+                if (!exceptions || !exceptions->enterInterrupt(memory, cpu, core))
+                    interrupts->checkDelivery(memory);
+            }
+        }
         const uint32_t physical = IopMemory::physicalAddress(cpu.pc);
         const bool vector = exceptions && exceptions->vectorOwns(memory, physical);
         if (((physical < codeBegin || uint64_t(physical) + 4 > codeEnd) && !vector) || (cpu.pc & 3) ||
@@ -75,11 +88,14 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
             }
             const bool cdvdAccess = cdvd && target >= 0x1f402000 && target < 0x1f402100 &&
                 (opcode == 0x20 || opcode == 0x24 || opcode == 0x28);
+            const bool timerWrite = opcode == 0x29 || opcode == 0x2b;
+            const bool timerAccess = timers && (timerWrite || opcode == 0x21 || opcode == 0x25 || opcode == 0x23) &&
+                timers->supports(target, width, timerWrite);
             if ((target >= IopMemory::RamSize || width > IopMemory::RamSize - target) &&
                 !(hardware && hardware->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
                 !(cache && cache->allows(address, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
                 !(interrupts && interrupts->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
-                !(dma && dma->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) && !cdvdAccess) {
+                !(dma && dma->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) && !cdvdAccess && !timerAccess) {
                 std::cerr << "[bootstrap-mmio-blocker] steps=" << steps << " pc=0x" << std::hex << cpu.pc
                           << " instruction=0x" << instruction << " address=0x" << address << std::dec
                           << " rt_value=0x" << std::hex << cpu.gpr[(instruction >> 16) & 31] << std::dec
@@ -91,6 +107,11 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
                 if (opcode == 0x28) cdvd->writeRegister(key, static_cast<uint8_t>(cpu.gpr[(instruction >> 16) & 31]));
                 else memory.write8(address, cdvd->readRegister(key));
             }
+            if (timerAccess) {
+                if (timerWrite) timers->write(target, width, cpu.gpr[(instruction >> 16) & 31]);
+                else if (width == 2) memory.write16(address, static_cast<uint16_t>(timers->read(target, width)));
+                else memory.write32(address, timers->read(target, width));
+            }
             if (interrupts && opcode == 0x23 && interrupts->allows(target, opcode, 0)) interruptRead = target;
             if (dma && opcode == 0x2b && dma->interruptRegister(target)) {
                 dmaWrite = target; dmaPrevious = memory.read32(target); dmaValue = cpu.gpr[(instruction >> 16) & 31];
@@ -101,7 +122,13 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
         if (!cpu.exception && interruptRead) interrupts->afterRead(memory, interruptRead);
         if (!cpu.exception && dmaWrite) dma->afterWrite(memory, dmaWrite, dmaPrevious, dmaValue);
         if (cdvd && cdvd->takeInterruptEdge()) memory.setInterruptStatus(memory.interruptStatus() | 4u);
-        if (interrupts) interrupts->checkDelivery(memory);
+        if (timers) memory.setInterruptStatus(memory.interruptStatus() | timers->advance(1));
+        if (interrupts) {
+            if (interrupts->pending(memory)) cpu.cop0[13] |= 0x400u;
+            else cpu.cop0[13] &= ~0x400u;
+            const bool enabled = (cpu.cop0[12] & 0x401u) == 0x401u;
+            if (!exceptions) interrupts->checkDelivery(memory, enabled);
+        }
         const bool ownedSyscall = cpu.exception && exceptions && exceptions->enterSyscall(memory, cpu, instruction);
         if (!running || (cpu.exception && !ownedSyscall) || cpu.stopped || cpu.yielded) {
             std::cerr << "[bootstrap-cpu-blocker] steps=" << steps << " pc=0x" << std::hex << previous

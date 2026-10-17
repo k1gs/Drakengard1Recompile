@@ -18,8 +18,11 @@ public:
     void afterRead(ps2x::iop::detail::IopMemory& memory, uint32_t physical) {
         if (physical == 0x1f801078) memory.setInterruptControl(0); // Read-and-disable, not a plain load.
     }
-    void checkDelivery(const ps2x::iop::detail::IopMemory& memory) const {
-        if (memory.interruptControl() && (memory.interruptStatus() & memory.interruptMask()))
+    bool pending(const ps2x::iop::detail::IopMemory& memory) const {
+        return memory.interruptControl() && (memory.interruptStatus() & memory.interruptMask());
+    }
+    void checkDelivery(const ps2x::iop::detail::IopMemory& memory, bool cpuEnabled = true) const {
+        if (cpuEnabled && pending(memory))
             throw std::runtime_error("Pending IOP interrupt requires actual exception delivery");
     }
 };

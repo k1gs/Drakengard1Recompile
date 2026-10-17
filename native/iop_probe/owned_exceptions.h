@@ -21,5 +21,18 @@ public:
                       << " v0=0x" << cpu.gpr[2] << " a0=0x" << cpu.gpr[4] << std::dec << '\n';
         return true;
     }
+    bool enterInterrupt(const ps2x::iop::detail::IopMemory& memory,
+                        ps2x::iop::detail::IopCpuState& cpu,
+                        const ps2x::iop::detail::IopCpuCore& core) {
+        if ((cpu.cop0[12] & 0x400401u) != 0x401u || !(cpu.cop0[13] & 0x400u) ||
+            cpu.pendingLoad || !vectorOwns(memory, 0x80)) return false;
+        core.raiseException(cpu, 0, cpu.pc, cpu.branchPending);
+        ++interrupts;
+        if (interrupts <= 16 || interrupts % 1024 == 0)
+            std::cerr << "[owned-iop-irq] count=" << interrupts << " epc=0x" << std::hex << cpu.cop0[14]
+                      << " cause=0x" << cpu.cop0[13] << std::dec << '\n';
+        return true;
+    }
     uint64_t syscalls{};
+    uint64_t interrupts{};
 };

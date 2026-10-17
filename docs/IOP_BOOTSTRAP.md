@@ -88,7 +88,8 @@ The quiescent interrupt model implements I_STAT acknowledgement, I_MASK storage 
 read-and-disable. DMA interrupt registers implement write-one-to-clear flags and master IRQ;
 priority/idle-channel storage does not imply a transfer. A channel start is explicitly refused
 until an actual engine is implemented. No device events, completed DMA or successful IRQ delivery
-are fabricated. An actual pending IRQ requires a separate exception-delivery implementation.
+are fabricated. Enabled pending IRQs enter the actual installed guest exception vector;
+missing handlers remain fatal.
 
 SYSCALL traps execute the nonzero exception vector that the real guest kernel installed at 0x80.
 Only actual owned vector instructions are fetched; CPU EPC/Cause/Status and guest RFE perform the
@@ -141,3 +142,31 @@ Cache isolation and syscall contracts:
 [PCSX2 functional IOP memory path](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopMem.cpp).
 CPU identity: [PCSX2 IOP reset](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/R3000A.cpp).
 Variant selection: [PS2SDK timer manager startup](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/system/timrman/src/timrman.c).
+
+## Deterministic timers and owned IRQ delivery
+
+The isolated probe now models six internal counters, prescalers, count/mode/target,
+target and overflow flags, and their causal IRQ bits. External pixel/HBlank clocks and
+unsupported gating remain explicit blockers. Each decoded instruction advances one modeled
+cycle. This is a functional scheduling policy, not a physical IOP/PAL timing measurement.
+
+Bootstrap-018 produced timer-5 IRQ `0x10000`, with I_MASK `0x10801` and CP0.Status `0x401`.
+Bootstrap-019 delivered it through the actual installed vector: EPC `0x33E0`, Cause `0x400`.
+The guest handler acknowledges I_STAT and returns with RFE. CP0 masking, missing vectors,
+branch-delay EPC/BD and deferral until pending loads commit have synthetic coverage.
+
+After that handler, actual startup reached a BIOS data read at `0xBFC00000`, PC `0x1A094`,
+after 4,096,612 instructions. ROM bytes are not substituted. The next experiment maps the
+verified local BIOS read-only for data access; ROM instruction execution remains unsupported.
+No EE BOOTEND, native frame or complete module initialization has been established.
+
+Game-free timer tests are also in CI:
+
+```powershell
+cmake -S native/timer_smoke -B build/timer-smoke
+cmake --build build/timer-smoke --config Release
+ctest --test-dir build/timer-smoke -C Release --output-on-failure
+```
+
+Primary counter contracts: [PCSX2 2.8.2 implementation](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopCounters.cpp)
+and [counter state](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopCounters.h).

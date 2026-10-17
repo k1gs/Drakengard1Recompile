@@ -11,6 +11,11 @@ CI этого checkpoint и handoff `27fd01b` завершился успешн�
 
 ## Сейчас
 
+- Latest isolated bootstrap-019 executed an actual timer IRQ through the installed guest vector,
+  then stopped at a BIOS data read `0xBFC00000`, PC `0x1A094`, after 4,096,612 LOADCORE
+  instructions and 22,016 isolated cache stores. Next: verified read-only ROM data mapping.
+  Main EE runner still stops at actual IOP reboot; this probe is not yet integrated.
+
 - Native-run-014 прошёл SIF/RPC initialization через реальный SET_SREG reply и гостевой SIF0 handler;
   ready flag напрямую не менялся. Следующий FileIO SID `0x80000001` изначально отсутствовал.
 - Реализован packet channel: negotiated EE receive buffer, init, bind, call, other-data, обычное
@@ -38,7 +43,7 @@ CI этого checkpoint и handoff `27fd01b` завершился успешн�
   Run-020 декодировал mode 0 и 40-byte request: `rom0:UDNL cdrom0:\MODULES\IOPRP280.IMG;1`.
   Backend явно остановился перед перезапуском; BOOTEND не выставляется. Exit 5, без timeout.
   Build-031 binary SHA-256: `8319df6c24d14359e5576bd4c4ec4e64cb214d16cc2d121f98567655521de002`.
-- Первый текущий blocker: actual IOP reboot/module initialization по этому запросу.
+- Main EE runner blocker: actual IOP reboot/module initialization по этому запросу.
   Отдельный strict bootstrap probe уже исполнил SYSMEM → LOADCORE и остановился перед неизвестным MMIO.
 - ROMDIR tool проверил IOPRP280: 269 889 bytes, 19 entries, 16 MIPS ELF images;
   SHA-256 `58e8ddcf97b494600bac8df81397a0b51f6dea1eacfc242d56fe2cfdc8339916`.
@@ -248,3 +253,17 @@ M2 частично выполнен: визуальный baseline ещё не 
 
 Проверки и публичный checkpoint фиксируются в Git и CI; отчёты с личными путями и игровые
 артефакты остаются в work/. Это подготовка исследовательского проекта, не результат порта.
+
+### Timer/IRQ checkpoint
+
+- Six internal counters now advance on an explicit functional clock: one modeled cycle per
+  decoded instruction. No physical cycle accuracy or PAL timing is claimed. Target/overflow,
+  divisors, mode flags, repeat/toggle IRQs and unsupported external clocks have game-free tests.
+- Bootstrap-018 generated timer-5 IRQ 0x10000 (I_MASK 0x10801, CP0.Status 0x401).
+  Bootstrap-019 entered the actual owned guest IRQ vector at EPC 0x33E0, Cause 0x400.
+  Pending loads retire before polling; branch-delay EPC/BD and guest acknowledge/RFE are tested.
+- Current actual probe blocker: BIOS read 0xBFC00000 at PC 0x1A094, 4,096,612 instructions,
+  22,016 isolated cache stores (work/iop-bootstrap-019.log; build-iop-probe-025.log).
+  Next: exact-hash-gated local ROM data mapping. Main EE reboot is still not integrated.
+- Validation: 31 Python tests; native ISO/CDVD checks, deterministic timer checks and optional
+  strict bare IOP checks passed. These are not native menu/gameplay validation.

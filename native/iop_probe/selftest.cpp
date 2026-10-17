@@ -65,6 +65,7 @@ int main() {
         if (result.value != 1 || memory.interruptControl() != 0)
             throw std::runtime_error("I_CTRL read must return prior value and disable interrupts");
         memory.setInterruptStatus(0x42); memory.setInterruptMask(0x40); memory.setInterruptControl(1);
+        interrupts.checkDelivery(memory, false); // CP0 global masking must preserve a latched pending source.
         rejects([&] { interrupts.checkDelivery(memory); }, "requires actual exception delivery");
         memory.setInterruptControl(0);
         code(memory, {0xac800000, 0x8c820000, 0, 0x03e00008, 0});
@@ -92,6 +93,22 @@ int main() {
         result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100, nullptr, nullptr, nullptr, nullptr, &exceptions);
         if (result.value != 42 || exceptions.syscalls != 1)
             throw std::runtime_error("Actual guest syscall vector did not return through EPC/RFE");
+        memory.reset(); interrupts.reset(memory); memory.setInterruptStatus(0x10);
+        code(memory, {0x3c08bf80, 0x35081074, 0x24090010, 0xad090000, 0x24090001,
+                      0xad090004, 0x340a0401, 0x408a6000, 0x2402002a, 0x03e00008, 0});
+        if (!memory.zeroRam(0x80, 0x80)) throw std::runtime_error("IRQ vector fixture range failed");
+        const uint32_t irqHandler[] = {0x401a7000, 0, 0x3c1bbf80, 0x377b1070,
+                                       0xaf600000, 0x03400008, 0x42000010};
+        for (unsigned index = 0; index < 7; ++index) memory.write32(0x80 + index * 4, irqHandler[index]);
+        OwnedExceptions irqExceptions;
+        result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100, nullptr, nullptr, &interrupts, nullptr, &irqExceptions);
+        if (result.value != 42 || irqExceptions.interrupts != 1 || memory.interruptStatus() != 0)
+            throw std::runtime_error("Actual guest IRQ vector/acknowledge/EPC return failed");
+        ps2x::iop::detail::IopCpuState branchCpu;
+        branchCpu.pc = 0x1004; branchCpu.branchPending = true; branchCpu.cop0[12] = 0x401; branchCpu.cop0[13] = 0x400;
+        ps2x::iop::detail::IopCpuCore core(memory);
+        if (!irqExceptions.enterInterrupt(memory, branchCpu, core) || branchCpu.cop0[14] != 0x1000 ||
+            !(branchCpu.cop0[13] & 0x80000000u)) throw std::runtime_error("IRQ branch-delay EPC/BD contract failed");
         memory.reset(); code(memory, {0xfc000000}); // Unsupported instruction must raise an exception.
         rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030); }, "raised an exception");
         memory.reset();

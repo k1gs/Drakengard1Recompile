@@ -54,6 +54,7 @@ add_library(iop_bootstrap_primitives STATIC
     "${IOP_ROOT}/src/emulator/imports/iop_imports.cpp"
     "${REPO_ROOT}/native/runner/iso_media.cpp"
     "${REPO_ROOT}/native/runner/cdvd_device.cpp"
+    "${REPO_ROOT}/native/runner/iop_timers.cpp"
     "${CMAKE_BINARY_DIR}/private_bootstrap_loader.cpp")
 target_include_directories(iop_bootstrap_primitives PUBLIC
     "${IOP_ROOT}/include" "${IOP_ROOT}/src/emulator"
