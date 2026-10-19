@@ -71,6 +71,7 @@ public:
             throw StrictDeviceError("Game entry requires actual completed firmware IOP startup");
         phase = Phase::FirmwareEntry;
         firmwareDma.enableSif1();
+        boot->enablePioCapture();
         boot->bindSif0([this](std::span<const uint8_t> quantum) {
             drainSif0();
             if (!sif0Fifo.push(quantum)) return false;

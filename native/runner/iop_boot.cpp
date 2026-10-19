@@ -40,6 +40,7 @@ struct IopBoot::Impl {
 };
 IopBoot::IopBoot(const IopBootInputs& inputs) : impl(std::make_unique<Impl>(inputs)) {}
 IopBoot::~IopBoot() = default;
+void IopBoot::enablePioCapture() { impl->session->enablePioCapture(); }
 void IopBoot::bindSif0(std::function<bool(std::span<const uint8_t>)> sink) {
     impl->session->bindSif0(std::move(sink));
 }

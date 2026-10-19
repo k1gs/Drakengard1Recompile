@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <vector>
 void checkSif0();
+void checkPioCapture();
 
 namespace {
 void require(bool value) { if (!value) throw std::runtime_error("Bootstrap interface check failed"); }
@@ -21,6 +22,7 @@ struct WordBus {
 int main() {
     try {
         checkSif0();
+        checkPioCapture();
         refuses([] { ReadOnlyRom wrong(std::vector<uint8_t>(16)); });
         std::vector<uint8_t> bytes(0x400000);
         bytes[0] = 0x78; bytes[1] = 0x56; bytes[2] = 0x34; bytes[3] = 0x92;

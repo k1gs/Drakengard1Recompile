@@ -105,6 +105,50 @@ int main() {
         result = bareCall(memory, 0x1000, 0, 0xbf80101c, 0x1000, 0x1100, {.hardware = &hardware});
         if (result.value != 0x000d2077 || memory.interruptStatus())
             throw std::runtime_error("PIO second delay profile lost actual guest state");
+        PioWriteCapture pio;
+        code(memory, {0x240200fc, 0xac820000, 0x03e00008, 0});
+        rejects([&] { bareCall(memory, 0x1000, 0, 0xbf802070, 0x1000, 0x1100,
+            {.pio = &pio}); }, "hardware contract");
+        pio.enable(); memory.write32(0x1f802074, 0xdeadbeef);
+        for (uint32_t address : {0x1f802070u, 0x9f802070u, 0xbf802070u})
+            bareCall(memory, 0x1000, 0, address, 0x1000, 0x1100, {.pio = &pio});
+        memory.write32(0x1f802070, 0xdeadbefc); // Byte stores must preserve the other three bytes.
+        code(memory, {0x3c021234, 0x344256a5, 0xa0820000, 0x03e00008, 0});
+        bareCall(memory, 0x1000, 0, 0xbf802070, 0x1000, 0x1100, {.pio = &pio});
+        if (pio.writes() != 4 || pio.value() != 0xa5 || pio.width() != 1 || memory.interruptStatus() ||
+            memory.read32(0x1f802074) != 0xdeadbeef || memory.read32(0x1f802070) != 0xdeadbea5)
+            throw std::runtime_error("Actual PIO stores lost width/data, changed neighbor or invented IRQ");
+        code(memory, {0x8c820000, 0, 0x03e00008, 0});
+        rejects([&] { bareCall(memory, 0x1000, 0, 0xbf802070, 0x1000, 0x1100,
+            {.pio = &pio}); }, "hardware contract");
+        // Exercise real CPU stores/load delays for every reviewed configuration,
+        // including transitions, aliases and denied remapping. No device is run.
+        PassiveHardware unseeded;
+        for (const auto& setting : ssbus::settings) {
+            for (uint32_t value : {setting.transition, setting.configured}) {
+                for (uint32_t alias : {0u, 0x80000000u, 0xa0000000u}) {
+                    const auto address = setting.address | alias;
+                    code(memory, {0x3c020000 | (value >> 16), 0x34420000 | (value & 0xffff),
+                        0xac820000, 0x8c820000, 0, 0x03e00008, 0});
+                    result = bareCall(memory, 0x1000, 0, address, 0x1000, 0x1100, {.hardware = &hardware});
+                    if (result.value != value || memory.read32(setting.address) != value || memory.interruptStatus())
+                        throw std::runtime_error("SSBUS CPU configuration storage or alias failed");
+                }
+            }
+            const auto previous = memory.read32(setting.address);
+            code(memory, {0x24020000, 0xac820000, 0x03e00008, 0});
+            rejects([&] { bareCall(memory, 0x1000, 0, setting.address, 0x1000, 0x1100,
+                {.hardware = &hardware}); }, "hardware contract");
+            if (memory.read32(setting.address) != previous ||
+                unseeded.allows(setting.address, 0x23, 0) ||
+                hardware.allows(setting.address, 0x29, setting.configured) ||
+                hardware.allows(setting.address, 0x25, 0))
+                throw std::runtime_error("SSBUS rejected write changed state or accepted width/unseeded profile");
+        }
+        for (uint32_t port : {0x1f801da8u, 0x1f402000u, 0x1e000000u, 0x1f400010u, 0x14000000u,
+                              0x1f801424u, 0xfffe0140u, 0xfffe0144u})
+            if (hardware.allows(port, 0x23, 0) || hardware.allows(port, 0x2b, 0xff))
+                throw std::runtime_error("SSBUS configuration opened an unrelated device/CPU port");
         memory.reset(); memory.write32(0x800, 0xdeadbeef);
         code(memory, {0x3c08fffe, 0x35080130, 0x24090c04, 0xad090000, 0x3c0a0001,
                       0x408a6000, 0x240b0800, 0xad600000, 0x40806000, 0xad000000,

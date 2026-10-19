@@ -503,3 +503,43 @@ An actual completed IOP reboot, new BOOTEND, native frame/menu, gameplay and sav
 Run-074 repeats the same port, value, PC and instruction count. Final isolated init (run-075)
 still reaches actual guest BOOTEND with exit 5; ordinary IOP mode (run-076) keeps its fixed-budget
 exit 6. Neither non-entry mode uses the new stop call or idle IOP scheduling; no run times out.
+
+## Restricted PIO write capture and fixed SSBUS configuration
+
+The next review establishes a narrower functional contract for `0x1F802070`, rather than its
+uncertain physical meaning. In the pinned [PCSX2 IOP memory paths](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopMem.cpp),
+page-2 byte/word writes retain their actual backing-store value without a device callback or IRQ.
+The [hardware research](https://psx-spx.consoledev.net/expansionportpio/) leaves POST/configuration
+semantics uncertain. The diagnostic profile therefore records writes only; it implements no
+physical debug board, status reads, reset acknowledgement or ready flag.
+
+`PioWriteCapture` is enabled only for explicit entry into the ELF after firmware initialization.
+The actual PIO base/delay latches must already match the reviewed configuration. It accepts the
+observed `SW 0xFC` and byte writes to this exact port. Halfwords, loads, other word values, adjacent
+ports and other mappings fail closed. Recording occurs after the real CPU store, preserving byte
+width and checking the stored value; failed instructions cannot produce a capture event.
+Run-077 records the actual `0xFC` store, then reaches the SPU bus-delay setting.
+
+The reviewed SSBUS settings now have their own `ssbus_config.h` component. It retains fixed base
+addresses and the known transition/final delay profiles for ROM, PIO, DEV1, DEV5, SPU, SPU1 and DEV9.
+The [register definitions](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopHw.h) and
+[storage write path](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/ps2/Iop/IopHwWrite.cpp)
+support configuration storage, not a cycle-accurate bus or a working audio/disc/network device.
+Only word loads/stores under the existing passive profile are permitted. No new snapshot state
+is seeded. Device ports, arbitrary remapping, unsupported widths and CPU-internal controls stay
+separate and unsupported. Synthetic CPU tests cover both delay stages, cached/uncached aliases,
+load delays, rejected writes leaving prior values intact, unchanged neighbors and no IRQ.
+PIO tests additionally check disabled capture, byte truncation and preservation of other bytes.
+
+Run-078 gets through the reviewed bus settings and stops at the next explicit contract:
+IOP PC `0x1909C`, instruction count 6,025,406, `SW 0x1F800400` to CPU register `0xFFFE0140`.
+The original table also contains `0xFFFE0144`; neither is opened as an SSBUS latch or a no-op.
+The run exits 6 without timeout after 16 SIF1 chains carrying 2,160 bytes. The next experiment
+must establish the CPU mapping/control contract and its interaction with coherent memory.
+Completed reboot, repeated BOOTEND, native frame/menu, gameplay, audio-content and saves remain
+unverified.
+Run-079 repeats the same port, value, PC and instruction count on the same executable. Run-080
+still returns from isolated initialization after actual guest BOOTEND (exit 5); run-081 retains
+the ordinary fixed-budget boundary (exit 6). Neither non-entry mode records a PIO write. None
+times out. A changed private BIOS copy, even with its matching supplied hash, is still rejected
+by the firmware-specific binding before guest execution; the original remains unchanged.

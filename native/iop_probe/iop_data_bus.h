@@ -11,6 +11,7 @@
 #include "read_only_rom.h"
 #include "sif_registers.h"
 #include "sif0_sender.h"
+#include "pio_write_capture.h"
 #include <iostream>
 #include <stdexcept>
 #include <optional>
@@ -28,6 +29,7 @@ struct IopDevices {
     const ReadOnlyRom* rom{};
     SifRegisters* sif{};
     Sif0Sender* sif0{};
+    PioWriteCapture* pio{};
 };
 
 // Adapts explicit device contracts to the pinned CPU's backing memory.
@@ -39,18 +41,20 @@ class IopDataBus {
     Memory& memory;
     const IopDevices devices;
 public:
+    struct PioWrite { uint32_t opcode{}, value{}, pc{}; };
     struct Effects {
         uint32_t interruptRead{}, dmaWrite{}, dmaPrevious{}, dmaValue{}, sifWrite{};
         std::optional<std::pair<uint32_t, uint32_t>> romRestore;
         bool sif0Start{};
+        std::optional<PioWrite> pioWrite;
     };
     IopDataBus(Memory& memory, const IopDevices& devices) : memory(memory), devices(devices) {}
     Effects prepare(const Cpu& cpu, uint32_t instruction, uint32_t steps) {
         using ps2x::iop::detail::IopMemory;
-        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0] = devices;
+        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio] = devices;
         const uint32_t opcode = instruction >> 26;
         Effects effects;
-        auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start] = effects;
+        auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite] = effects;
         if ((opcode >= 0x20 && opcode <= 0x26) || (opcode >= 0x28 && opcode <= 0x2b) || opcode == 0x2e) {
             const uint32_t address = cpu.gpr[(instruction >> 21) & 31] +
                 static_cast<uint32_t>(static_cast<int16_t>(instruction));
@@ -68,6 +72,7 @@ public:
                 timers->supports(target, width, timerWrite);
             const bool romAccess = rom && rom->allows(address, opcode);
             const bool sifAccess = sif && sif->allows(target, opcode);
+            const bool pioAccess = pio && pio->allows(memory, target, opcode, cpu.gpr[(instruction >> 16) & 31]);
             if (dma && opcode == 0x2b && dma->channelRegister(target) && (target & 15) == 8 &&
                 (cpu.gpr[(instruction >> 16) & 31] & 0x01000000)) {
                 const auto base = target & ~15u;
@@ -88,7 +93,7 @@ public:
                 !(cache && cache->allows(address, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
                 !(interrupts && interrupts->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&
                 !(dma && dma->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31], &memory)) &&
-                !cdvdAccess && !timerAccess && !romAccess && !sifAccess) {
+                !cdvdAccess && !timerAccess && !romAccess && !sifAccess && !pioAccess) {
                 std::cerr << "[bootstrap-mmio-blocker] steps=" << steps << " pc=0x" << std::hex << cpu.pc
                           << " instruction=0x" << instruction << " address=0x" << address << std::dec
                           << " rt_value=0x" << std::hex << cpu.gpr[(instruction >> 16) & 31] << std::dec
@@ -98,6 +103,7 @@ public:
                 throw std::runtime_error("Non-RAM data access requires an explicit hardware contract");
             }
             if (romAccess) romRestore = rom->stage(memory, address, opcode);
+            if (pioAccess) pioWrite = PioWrite{opcode, cpu.gpr[(instruction >> 16) & 31], cpu.pc};
             if (sifAccess) {
                 if (opcode == 0x2b) {
                     sif->write(target, cpu.gpr[(instruction >> 16) & 31]);
@@ -132,8 +138,8 @@ public:
         return effects;
     }
     void complete(const Cpu& cpu, const Effects& effects) {
-        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0] = devices;
-        const auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start] = effects;
+        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio] = devices;
+        const auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite] = effects;
         // Temporary staging preserves the upstream core's load-delay behavior
         // without leaving ROM words in the masked hardware map (BIU aliases).
         if (romRestore) memory.write32(romRestore->first, romRestore->second);
@@ -141,6 +147,7 @@ public:
         if (!cpu.exception && interruptRead) interrupts->afterRead(memory, interruptRead);
         if (!cpu.exception && dmaWrite) dma->afterWrite(memory, dmaWrite, dmaPrevious, dmaValue);
         if (!cpu.exception && sif0Start) sif0->start(memory);
+        if (!cpu.exception && pioWrite) pio->afterWrite(memory, pioWrite->opcode, pioWrite->value, pioWrite->pc);
         if (cdvd && cdvd->takeInterruptEdge()) memory.setInterruptStatus(memory.interruptStatus() | 4u);
         if (timers) memory.setInterruptStatus(memory.interruptStatus() | timers->advance(1));
     }
