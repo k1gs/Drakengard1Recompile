@@ -16,17 +16,26 @@ IMAGE_SHA256 = '9884ddf3c1e80a8fd9b89d83b741b3b64ec509c0edf773bd889048eaf3d55dd8
 REFERENCE_SHA256 = '8eefaf755c38f6b5fec1dbd9616acb6f206726b18199793cf3bb7a9f1b34400c'
 
 
+def verify_sif_syscall_table(kernel):
+    for number, address in ((0x6b, 0x80006380), (0x76, 0x80006958),
+                            (0x77, 0x800067a0), (0x78, 0x80006348)):
+        slot = 0x14e80 + number * 4
+        if len(kernel) < slot + 4 or int.from_bytes(kernel[slot:slot + 4], 'little') != address:
+            raise ValueError('Firmware SIF syscall table differs')
+
+
 def prepare(output):
     image_dir = ROOT / 'work/ee-bios-kernel-001'
     image = image_dir / 'sif.elf'
     metadata = inspect_elf(image)
     if metadata['sha256'] != IMAGE_SHA256 or metadata['entry'] != 0x80006240:
         raise ValueError('Firmware translation image differs from reviewed experiment')
-    table = image_dir / 'sif-functions-003.csv'
+    table = image_dir / 'sif-functions-004.csv'
     validate_map(table, metadata)
     rows = list(csv.DictReader(table.open()))
     if [(int(r['Start'], 0), int(r['End'], 0)) for r in rows] != [
         (0x80005f00, 0x80005fdc), (0x80006240, 0x80006348), (0x80006348, 0x8000637c),
+        (0x80006380, 0x800063ac),
         (0x800063b0, 0x80006414), (0x80006418, 0x80006670), (0x80006670, 0x800066f8),
         (0x800066f8, 0x800067a0), (0x800067a0, 0x80006954), (0x80006958, 0x80006ae0),
         (0x80006b90, 0x80006ba4),
@@ -43,12 +52,9 @@ def prepare(output):
     kernel = rom[record['offset']:record['offset'] + record['size']]
     if len(kernel) != 93544 or hashlib.sha256(kernel).hexdigest() != KERNEL_SHA256:
         raise ValueError('Firmware source extent differs')
-    # The adjacent original syscall-table slots establish identity independently
+    # The reviewed original syscall-table slots establish identity independently
     # of decompiler names. Never bind a handler from address similarity alone.
-    if (int.from_bytes(kernel[0x15058:0x1505c], 'little') != 0x80006958 or
-            int.from_bytes(kernel[0x1505c:0x15060], 'little') != 0x800067a0 or
-            int.from_bytes(kernel[0x15060:0x15064], 'little') != 0x80006348):
-        raise ValueError('Firmware SIF syscall table differs')
+    verify_sif_syscall_table(kernel)
     reference = (ROOT / 'work/reference-pine-001/savestates/SLES-52322 (79585776).01.p2s').read_bytes()
     if hashlib.sha256(reference).hexdigest() != REFERENCE_SHA256:
         raise ValueError('Passive EE hardware reference differs')
@@ -62,7 +68,7 @@ def prepare(output):
         raise ValueError('Firmware compiler units must stay inside private build/')
     output.mkdir(parents=True, exist_ok=True)
     write_changed(output / 'firmware_functions.h', (ROOT / 'native/runner/firmware_functions.h').read_text())
-    source = ROOT / 'generated/firmware-004'
+    source = ROOT / 'generated/firmware-005'
     for path in source.glob('*'):
         if path.name == 'register_functions.cpp' or path.suffix not in ('.cpp', '.h'):
             continue

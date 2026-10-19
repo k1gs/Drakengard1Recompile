@@ -88,6 +88,8 @@ void checkSif0() {
             });
         };
         ee.write(0x1000c000, 0x184); check(drain() == 3 && fifo.size() == 2);
+        ee.write(0x1000c000, 0); ee.write(0x1000c020, 0);
+        check(!drain() && fifo.size() == 2 && word(ram, 0x900) == 0xcdcdcdcd);
         ee.write(0x1000c000, 0x184); check(!drain()); // Preserve unconsumed completion.
         check(ee.takeSif0Completion() && drain() == 2 && ee.takeSif0Completion());
         check(word(ram, 0x800) == 0xabc00000 && word(ram, 0x900) == 0xabc00000 && fifo.size() == 0);

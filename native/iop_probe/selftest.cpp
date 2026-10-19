@@ -74,6 +74,37 @@ int main() {
         put(20, 0x1f801450);
         rejects([&] { hardware.seed(seed, memory); }, "duplicate passive hardware register");
         if (memory.read32(0xbf801578) != 0) throw std::runtime_error("Rejected seed changed hardware");
+        code(memory, {0x3c020016, 0x3442244f, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
+        for (uint32_t address : {0x1f801010u, 0x9f801010u, 0xbf801010u}) {
+            result = bareCall(memory, 0x1000, 0, address, 0x1000, 0x1100, {.hardware = &hardware});
+            if (result.value != 0x0016244f || memory.interruptStatus() || memory.read32(0x1f801014))
+                throw std::runtime_error("ROM delay store/read lost value, changed neighbor or invented IRQ");
+        }
+        code(memory, {0x24020001, 0xac820000, 0x03e00008, 0});
+        rejects([&] { bareCall(memory, 0x1000, 0, 0xbf801010, 0x1000, 0x1100,
+            {.hardware = &hardware}); }, "hardware contract");
+        if (memory.read32(0x1f801010) != 0x0016244f || hardware.allows(0x1f801010, 0x29, 0) ||
+            hardware.allows(0x1f801014, 0x2b, 0x0016244f))
+            throw std::runtime_error("Unreviewed SSBUS register/bits/width accepted");
+        code(memory, {0x24021225, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
+        result = bareCall(memory, 0x1000, 0, 0xbf801020, 0x1000, 0x1100, {.hardware = &hardware});
+        if (result.value != 0x1225 || memory.read32(0x1f801010) != 0x0016244f || memory.interruptStatus() ||
+            hardware.allows(0x1f801020, 0x2b, 0x1224) || hardware.allows(0x1f801020, 0x25, 0))
+            throw std::runtime_error("SSBUS common-delay storage/guard changed another device or invented IRQ");
+        code(memory, {0x240200ff, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
+        result = bareCall(memory, 0x1000, 0, 0xbf80101c, 0x1000, 0x1100, {.hardware = &hardware});
+        if (result.value != 0xff || memory.interruptStatus() ||
+            hardware.allows(0x1f80101c, 0x2b, 0x100) || hardware.allows(0x1f80101c, 0x28, 0))
+            throw std::runtime_error("SSBUS PIO-delay storage/width/profile guard failed");
+        code(memory, {0x3c021f80, 0x34422000, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
+        result = bareCall(memory, 0x1000, 0, 0xbf801004, 0x1000, 0x1100, {.hardware = &hardware});
+        if (result.value != 0x1f802000 || memory.interruptStatus() ||
+            hardware.allows(0x1f801004, 0x2b, 0x1f803000) || hardware.allows(0x1f802070, 0x2b, 0xfc))
+            throw std::runtime_error("PIO base profile opened arbitrary remapping or unreviewed device ports");
+        code(memory, {0x3c02000d, 0x34422077, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
+        result = bareCall(memory, 0x1000, 0, 0xbf80101c, 0x1000, 0x1100, {.hardware = &hardware});
+        if (result.value != 0x000d2077 || memory.interruptStatus())
+            throw std::runtime_error("PIO second delay profile lost actual guest state");
         memory.reset(); memory.write32(0x800, 0xdeadbeef);
         code(memory, {0x3c08fffe, 0x35080130, 0x24090c04, 0xad090000, 0x3c0a0001,
                       0x408a6000, 0x240b0800, 0xad600000, 0x40806000, 0xad000000,

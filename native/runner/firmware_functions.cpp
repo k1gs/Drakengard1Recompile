@@ -79,11 +79,12 @@ bool invokeFirmwareSifSyscall(uint8_t* ram, R5900Context* ctx, PS2Runtime* runti
     if (!drakengard::strictIopActive()) return false;
     if (!drakengard::firmwareGameEntryActive())
         throw drakengard::StrictDeviceError("Original firmware SIF DMA requires firmware-entry mode");
-    if (!ram || !ctx || !runtime || (number != 0x76 && number != 0x77 && number != 0x78))
+    if (!ram || !ctx || !runtime || (number != 0x6b && number != 0x76 && number != 0x77 && number != 0x78))
         throw drakengard::StrictDeviceError("Unsupported strict firmware SIF syscall context");
     // Verified BIOS table base 0x80014e80; adjacent slots are independently
     // checked against the source ROM during preparation. No guessed aliases.
-    const uint32_t address = number == 0x78 ? 0x80006348 : number == 0x77 ? 0x800067a0 : 0x80006958;
+    const uint32_t address = number == 0x6b ? 0x80006380 : number == 0x78 ? 0x80006348 :
+        number == 0x77 ? 0x800067a0 : 0x80006958;
     uint32_t actual;
     std::memcpy(&actual, ram + 0x14e80 + number * 4, sizeof(actual));
     if (actual != address) throw drakengard::StrictDeviceError("Firmware SIF syscall table changed");
@@ -103,8 +104,8 @@ bool invokeFirmwareSifSyscall(uint8_t* ram, R5900Context* ctx, PS2Runtime* runti
         catch (const drakengard::StrictDeviceError&) { throw; }
         catch (const std::exception& error) { throw drakengard::StrictDeviceError(error.what()); }
     }
-    // SetDChain is void; DMA ID/status calls take the original guest return.
-    if (number != 0x78) ctx->r[2] = call.r[2];
+    // Stop/SetDChain are void; DMA ID/status calls take the original guest return.
+    if (number == 0x76 || number == 0x77) ctx->r[2] = call.r[2];
     std::cerr << "[firmware-sif-return] number=0x" << std::hex << number
               << " value=0x" << getRegU32(ctx, 2) << std::dec << '\n';
     drakengard::advanceFirmwareIop();

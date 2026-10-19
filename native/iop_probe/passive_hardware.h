@@ -7,7 +7,9 @@
 #include <span>
 #include <stdexcept>
 
-// Only HW_ICFG and the DMA-global gate have reviewed storage contracts so far.
+// Reviewed storage: HW_ICFG, DMA-global gate, and observed boot-ROM/common/PIO-delay
+// profiles and the fixed PIO base. Retaining these is not a bus-cycle timing model
+// or permission to access the mapped device; its ports still need their own contract.
 // Never import snapshot DMA/interrupt/device state as a running device model.
 class PassiveHardware {
 public:
@@ -43,6 +45,14 @@ public:
     bool allows(uint32_t physical, uint32_t opcode, uint32_t writeValue) const {
         if (opcode != 0x23 && opcode != 0x2b) return false;
         if (physical == 0x1f801450) return m_icfg;
+        if (physical == 0x1f801010)
+            return m_icfg && (opcode == 0x23 || writeValue == 0x0016244f);
+        if (physical == 0x1f801020)
+            return m_icfg && (opcode == 0x23 || writeValue == 0x00001225);
+        if (physical == 0x1f80101c)
+            return m_icfg && (opcode == 0x23 || writeValue == 0x000000ff || writeValue == 0x000d2077);
+        if (physical == 0x1f801004)
+            return m_icfg && (opcode == 0x23 || writeValue == 0x1f802000);
         return m_gate && physical == 0x1f801578 && (opcode != 0x2b || writeValue <= 1);
     }
 private:

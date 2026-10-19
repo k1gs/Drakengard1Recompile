@@ -92,6 +92,8 @@ public:
                 std::cerr << "[bootstrap-mmio-blocker] steps=" << steps << " pc=0x" << std::hex << cpu.pc
                           << " instruction=0x" << instruction << " address=0x" << address << std::dec
                           << " rt_value=0x" << std::hex << cpu.gpr[(instruction >> 16) & 31] << std::dec
+                          << " ra=0x" << std::hex << cpu.gpr[31] << " a0=0x" << cpu.gpr[4]
+                          << " a1=0x" << cpu.gpr[5] << std::dec
                           << " isolated_cache_stores=" << (cache ? cache->isolatedStores : 0) << '\n';
                 throw std::runtime_error("Non-RAM data access requires an explicit hardware contract");
             }

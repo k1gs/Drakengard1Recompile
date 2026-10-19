@@ -50,7 +50,7 @@ function(drakengard_configure_runner)
     target_link_libraries(ps2EntryRunner PRIVATE drakengard_iop_engine)
     set(firmware_host "${REPO_ROOT}/native/runner/firmware_functions.cpp")
     target_sources(ps2EntryRunner PRIVATE "${firmware_host}")
-    if(EXISTS "${REPO_ROOT}/generated/firmware-004/register_functions.cpp")
+    if(EXISTS "${REPO_ROOT}/generated/firmware-005/register_functions.cpp")
         set(firmware_units "${CMAKE_BINARY_DIR}/firmware_translation")
         execute_process(COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/scripts/prepare_firmware.py"
             --input-complete "${firmware_units}" RESULT_VARIABLE firmware_result)

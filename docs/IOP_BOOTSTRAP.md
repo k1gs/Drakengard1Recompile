@@ -465,3 +465,41 @@ Different packet counts reflect the original rearm procedure and its cooperative
 are not a timing-equivalence claim. Full-FIFO pause/resume is synthetically verified, not yet
 observed as a full queue in this native run. Next work is verified original SIF0 stop execution.
 Native menu/frame, gameplay, audio-content and saves remain unverified.
+
+## Original SIF0 stop procedure
+
+The verified BIOS syscall table has `0x6B` at slot `0x8001502C`, pointing to `0x80006380`.
+The private Ghidra review recovers the exact range `0x80006380..0x800063AC`: 44 instruction
+bytes that clear EE SIF0 CHCR and QWC and return. `firmware-005` adds this range to the existing
+private translation (11 functions, 26 entries, 2,432 instruction bytes; no stubs/decode failures).
+The source BIOS, extracted KERNEL, translation image, table slots and per-dispatch instruction
+bytes remain independently checked. Generated firmware is not distributed.
+
+Stop routes through the same bounded original-code component call as the other SIF syscalls,
+preserving its void caller ABI. It does not call the unrelated HLE packet backend or discard
+queued SIF data. Synthetic checks cover stop/rearm with a queued reply and pending completion,
+and reject a changed or truncated table slot for every supported firmware SIF entry.
+
+Native-run-069 executes the actual stop, preserving the caller's `v0 = 0x572C70`, and then
+delivers a 112-byte DMA payload containing the reboot request through original SIF1 tags. The guest IOP rearms reception
+and begins the reboot's hardware initialization. No transport reset or ready flag is substituted.
+
+That sequence writes the SSBUS ROM delay, common delay, PIO delay and fixed PIO base from the
+verified BIOS hardware table. The functional model retains only the reviewed word-sized profiles:
+ROM delay `0x0016244F`, common delay `0x1225`, PIO delay `0xFF`/`0xD2077`, PIO base `0x1F802000`.
+Other values, widths, registers and device ports remain unsupported. These actual writes create
+no IRQ or host timing assumption; snapshot state is not imported. Register identity and storage
+behavior follow the pinned [IOP definitions](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopHw.h)
+and [word write/read paths](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/ps2/Iop/IopHwWrite.cpp).
+Synthetic CPU stores/readbacks exercise aliases, unchanged neighbors and rejected profiles.
+
+Run-073 gets through these settings and stops at IOP PC `0x1909C`, instruction count 6,025,262,
+on a store of `0xFC` to `0xBF802070`. The caller reads the original BIOS initialization table;
+the raw table and instruction review remain private. The PIO base profile does not grant access
+to that port. MAME labels the mapping an [IOP debug write](https://github.com/mamedev/mame/blob/master/src/mame/sony/ps2sony.cpp),
+but its empty handler is insufficient evidence for a physical-device contract here. Keep this
+port fail-closed pending further review. Exit 6 without timeout; 16 SIF1 chains carry 2,160 bytes.
+An actual completed IOP reboot, new BOOTEND, native frame/menu, gameplay and saves are unverified.
+Run-074 repeats the same port, value, PC and instruction count. Final isolated init (run-075)
+still reaches actual guest BOOTEND with exit 5; ordinary IOP mode (run-076) keeps its fixed-budget
+exit 6. Neither non-entry mode uses the new stop call or idle IOP scheduling; no run times out.
