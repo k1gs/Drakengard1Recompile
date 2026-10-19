@@ -595,3 +595,54 @@ initialization (run-089) still reaches actual guest BOOTEND with exit 5; ordinar
 retains its fixed-budget exit 6. Neither non-entry mode enables the new control/ROM path. All
 four runs use the same executable and verified inputs without timeout. The changed-BIOS
 negative check still refuses execution before guest startup; the original file remains intact.
+
+## Verified absent-ROM1 profile and quiescent SIO2 control
+
+The pinned reference reports that its optional ROM1 module is absent. The original reference
+log and a fresh isolated PCSX2 v2.8.2 run both report this. Two independent PINE reads of the
+entire 4-MiB ROM1 allocation return identical zero-filled data, SHA-256
+`bb9f8df61474d25e71fa00722318cd387396ca1736605e1248821cc0de3d3af8`.
+The reference executable and original BIOS hashes remain verified; these observations establish
+reference memory contents, not native rendering or physical open-bus behavior.
+
+This agrees with [memory reset](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/Memory.cpp),
+the [optional BIOS loader](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/ps2/BiosTools.cpp)
+and the [IOP ROM1 mapping](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopMem.cpp).
+The entry experiment now explicitly enables a zero-backed, read-only aperture at physical
+`0x1E000000..0x1E3FFFFF`, with physical/KSEG0/KSEG1 data aliases. Stores, instruction fetches,
+KSEG3 aliases and neighboring regions remain unsupported. ROM2 is not enabled. Temporary data
+staging preserves the original core's load delays and restores its previous backing value.
+
+The runner still requires the fixed reviewed BIOS hash. Before enabling entry devices it also
+checks both companion names used by the reference: `<bios>.rom1` and the BIOS path with its
+extension replaced by `.rom1`. Any entry, including an empty file, or an indeterminate filesystem
+status rejects this absent-module profile. A provided ROM1 image requires separate review;
+there is no fallback that silently ignores it or zeroes unrelated memory.
+Native negative checks verify rejection for both names using separate private BIOS copies.
+
+Run-091 passes the ROM1 probe and reaches SIO2 initialization at IOP PC `0x36F3C`, step 6,896,374:
+the guest writes `0x3BC` to control register `0x1F808268`. The pinned
+[SIO2 control definitions](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SIO/SioTypes.h)
+identify this reset profile; the [control implementation](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SIO/Sio2.cpp)
+retains it without starting a transfer or raising IRQ. A separate `QuiescentSio2` component
+permits this exact word write and word readback after its actual CPU store. Unknown values,
+transfer-start writes, other widths, FIFO, command/status registers, pads, cards and DMA remain
+unsupported. Nothing imports a ready flag or pretends a transaction completed.
+
+Synthetic tests cover ROM1 aliases/edges, disabled profiles, retained backing values, no ROM1
+execution or stores, actual SIO2 CPU store/load delay and unchanged neighbors/IRQ. Portable
+checks additionally reject SIO2 readback before configuration and invalid initialization.
+
+Run-092 gets through SIO2 initialization and reaches the next owned-code guard at IOP PC
+`0x10019C`, step 7,373,114, RA `0x14778`. This exceeds the original bootstrap's code boundary.
+Original ROM UDNL metadata has entry offset `0x16C`; an allocation at `0x100000` with its `0x30`
+module header would produce exactly this entry. This is a candidate identification: guest RAM
+bytes and relocations have not yet been compared. Execution remains refused. The next experiment
+must verify that loaded image and a bounded execution contract, rather than opening upper RAM.
+Exit 6 without timeout; the original 8-million-instruction cap remains unchanged. Completed
+reboot, repeated BOOTEND, native menu/frame, gameplay, audio-content and saves remain unverified.
+Run-093 repeats the same entry boundary and instruction count on the final executable. Isolated
+initialization (run-094) still reaches actual guest BOOTEND with exit 5; ordinary mode (run-095)
+retains its fixed-budget exit 6. These non-entry modes do not enable ROM1/SIO2 entry devices.
+All runs verify their inputs and finish without timeout. Separate negative checks still reject
+a changed BIOS before guest execution and either ROM1 companion before enabling entry devices.

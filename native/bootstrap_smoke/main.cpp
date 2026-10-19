@@ -6,6 +6,7 @@
 #include <vector>
 void checkSif0();
 void checkPioCapture();
+void checkSio2Control();
 
 namespace {
 void require(bool value) { if (!value) throw std::runtime_error("Bootstrap interface check failed"); }
@@ -23,6 +24,7 @@ int main() {
     try {
         checkSif0();
         checkPioCapture();
+        checkSio2Control();
         refuses([] { ReadOnlyRom wrong(std::vector<uint8_t>(16)); });
         std::vector<uint8_t> bytes(0x400000);
         bytes[0] = 0x78; bytes[1] = 0x56; bytes[2] = 0x34; bytes[3] = 0x92;
@@ -45,6 +47,19 @@ int main() {
         for (uint32_t address : {0x1fbfffffu, 0x20000000u, 0x7fc00000u, 0xc0000000u, 0xfffe0130u})
             refuses([&] { rom.stage(bus, address, 0x23); });
         refuses([&] { rom.stage(bus, 0xbfc00000, 0x2b); });
+        refuses([&] { rom.stage(bus, 0xbe000000, 0x23); });
+        rom.enableAbsentRom1();
+        refuses([&] { rom.enableAbsentRom1(); });
+        const uint32_t previousRom1Slot = bus.value;
+        for (auto address : {0x1e000000u, 0x9e000000u, 0xbe000000u, 0xbe3fffffu}) {
+            const auto prior = rom.stage(bus, address, 0x24);
+            require(!bus.value && !rom.ownsCode(address));
+            bus.write32(prior.first, prior.second); require(bus.value == previousRom1Slot);
+        }
+        for (auto address : {0x1dfffffcu, 0xbe400000u, 0x7e000000u, 0xfe000000u})
+            refuses([&] { rom.stage(bus, address, 0x23); });
+        for (auto opcode : {0x28u, 0x29u, 0x2bu, 0x2eu})
+            refuses([&] { rom.stage(bus, 0xbe000000, opcode); });
         SifRegisters sif;
         require(SifRegisters::kernelAddress(1) == 0x1000f200 && SifRegisters::kernelAddress(2) == 0x1000f210 &&
                 SifRegisters::kernelAddress(3) == 0x1000f220 && SifRegisters::kernelAddress(4) == 0x1000f230);

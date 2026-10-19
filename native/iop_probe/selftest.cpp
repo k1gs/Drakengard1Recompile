@@ -121,6 +121,21 @@ int main() {
         code(memory, {0x8c820000, 0, 0x03e00008, 0});
         rejects([&] { bareCall(memory, 0x1000, 0, 0xbf802070, 0x1000, 0x1100,
             {.pio = &pio}); }, "hardware contract");
+        QuiescentSio2 sio2;
+        code(memory, {0x240203bc, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
+        rejects([&] { bareCall(memory, 0x1000, 0, 0xbf808268, 0x1000, 0x1100,
+            {.sio2 = &sio2}); }, "hardware contract");
+        sio2.enable(); memory.write32(0x1f80826c, 0xdeadbeef);
+        for (auto address : {0x1f808268u, 0x9f808268u, 0xbf808268u}) {
+            result = bareCall(memory, 0x1000, 0, address, 0x1000, 0x1100, {.sio2 = &sio2});
+            if (result.value != 0x3bc || memory.interruptStatus() || memory.read32(0x1f80826c) != 0xdeadbeef)
+                throw std::runtime_error("SIO2 control lost actual CPU state, changed neighbor or invented IRQ");
+        }
+        code(memory, {0x240203bd, 0xac820000, 0x03e00008, 0});
+        rejects([&] { bareCall(memory, 0x1000, 0, 0xbf808268, 0x1000, 0x1100,
+            {.sio2 = &sio2}); }, "hardware contract");
+        if (memory.read32(0x1f808268) != 0x3bc || memory.interruptStatus())
+            throw std::runtime_error("Rejected SIO2 transfer changed control or raised IRQ");
         // Exercise real CPU stores/load delays for every reviewed configuration,
         // including transitions, aliases and denied remapping. No device is run.
         PassiveHardware unseeded;
@@ -242,6 +257,24 @@ int main() {
                 {.rom = &escapedRom}); }, "owned bootstrap code RAM");
             if (memory.read32(0xbfc4a000) != 0xfeedface)
                 throw std::runtime_error("Out-of-window ROM branch leaked fetch state");
+            ReadOnlyRom absentRom(romBytes);
+            code(memory, {0x8c820000, 0, 0x03e00008, 0});
+            rejects([&] { bareCall(memory, 0x1000, 0, 0xbe000000, 0x1000, 0x1100,
+                {.rom = &absentRom}); }, "hardware contract");
+            absentRom.enableAbsentRom1();
+            for (auto address : {0x1e000000u, 0x9e000000u, 0xbe000000u, 0xbe3ffffcu}) {
+                memory.write32(address, 0xdeadbeef);
+                result = bareCall(memory, 0x1000, 0, address, 0x1000, 0x1100, {.rom = &absentRom});
+                if (result.value || memory.read32(address) != 0xdeadbeef || memory.interruptStatus())
+                    throw std::runtime_error("Absent ROM1 load did not use zero-backed data or leaked staging/IRQ");
+            }
+            code(memory, {0xac800000, 0x03e00008, 0});
+            rejects([&] { bareCall(memory, 0x1000, 0, 0xbe000000, 0x1000, 0x1100,
+                {.rom = &absentRom}); }, "hardware contract");
+            rejects([&] { bareCall(memory, 0xbe000000, 0, 0, 0, 0x200000,
+                {.rom = &absentRom}); }, "owned bootstrap code RAM");
+            if (memory.read32(0xbe000000) != 0xdeadbeef)
+                throw std::runtime_error("Rejected ROM1 store/fetch modified its backing slot");
         }
         code(memory, {0x3c0a0001, 0x408a6000, 0xad600000, 0x03e00008, 0});
         rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030); }, "explicit coherent-cache mode");
