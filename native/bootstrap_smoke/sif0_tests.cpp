@@ -1,5 +1,6 @@
 #include "sif0_sender.h"
 #include "ee_sif_dma.h"
+#include "sif0_fifo.h"
 #include <map>
 #include <vector>
 #include <algorithm>
@@ -37,6 +38,80 @@ uint32_t word(const std::vector<uint8_t>& ram, unsigned at) {
 }
 }
 void checkSif0() {
+    {
+        auto memory = source(257);
+        std::vector<uint8_t> ram(0x2000, 0xcd);
+        EeSifDma ee; ee.seedEnableWord(0x1201);
+        Sif0Fifo fifo; Sif0Sender sender;
+        sender.bind([&](auto quantum) { return fifo.push(quantum); });
+        const auto drain = [&](uint32_t control) {
+            return fifo.drain([&](auto quantum) {
+                if (!ee.canReceiveSif0(control)) return false;
+                ee.feedSif0(ram, quantum, control); return true;
+            });
+        };
+        sender.start(memory);
+        check(fifo.size() == 32 && memory.read32(0x1f801520) == 0x5f0 &&
+              memory.read32(0x1f80152c) == 0x114 && !memory.irq);
+        sender.pump(memory); // Full FIFO does not advance or complete a paused producer.
+        check(memory.read32(0x1f801520) == 0x5f0 && !memory.irq && !drain(1));
+        refuses([&] { sender.start(memory); });
+        ee.write(0x1000c000, 0x184);
+        check(!drain(0) && fifo.size() == 32 && !ee.takeSif0Completion());
+        ee.write(0x1000f590, 0x10000); check(!drain(1) && fifo.size() == 32);
+        ee.write(0x1000f590, 0x1201);
+        check(drain(1) == 32 && fifo.size() == 0 && ee.read(0x1000c020) == 34);
+        sender.pump(memory);
+        check(fifo.size() == 32 && memory.read32(0x1f801520) == 0x7f0 && !memory.irq);
+        check(drain(1) == 32 && ee.read(0x1000c020) == 2 && !ee.takeSif0Completion());
+        sender.pump(memory);
+        check(fifo.size() == 2 && memory.read32(0x1f801520) == 0x804 && memory.irq == 8 &&
+              !(memory.read32(0x1f801528) & 0x01000000) && !ee.takeSif0Completion());
+        check(drain(1) == 2 && ee.takeSif0Completion());
+        for (unsigned n = 0; n < 257; ++n) check(word(ram, 0x800 + n * 4) == 0xabc00000u + n);
+        for (unsigned n = 257; n < 260; ++n) check(word(ram, 0x800 + n * 4) == 0xabc00000u + n - 4);
+        check(ram[0x7ff] == 0xcd && ram[0xc10] == 0xcd);
+    }
+    {
+        // Back-to-back terminal replies remain queued until each actual rearm.
+        auto memory = source(6); Sif0Fifo fifo; Sif0Sender sender;
+        sender.bind([&](auto quantum) { return fifo.push(quantum); });
+        sender.start(memory);
+        memory = source(2); memory.write32(0x110, 0x900); sender.start(memory);
+        check(fifo.size() == 5 && memory.irq == 8);
+        EeSifDma ee; ee.seedEnableWord(0x1201);
+        std::vector<uint8_t> ram(0x2000, 0xcd);
+        const auto drain = [&] {
+            return fifo.drain([&](auto quantum) {
+                if (!ee.canReceiveSif0(1)) return false;
+                ee.feedSif0(ram, quantum, 1); return true;
+            });
+        };
+        ee.write(0x1000c000, 0x184); check(drain() == 3 && fifo.size() == 2);
+        ee.write(0x1000c000, 0x184); check(!drain()); // Preserve unconsumed completion.
+        check(ee.takeSif0Completion() && drain() == 2 && ee.takeSif0Completion());
+        check(word(ram, 0x800) == 0xabc00000 && word(ram, 0x900) == 0xabc00000 && fifo.size() == 0);
+        std::array<uint8_t, 16> quantum{};
+        check(fifo.push(quantum));
+        refuses([&] { fifo.drain([](auto) -> bool { throw std::runtime_error("bad destination tag"); }); });
+        check(fifo.size() == 1);
+        refuses([&] { fifo.push(std::span<const uint8_t>(quantum).first(15)); });
+        check(fifo.size() == 1);
+    }
+    {
+        auto memory = source(6); Sif0Fifo fifo; std::array<uint8_t, 16> filler{};
+        for (unsigned n = 0; n < 32; ++n) check(fifo.push(filler));
+        Sif0Sender sender; sender.bind([&](auto quantum) { return fifo.push(quantum); });
+        sender.start(memory); sender.pump(memory);
+        check(memory.read32(0x1f80152c) == 0x104 && memory.read32(0x1f801520) == 0 && !memory.irq);
+        memory.write32(0x1f80152c, 0x114);
+        refuses([&] { sender.pump(memory); }); // Changed active source is not silently resumed.
+        check(fifo.size() == 32 && !memory.irq);
+        memory.write32(0x1f80152c, 0x104);
+        check(fifo.drain([](auto) { return true; }) == 32);
+        sender.pump(memory);
+        check(fifo.size() == 3 && memory.irq == 8 && memory.read32(0x1f801520) == 0x418);
+    }
     for (unsigned count : {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 129u}) {
         auto memory = source(count);
         EeSifDma ee; ee.seedEnableWord(0x1201); ee.write(0x1000c000, 0x184);
@@ -45,7 +120,7 @@ void checkSif0() {
         unsigned quanta = 0;
         sender.bind([&](auto quantum) {
             check(!ee.takeSif0Completion()); // Completion only follows the last quantum.
-            ee.feedSif0(ram, quantum, 1); ++quanta;
+            ee.feedSif0(ram, quantum, 1); ++quanta; return true;
         });
         sender.start(memory);
         const unsigned rounded = (count + 3) & ~3u;
@@ -66,7 +141,7 @@ void checkSif0() {
     }
     for (unsigned failure = 0; failure < 7; ++failure) {
         auto memory = source(6); unsigned calls = 0; Sif0Sender sender;
-        if (failure != 0) sender.bind([&](auto) { ++calls; });
+        if (failure != 0) sender.bind([&](auto) { ++calls; return true; });
         if (failure == 1) memory.write32(0x1f801578, 0);
         if (failure == 2) memory.write32(0x1f801570, 0);
         if (failure == 3) memory.write32(0x1f80152c, 0x1ff0);
@@ -77,7 +152,7 @@ void checkSif0() {
         check(!calls && memory.irq == 0 && memory.read32(0x1f801528) == 0x01000701);
     }
     auto memory = source(6); Sif0Sender blocked;
-    blocked.bind([](auto) { throw std::runtime_error("receiver unavailable"); });
+    blocked.bind([](auto) -> bool { throw std::runtime_error("receiver unavailable"); });
     refuses([&] { blocked.start(memory); });
     check(!memory.irq && memory.read32(0x1f80152c) == 0x104);
     // Two IOP records, one continuing EE chain, then an END without tag IRQ.
@@ -89,7 +164,7 @@ void checkSif0() {
     EeSifDma chain; chain.seedEnableWord(0x1201); chain.write(0x1000c000, 0x184);
     std::vector<uint8_t> chainRam(0x2000);
     Sif0Sender chainSender;
-    chainSender.bind([&](auto quantum) { chain.feedSif0(chainRam, quantum, 1); });
+    chainSender.bind([&](auto quantum) { chain.feedSif0(chainRam, quantum, 1); return true; });
     chainSender.start(memory);
     check(chain.takeSif0Completion() && word(chainRam, 0x800) == 0xabc00000 &&
           word(chainRam, 0x900) == 17 && memory.read32(0x1f80152c) == 0x124);
@@ -98,9 +173,20 @@ void checkSif0() {
     for (unsigned n = 0; n < 128; ++n) {
         memory.write32(0x104 + n * 16, 0x400); memory.write32(0x108 + n * 16, 0);
     }
-    Sif0Sender bounded; bounded.bind([](auto) {});
+    Sif0Sender bounded; bounded.bind([](auto) { return true; });
     refuses([&] { bounded.start(memory); });
     check(!memory.irq && (memory.read32(0x1f801528) & 0x01000000));
+    memory.write32(0x1f80152c, 0x104); memory.write32(0x1f801520, 0);
+    Sif0Fifo boundedFifo; Sif0Sender resumedBudget;
+    resumedBudget.bind([&](auto quantum) { return boundedFifo.push(quantum); });
+    resumedBudget.start(memory);
+    for (unsigned n = 0; n < 2; ++n) {
+        check(boundedFifo.drain([](auto) { return true; }) == 32);
+        resumedBudget.pump(memory);
+    }
+    check(boundedFifo.drain([](auto) { return true; }) == 32);
+    refuses([&] { resumedBudget.pump(memory); }); // The same tag cap survives all pauses.
+    check(!memory.irq && boundedFifo.size() == 32);
     std::array<uint8_t, 16> tag{}; tag[0] = 2; tag[3] = 0x90; tag[5] = 8;
     std::array<uint8_t, 16> payload{}; payload.fill(0x5a);
     std::vector<uint8_t> ram(0x2000, 0xcd);

@@ -393,7 +393,8 @@ The EE receiver supports destination CNT/END tags in owned RAM. It checks live D
 suspend state, retains STR until all declared quadwords arrive, and publishes channel 5 completion
 through the runtime's existing DMAC consumer. IOP completion clears its own STR and latches the
 channel 2 ICR2 flag and IRQ. Unsupported tags, ranges, modes and unavailable receivers fail closed.
-This bounded synchronous model does not claim cycle accuracy or a general queued SIF FIFO.
+That first synchronous implementation did not yet include a queued SIF FIFO; the later model below
+adds bounded storage and resumable source progress. Neither model claims cycle accuracy.
 
 Native-run-054 delivered the first 24 source bytes but exposed an unused completion-drain hook;
 the run timed out. Run-055 moved publication to the actual DMAC completion consumer. It observes
@@ -428,7 +429,39 @@ CHCR is `0x90000084` (STR clear), QWC is zero, DMA control is `1`, and enable is
 The synchronous sink refuses this next packet instead of discarding it or inventing readiness.
 Both runs report fatal exit 6 without timeout; this is a reproducible device boundary.
 
-Next work is an actual bounded SIF0 FIFO that retains emitted data across EE completion/rearm
+The next experiment was an actual bounded SIF0 FIFO that retains emitted data across EE completion/rearm
 and pauses a full producer without inventing an early completion. Preserve tag history and
 partial source progress. Do not bypass the boundary by shortening instruction slices, force-arming
 the EE channel, dropping packets, or supplying a host RPC reply. No rendered menu/gameplay claim.
+
+## Bounded SIF0 FIFO and original receiver rearm
+
+SIF0 now stores up to 128 words as 32 complete FIFO quanta. Accepted source bytes remain queued
+when EE STR is clear, master DMA is disabled, reception is suspended, or a prior EE completion
+has not yet been consumed. The consumer removes a quantum only after accepting it. Unsupported
+control/stall modes and invalid tags still fail explicitly.
+
+The IOP source retains its tag budget, remaining count, MADR/TADR and padding history across a
+full FIFO. A full queue leaves STR set without IRQ; freeing capacity resumes actual source reads.
+IOP completion follows the last accepted source quantum, independently of later EE consumption.
+An active source configuration change is refused. Pumping does not execute additional CPU code
+or change instruction budgets; it runs on the existing EE executor at IOP slices and DMA service.
+
+Synthetic checks cover a 257-word source across three FIFO fills, ring wrap, DMAE/suspend,
+back-to-back replies across EE rearm, source IRQ before EE completion, full-queue retries,
+source changes while paused, retained invalid consumer data and unchanged tail padding.
+
+The new strict HLE guards exposed an older SetDChain adapter. Firmware syscall `0x78` now invokes
+the already translated, hash/table/byte-checked procedure at `0x80006348`. Its void host ABI leaves
+the caller return register untouched. No new firmware image or unchecked address is introduced.
+Strict HLE start/stop is rejected before creating or changing the unrelated packet backend.
+
+Preliminary run-062, with the old rearm adapter, completed 16 SIF1 chains before its stop-mode
+refusal. Run-063 deliberately exposed that HLE start. Final run-065 uses the original SetDChain:
+15 SIF1 chains transfer 2,048 bytes, 17 SIF0 source chains and EE completions occur, and buffered
+quanta survive the previous receiver-not-ready boundary. It then reaches stop syscall `0x6B`
+at EE PC `0x31FD38`, RA `0x327D18`, and fails before HLE stop. Exit 6 without timeout.
+Different packet counts reflect the original rearm procedure and its cooperative slice; they
+are not a timing-equivalence claim. Full-FIFO pause/resume is synthetically verified, not yet
+observed as a full queue in this native run. Next work is verified original SIF0 stop execution.
+Native menu/frame, gameplay, audio-content and saves remain unverified.

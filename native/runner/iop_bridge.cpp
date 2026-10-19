@@ -5,6 +5,7 @@
 #include <array>
 #include "../iop_probe/sif_registers.h"
 #include "../iop_probe/ee_sif_dma.h"
+#include "../iop_probe/sif0_fifo.h"
 #include "strict_device_error.h"
 
 namespace drakengard {
@@ -18,6 +19,8 @@ class CooperativeIopBridge {
     bool active() const { return phase != Phase::Prepared; }
     bool firmwareExperiment() const { return phase == Phase::Firmware || phase == Phase::FirmwareEntry; }
     EeSifDma firmwareDma;
+    Sif0Fifo sif0Fifo;
+    unsigned deferredQuanta{};
     std::span<uint8_t> eeRam;
     std::function<uint32_t()> dmaControl;
     unsigned reads{};
@@ -27,6 +30,19 @@ class CooperativeIopBridge {
         return SifRegisters::kernelAddress(number);
     }
     bool busAddress(uint32_t address) { return address >= 0x1000f200 && address <= 0x1000f260; }
+    void drainSif0() {
+        sif0Fifo.drain([&](auto quantum) {
+            const auto control = dmaControl();
+            if (!firmwareDma.canReceiveSif0(control)) return false;
+            firmwareDma.feedSif0(eeRam, quantum, control);
+            return true;
+        });
+    }
+    void serviceSif0() {
+        if (phase != Phase::FirmwareEntry) return;
+        try { drainSif0(); boot->pumpSif0(); drainSif0(); }
+        catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+    }
 public:
     bool firmwareGameEntryActive() const { return phase == Phase::FirmwareEntry; }
     void bindFirmwareEeRam(std::span<uint8_t> ram, uint32_t initialEnableWord, std::function<uint32_t()> control) {
@@ -37,7 +53,7 @@ public:
         firmwareDma.seedEnableWord(initialEnableWord);
     }
     bool takeFirmwareDmaCompletion() { return firmwareDma.takeCompletion(); }
-    bool takeFirmwareSif0Completion() { return firmwareDma.takeSif0Completion(); }
+    bool takeFirmwareSif0Completion() { serviceSif0(); return firmwareDma.takeSif0Completion(); }
     void advanceFirmwareIop() {
         if (phase != Phase::FirmwareEntry) throw StrictDeviceError("Firmware DMA call requires experimental game entry");
         boot->advance(4096);
@@ -56,14 +72,12 @@ public:
         phase = Phase::FirmwareEntry;
         firmwareDma.enableSif1();
         boot->bindSif0([this](std::span<const uint8_t> quantum) {
-            try { firmwareDma.feedSif0(eeRam, quantum, dmaControl()); }
-            catch (const std::exception&) {
-                std::cerr << "[strict-sif0-receiver-blocker] chcr=0x" << std::hex
-                          << firmwareDma.read(0x1000c000) << " madr=0x" << firmwareDma.read(0x1000c010)
-                          << " qwc=0x" << firmwareDma.read(0x1000c020) << " control=0x" << dmaControl()
-                          << " enable=0x" << firmwareDma.read(0x1000f520) << std::dec << '\n';
-                throw;
-            }
+            drainSif0();
+            if (!sif0Fifo.push(quantum)) return false;
+            drainSif0();
+            if (sif0Fifo.size() && (++deferredQuanta <= 4 || deferredQuanta % 256 == 0))
+                std::cerr << "[strict-sif0-buffered] quanta=" << sif0Fifo.size() << " deferred=" << deferredQuanta << '\n';
+            return true;
         });
     }
     void prepareCooperativeIop(const IopBootInputs& inputs) {
@@ -108,6 +122,7 @@ public:
         if (!firmwareExperiment() || !EeSifDma::contains(address)) return false;
         try {
             firmwareDma.write(address, value);
+            if (address == 0x1000c000 || address == 0x1000f590) serviceSif0();
             if (address == 0x1000c400 && (value & 0x100u))
                 firmwareDma.pumpSif1(eeRam, [&](std::span<const uint8_t> quantum) { boot->feedSif1(quantum); });
         }

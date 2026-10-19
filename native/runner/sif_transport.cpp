@@ -246,6 +246,8 @@ void resetSifChannel(PS2Runtime* runtime) {
 
 void stopSifReceive(PS2Runtime* runtime) {
     if (!runtime) throw std::runtime_error("SIF0 stop without runtime");
+    if (strictIopActive())
+        throw StrictDeviceError("Strict SIF0 stop requires reviewed original firmware procedure; HLE stop refused");
     std::lock_guard lock(channelsMutex);
     auto& state = channels[runtime];
     if (!state) state = std::make_shared<RuntimeBackend>(runtime);
@@ -258,6 +260,8 @@ void stopSifReceive(PS2Runtime* runtime) {
 
 void startSifReceive(PS2Runtime* runtime) {
     if (!runtime) throw std::runtime_error("SIF0 start without runtime");
+    if (strictIopActive())
+        throw StrictDeviceError("Strict SIF0 start requires reviewed original firmware procedure; HLE start refused");
     std::lock_guard lock(channelsMutex);
     auto& state = channels[runtime];
     if (!state) state = std::make_shared<RuntimeBackend>(runtime);

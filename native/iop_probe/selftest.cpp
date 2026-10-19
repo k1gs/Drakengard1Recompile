@@ -150,6 +150,7 @@ int main() {
             if (quanta == 1 && (quantum[0] != 0x44 || quantum[5] != 8 || quantum[8] != 0xdf))
                 throw std::runtime_error("IOP SIF0 payload/history differs from actual RAM");
             ++quanta;
+            return true;
         });
         code(memory, {0x3c020100, 0x34420701, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
         result = bareCall(memory, 0x1000, 0, 0xbf801528, 0x1000, 0x1100,

@@ -40,8 +40,12 @@ struct IopBoot::Impl {
 };
 IopBoot::IopBoot(const IopBootInputs& inputs) : impl(std::make_unique<Impl>(inputs)) {}
 IopBoot::~IopBoot() = default;
-void IopBoot::bindSif0(std::function<void(std::span<const uint8_t>)> sink) {
+void IopBoot::bindSif0(std::function<bool(std::span<const uint8_t>)> sink) {
     impl->session->bindSif0(std::move(sink));
+}
+void IopBoot::pumpSif0() {
+    try { impl->session->pumpSif0(); }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
 }
 void IopBoot::enableSif1Receiver() { impl->session->enableSif1Receiver(); }
 void IopBoot::feedSif1(std::span<const uint8_t> quantum) {

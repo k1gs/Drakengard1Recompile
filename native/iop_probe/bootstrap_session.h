@@ -33,9 +33,10 @@ public:
     SifRegisters sif;
     void enableSif1Receiver() { dma.enableSif1Receiver(); }
     void feedSif1(std::span<const uint8_t> quantum) { sif1.feed(memory, quantum); }
-    void bindSif0(std::function<void(std::span<const uint8_t>)> sink) {
+    void bindSif0(std::function<bool(std::span<const uint8_t>)> sink) {
         sif0.bind(std::move(sink)); dma.enableSif0Sender();
     }
+    void pumpSif0() { sif0.pump(memory); }
     void setClockSource(std::function<drakengard::CdvdCalendar()> source) { cdvd.setClockSource(std::move(source)); }
     BootstrapSession(std::span<const uint8_t> bundle, std::span<const uint8_t> seed,
                      std::vector<uint8_t> romBytes, drakengard::IsoMedia& media,
@@ -80,6 +81,7 @@ public:
         entry = loaded.entry; gp = loaded.gp;
     }
     void advance(uint32_t instructions) {
+        pumpSif0();
         const IopDevices devices{
             .hardware = &hardware, .cache = &cache, .interrupts = &interrupts,
             .dma = &dma, .exceptions = &exceptions, .cdvd = &cdvd,

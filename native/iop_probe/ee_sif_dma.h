@@ -28,6 +28,10 @@ public:
     void enableSif1() { sif1Enabled = true; }
     bool takeCompletion() { return std::exchange(completion, false); }
     bool takeSif0Completion() { return std::exchange(sif0Completion, false); }
+    bool canReceiveSif0(uint32_t control) const {
+        if (control != 0 && control != 1) throw std::runtime_error("Unreviewed EE SIF0 DMA control/stall state");
+        return (registers[0] & 0xffffu) == 0x184 && !sif0Completion && control == 1 && !(enableWord & 0x10000u);
+    }
     static bool contains(uint32_t address) {
         return address == 0x1000f520 || address == 0x1000f590 ||
                (address >= 0x1000c000 && address < 0x1000c100) ||
