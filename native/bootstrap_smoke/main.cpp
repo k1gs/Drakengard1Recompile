@@ -28,6 +28,12 @@ int main() {
         bytes[0] = 0x78; bytes[1] = 0x56; bytes[2] = 0x34; bytes[3] = 0x92;
         bytes.back() = 0xa5;
         ReadOnlyRom rom(std::move(bytes));
+        require(!rom.ownsCode(0xbfc4a000));
+        rom.enableIopBootCode();
+        refuses([&] { rom.enableIopBootCode(); });
+        require(rom.ownsCode(0xbfc4a000) && rom.ownsCode(0xbfc4b11c));
+        for (auto address : {0xbfc49ffcu, 0xbfc4b120u, 0xbfc4a001u, 0x1fc4a000u, 0x9fc4a000u, 0xffc4a000u})
+            require(!rom.ownsCode(address));
         WordBus bus;
         for (uint32_t address : {0x1fc00000u, 0x9fc00000u, 0xbfc00000u}) {
             const auto old = rom.stage(bus, address, 0x23);

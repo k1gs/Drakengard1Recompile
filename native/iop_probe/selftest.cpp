@@ -125,7 +125,8 @@ int main() {
         // including transitions, aliases and denied remapping. No device is run.
         PassiveHardware unseeded;
         for (const auto& setting : ssbus::settings) {
-            for (uint32_t value : {setting.transition, setting.configured}) {
+            for (uint32_t value : setting.writes) {
+                if (!value) continue;
                 for (uint32_t alias : {0u, 0x80000000u, 0xa0000000u}) {
                     const auto address = setting.address | alias;
                     code(memory, {0x3c020000 | (value >> 16), 0x34420000 | (value & 0xffff),
@@ -141,7 +142,7 @@ int main() {
                 {.hardware = &hardware}); }, "hardware contract");
             if (memory.read32(setting.address) != previous ||
                 unseeded.allows(setting.address, 0x23, 0) ||
-                hardware.allows(setting.address, 0x29, setting.configured) ||
+                hardware.allows(setting.address, 0x29, setting.writes[0]) ||
                 hardware.allows(setting.address, 0x25, 0))
                 throw std::runtime_error("SSBUS rejected write changed state or accepted width/unseeded profile");
         }
@@ -159,6 +160,89 @@ int main() {
         if (result.value != 42 || cache.isolatedStores != 1 || memory.read32(0x800) != 0xdeadbeef ||
             memory.read32(0xfffe0130) != 0)
             throw std::runtime_error("Cache isolation corrupted backing RAM or BIU restore");
+        CoherentCache uninitializedCache;
+        rejects([&] { uninitializedCache.enableRebootControls(); }, "initialized coherent memory");
+        if (cache.allows(0xfffe0130, 0x2b, 0x1edd8))
+            throw std::runtime_error("Reboot BIU configuration enabled before explicit entry profile");
+        code(memory, {0x3c021f80, 0x34420400, 0xac820000, 0x03e00008, 0});
+        rejects([&] { bareCall(memory, 0x1000, 0, 0xfffe0140, 0x1000, 0x1100,
+            {.cache = &cache}); }, "hardware contract");
+        cache.enableRebootControls();
+        rejects([&] { cache.enableRebootControls(); }, "single activation");
+        for (auto address : {0xfffe0140u, 0xfffe0144u}) {
+            memory.write32(address, 0xfeedface); memory.write32(address + 8, 0xabcdef01);
+            const uint32_t value = address == 0xfffe0140 ? 0x1f800400 : 0x1f800000;
+            code(memory, {0x3c021f80, 0x34420000 | (value & 0xffff), 0xac820000, 0x03e00008, 0});
+            bareCall(memory, 0x1000, 0, address, 0x1000, 0x1100, {.cache = &cache});
+            if (memory.read32(address) != 0xfeedface || memory.read32(address + 8) != 0xabcdef01 ||
+                memory.read32(0x800) != 0xdeadbeef || memory.interruptStatus())
+                throw std::runtime_error("Reference CPU control polluted a masked slot, neighbor, RAM or IRQ");
+            for (uint32_t opcode : {0x20u, 0x21u, 0x23u, 0x25u, 0x28u, 0x29u, 0x2eu})
+                if (cache.allows(address, opcode, value))
+                    throw std::runtime_error("Reference CPU control accepted an unreviewed width/read");
+            for (auto alias : {address & 0x1fffffffu, (address & 0x1fffffffu) | 0x80000000u,
+                               (address & 0x1fffffffu) | 0xa0000000u, address + 1})
+                if (cache.allows(alias, 0x2b, value))
+                    throw std::runtime_error("Reference CPU control opened an alias or unaligned access");
+            code(memory, {0x24020001, 0xac820000, 0x03e00008, 0});
+            rejects([&] { bareCall(memory, 0x1000, 0, address, 0x1000, 0x1100,
+                {.cache = &cache}); }, "hardware contract");
+            if (memory.read32(address) != 0xfeedface)
+                throw std::runtime_error("Rejected CPU control write changed state");
+        }
+        if (cache.controlWrites != 2 || cache.allows(0xfffe0148, 0x2b, 0x1f800000))
+            throw std::runtime_error("Reference CPU control count/adjacent register guard failed");
+        const auto failedWrite = cache.stageControl(memory, 0xfffe0140, 0x2b, 0x1f800400, 0x1000);
+        memory.write32(0xfffe0140, 0x1f800400);
+        cache.completeControl(memory, failedWrite, true);
+        if (cache.controlWrites != 2 || memory.read32(0xfffe0140) != 0xfeedface)
+            throw std::runtime_error("Failed CPU control instruction retained side effects or capture");
+        code(memory, {0x3c020001, 0x3442edd8, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
+        result = bareCall(memory, 0x1000, 0, 0xfffe0130, 0x1000, 0x1100, {.cache = &cache});
+        if (result.value != 0x1edd8 || memory.interruptStatus() || cache.allows(0xfffe0130, 0x2b, 0x1edd9))
+            throw std::runtime_error("Reboot BIU shadow lost configuration or accepted unknown bits");
+        rejects([&] { cache.isolatedAccess(memory, 0, 0x2b, 0); }, "Unsupported isolated cache access");
+        memory.write32(0xfffe0130, 0);
+        {
+            std::vector<uint8_t> romBytes(0x400000);
+            const auto instruction = [&](uint32_t offset, uint32_t word) {
+                for (unsigned n = 0; n < 4; ++n) romBytes[0x4a000 + offset + n] = uint8_t(word >> (n * 8));
+            };
+            // Fetch and data load target the same word: nested staging must
+            // restore the instruction, then the original backing slot.
+            instruction(0, 0x8c820000); instruction(4, 0);
+            instruction(8, 0x03e00008); instruction(12, 0);
+            ReadOnlyRom codeRom(romBytes);
+            rejects([&] { bareCall(memory, 0xbfc4a000, 0, 0xbfc4a000, 0, 0x200000,
+                {.rom = &codeRom}); }, "owned bootstrap code RAM");
+            codeRom.enableIopBootCode();
+            rejects([&] { codeRom.enableIopBootCode(); }, "enabled twice");
+            for (auto address : {0xbfc49ffcu, 0xbfc4b120u, 0xbfc4a001u, 0x1fc4a000u, 0x9fc4a000u, 0xffc4a000u})
+                if (codeRom.ownsCode(address)) throw std::runtime_error("ROM execution window escaped its reviewed profile");
+            memory.write32(0xbfc4a000, 0xfeedface); memory.write32(0xbfc4a004, 0xabcdef01);
+            BareCallState romState;
+            for (unsigned n = 0; n < 4; ++n) {
+                result = bareCall(memory, 0xbfc4a000, 0, 0xbfc4a000, 0, 0x200000,
+                    {.rom = &codeRom}, &romState, 1);
+                if (memory.read32(0xbfc4a000) != 0xfeedface || memory.read32(0xbfc4a004) != 0xabcdef01 ||
+                    memory.ownsRamRange(0x1fc4a000, 4))
+                    throw std::runtime_error("ROM fetch leaked staging state or marked code as RAM");
+            }
+            if (!result.completed || result.value != 0x8c820000 || memory.interruptStatus())
+                throw std::runtime_error("Sliced ROM instruction/data load or delay slot failed");
+            instruction(0, 0xac800000); // Store to ROM must fail before modifying the owned ROM bytes.
+            ReadOnlyRom storeRom(romBytes); storeRom.enableIopBootCode();
+            rejects([&] { bareCall(memory, 0xbfc4a000, 0, 0xbfc4a000, 0, 0x200000,
+                {.rom = &storeRom}); }, "hardware contract");
+            if (memory.read32(0xbfc4a000) != 0xfeedface)
+                throw std::runtime_error("Failed ROM instruction leaked its temporary fetch slot");
+            instruction(0, 0x08000000 | ((0xbfc4b120 >> 2) & 0x03ffffff));
+            ReadOnlyRom escapedRom(romBytes); escapedRom.enableIopBootCode();
+            rejects([&] { bareCall(memory, 0xbfc4a000, 0, 0, 0, 0x200000,
+                {.rom = &escapedRom}); }, "owned bootstrap code RAM");
+            if (memory.read32(0xbfc4a000) != 0xfeedface)
+                throw std::runtime_error("Out-of-window ROM branch leaked fetch state");
+        }
         code(memory, {0x3c0a0001, 0x408a6000, 0xad600000, 0x03e00008, 0});
         rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030); }, "explicit coherent-cache mode");
         rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030,

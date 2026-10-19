@@ -47,6 +47,7 @@ public:
         std::optional<std::pair<uint32_t, uint32_t>> romRestore;
         bool sif0Start{};
         std::optional<PioWrite> pioWrite;
+        std::optional<CoherentCache::ControlWrite> cpuControl;
     };
     IopDataBus(Memory& memory, const IopDevices& devices) : memory(memory), devices(devices) {}
     Effects prepare(const Cpu& cpu, uint32_t instruction, uint32_t steps) {
@@ -54,7 +55,7 @@ public:
         const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio] = devices;
         const uint32_t opcode = instruction >> 26;
         Effects effects;
-        auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite] = effects;
+        auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite, cpuControl] = effects;
         if ((opcode >= 0x20 && opcode <= 0x26) || (opcode >= 0x28 && opcode <= 0x2b) || opcode == 0x2e) {
             const uint32_t address = cpu.gpr[(instruction >> 21) & 31] +
                 static_cast<uint32_t>(static_cast<int16_t>(instruction));
@@ -103,6 +104,8 @@ public:
                 throw std::runtime_error("Non-RAM data access requires an explicit hardware contract");
             }
             if (romAccess) romRestore = rom->stage(memory, address, opcode);
+            if (cache && cache->rebootWrite(address, opcode, cpu.gpr[(instruction >> 16) & 31]))
+                cpuControl = cache->stageControl(memory, address, opcode, cpu.gpr[(instruction >> 16) & 31], cpu.pc);
             if (pioAccess) pioWrite = PioWrite{opcode, cpu.gpr[(instruction >> 16) & 31], cpu.pc};
             if (sifAccess) {
                 if (opcode == 0x2b) {
@@ -139,10 +142,11 @@ public:
     }
     void complete(const Cpu& cpu, const Effects& effects) {
         const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio] = devices;
-        const auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite] = effects;
+        const auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite, cpuControl] = effects;
         // Temporary staging preserves the upstream core's load-delay behavior
         // without leaving ROM words in the masked hardware map (BIU aliases).
         if (romRestore) memory.write32(romRestore->first, romRestore->second);
+        if (cpuControl) cache->completeControl(memory, *cpuControl, cpu.exception);
         if (sifWrite) memory.write32(sifWrite, sif->read(sifWrite));
         if (!cpu.exception && interruptRead) interrupts->afterRead(memory, interruptRead);
         if (!cpu.exception && dmaWrite) dma->afterWrite(memory, dmaWrite, dmaPrevious, dmaValue);

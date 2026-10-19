@@ -12,7 +12,8 @@ struct BareCallState {
     uint32_t instructions{}, codeBegin{}, codeEnd{}, entry{}, gp{}, argument{};
 };
 
-// Execute only owned RAM code with explicitly mapped data. Unknown imports, hardware,
+// Execute owned RAM code or an explicitly enabled, reviewed ROM code window.
+// Unknown imports, hardware,
 // exceptions and the instruction budget are explicit blockers, never zero returns.
 inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t entry,
                               uint32_t gp, uint32_t argument, uint32_t codeBegin, uint32_t codeEnd,
@@ -59,17 +60,36 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
         }
         const uint32_t physical = IopMemory::physicalAddress(cpu.pc);
         const bool vector = exceptions && exceptions->vectorOwns(memory, physical);
-        if (((physical < codeBegin || uint64_t(physical) + 4 > codeEnd) && !vector) || (cpu.pc & 3) ||
-            !memory.ownsRamRange(physical, 4))
+        const bool romCode = devices.rom && devices.rom->ownsCode(cpu.pc);
+        if (!romCode && (((physical < codeBegin || uint64_t(physical) + 4 > codeEnd) && !vector) || (cpu.pc & 3) ||
+            !memory.ownsRamRange(physical, 4))) {
+            std::cerr << "[bootstrap-execution-blocker] steps=" << steps << " pc=0x" << std::hex << cpu.pc
+                      << " physical=0x" << physical << " ra=0x" << cpu.gpr[31]
+                      << " a0=0x" << cpu.gpr[4] << " a1=0x" << cpu.gpr[5]
+                      << " a2=0x" << cpu.gpr[6] << " a3=0x" << cpu.gpr[7]
+                      << " sp=0x" << cpu.gpr[29] << std::dec << '\n';
             throw std::runtime_error("Execution left owned bootstrap code RAM");
-        if (const auto call = imports.decode(cpu.pc)) {
-            iop_diagnostics::unresolvedImport(memory, cpu, *call, codeBegin, codeEnd);
+        }
+        // Fetch uses the core's actual instruction decoder. Undo its temporary
+        // backing slot on every exit, including bus/core errors. Nested ROM data
+        // staging restores this instruction first, then this scope restores RAM.
+        struct FetchRestore {
+            IopMemory& memory;
+            std::optional<std::pair<uint32_t, uint32_t>> slot;
+            ~FetchRestore() { if (slot) memory.write32(slot->first, slot->second); }
+        } fetch{memory, {}};
+        if (romCode) fetch.slot = devices.rom->stage(memory, cpu.pc, 0x23);
+        if (!romCode) {
+            if (const auto call = imports.decode(cpu.pc))
+                iop_diagnostics::unresolvedImport(memory, cpu, *call, codeBegin, codeEnd);
         }
         const uint32_t instruction = memory.read32(cpu.pc);
         const auto effects = bus.prepare(cpu, instruction, steps);
         const uint32_t previous = cpu.pc;
         const bool running = core.executeInstruction(cpu);
         bus.complete(cpu, effects);
+        if (romCode && previous == 0xbfc4a000 && !cpu.exception)
+            std::cerr << "[iop-rom-entry] pc=0xbfc4a000 first instruction retired; steps=" << steps << '\n';
         if (interrupts) {
             if (interrupts->pending(memory)) cpu.cop0[13] |= 0x400u;
             else cpu.cop0[13] &= ~0x400u;

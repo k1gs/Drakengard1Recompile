@@ -543,3 +543,55 @@ still returns from isolated initialization after actual guest BOOTEND (exit 5); 
 the ordinary fixed-budget boundary (exit 6). Neither non-entry mode records a PIO write. None
 times out. A changed private BIOS copy, even with its matching supplied hash, is still rejected
 by the firmware-specific binding before guest execution; the original remains unchanged.
+
+## Original IOPBOOT execution after the reboot request
+
+The CPU-control review uses the pinned [PCSX2 memory implementation](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopMem.cpp):
+reset leaves write-table page `0x1FFE` unmapped and its word-write path has no handler for it.
+The diagnostic coherent-memory profile now accepts only the two observed writes, with their
+exact original KSEG3 addresses and values. It restores the core's temporary masked backing slot,
+records retired writes and creates no guest-visible latch, status or IRQ. Reads, aliases, other
+widths and values stay unsupported. This models the reference's functional write behavior;
+the physical meaning of these controls remains unestablished.
+
+The existing BIU shadow also accepts `0x1EDD8` only after explicit game entry. This value is
+verified in the original RESET configuration and is written by the original LOADCORE routine.
+The shadow is for validating known cache sequences, not an implementation of physical cache
+timing or a claim that all BIU reads match PCSX2. Unknown values and isolated accesses outside
+the existing reviewed flush sequences still fail.
+
+Native-run-082 reaches the BIU configuration. Run-084 then identifies the actual jump from
+guest reboot code to `0xBFC4A000`, previously stopped by the owned-RAM execution guard.
+Private ROM-directory/hash checks identify IOPBOOT at ROM offset `0x4A000`, 4,448 bytes,
+SHA-256 `572e8acd6db6c7854cba1418b3ecfc02f23c3752e1073baa3ccd728a986abc54`.
+A read-only Ghidra import reviews the entry, control flow and code/data boundary.
+
+ROM data access alone still grants no execution. Explicit game entry enables only aligned
+instruction addresses `0xBFC4A000..0xBFC4B11C`; trailing string data and all other ROM addresses
+remain non-executable. The runner separately requires the exact reviewed BIOS hash before
+enabling this profile. The interpreter decodes the original instruction through a scoped
+fetch slot that is restored on every exit, including bus errors. Nested ROM data reads restore
+the instruction before the fetch scope restores its prior slot. No ROM bytes are copied to
+owned RAM by the host, and the original ROM input remains read-only.
+
+Synthetic CPU checks cover sliced ROM execution, pending loads/delay slots, a data load from
+the instruction's own ROM word, restored backing slots, disabled execution, rejected aliases,
+unaligned fetch, branches into trailing data and a rejected store to ROM. CPU-control checks
+exercise rejected writes and exception restoration without IRQ or RAM changes. Portable
+bootstrap checks independently cover the ROM execution window.
+
+Run-085 executes original IOPBOOT and reaches initialization code loaded into RAM by the guest.
+This code uses the fixed DEV1 base's KSEG1 alias and an additional delay profile; the model
+retains the exact observed `0xBE000000` base and `0x0018344F` delay without granting device access.
+Run-087 retires the first IOPBOOT instruction at step 6,032,020, then reaches a word read from
+ROM1 at `0xBE000000`, IOP PC `0x15E94`, step 6,537,975. The read is refused; there is no imported
+ROM1 image or fabricated zero/open-bus response. Exit 6 without timeout, still 16 SIF1 chains
+carrying 2,160 bytes. The 8-million-instruction budget remains unchanged.
+Next work is to establish the optional ROM1 mapping/content or absence contract against the
+verified reference. Completed reboot, repeated BOOTEND and native frame/menu/gameplay remain
+unverified.
+Run-088 repeats the same ROM entry and ROM1 blocker, including instruction counts. Isolated
+initialization (run-089) still reaches actual guest BOOTEND with exit 5; ordinary mode (run-090)
+retains its fixed-budget exit 6. Neither non-entry mode enables the new control/ROM path. All
+four runs use the same executable and verified inputs without timeout. The changed-BIOS
+negative check still refuses execution before guest startup; the original file remains intact.

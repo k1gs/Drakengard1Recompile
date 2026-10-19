@@ -18,7 +18,7 @@ public:
     void feedSif1(std::span<const uint8_t> quantum);
     void bindSif0(std::function<bool(std::span<const uint8_t>)> sink);
     void pumpSif0();
-    void enablePioCapture();
+    void enableEntryDevices();
     void enableHostRtc();
     uint32_t readEe(uint32_t address) const;
     void writeEe(uint32_t address, uint32_t value);

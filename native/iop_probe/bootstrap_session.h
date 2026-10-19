@@ -38,7 +38,7 @@ public:
         sif0.bind(std::move(sink)); dma.enableSif0Sender();
     }
     void pumpSif0() { sif0.pump(memory); }
-    void enablePioCapture() { pio.enable(); }
+    void enableEntryDevices() { pio.enable(); cache.enableRebootControls(); rom.enableIopBootCode(); }
     void setClockSource(std::function<drakengard::CdvdCalendar()> source) { cdvd.setClockSource(std::move(source)); }
     BootstrapSession(std::span<const uint8_t> bundle, std::span<const uint8_t> seed,
                      std::vector<uint8_t> romBytes, drakengard::IsoMedia& media,

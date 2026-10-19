@@ -27,10 +27,12 @@ std::vector<uint8_t> checked(const std::string& path, const std::string& hash, s
 struct IopBoot::Impl {
     IsoMedia media;
     std::unique_ptr<BootstrapSession> session;
+    bool reviewedRom{};
     explicit Impl(const IopBootInputs& inputs) : media(checkedIso(inputs.iso)) {
         auto bundle = checked(inputs.bundle, inputs.bundleHash, 512 * 1024);
         auto seed = checked(inputs.hardware, inputs.hardwareHash, 28);
         auto rom = checked(inputs.rom, inputs.romHash, 0x400000);
+        reviewedRom = inputs.romHash == "ee7ae4cc152588b7da1dab17494a321ceafafaf799769baea4e8a28afa5044b1";
         auto mecha = checked(inputs.mecha, inputs.mechaHash, 4);
         if (mecha.size() != 4) throw std::runtime_error("Mecha profile must contain four bytes");
         session = std::make_unique<BootstrapSession>(bundle, seed, std::move(rom), media,
@@ -40,7 +42,10 @@ struct IopBoot::Impl {
 };
 IopBoot::IopBoot(const IopBootInputs& inputs) : impl(std::make_unique<Impl>(inputs)) {}
 IopBoot::~IopBoot() = default;
-void IopBoot::enablePioCapture() { impl->session->enablePioCapture(); }
+void IopBoot::enableEntryDevices() {
+    if (!impl->reviewedRom) throw StrictDeviceError("IOPBOOT execution requires the exact reviewed BIOS SHA-256");
+    impl->session->enableEntryDevices();
+}
 void IopBoot::bindSif0(std::function<bool(std::span<const uint8_t>)> sink) {
     impl->session->bindSif0(std::move(sink));
 }

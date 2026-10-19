@@ -5,12 +5,22 @@
 #include <utility>
 #include <vector>
 
-// Data-only aperture. The caller verifies the file hash before constructing this
-// owned copy. Instruction fetch still passes the independent owned-RAM guard.
+// The caller verifies the file hash before constructing this owned copy. Data
+// mapping alone never grants execution; the runner separately gates IOPBOOT code
+// on the fixed reviewed BIOS hash before explicitly enabling its code window.
 class ReadOnlyRom {
 public:
     explicit ReadOnlyRom(std::vector<uint8_t> bytes) : m_bytes(std::move(bytes)) {
         if (m_bytes.size() != 0x400000) throw std::runtime_error("Boot ROM must contain exactly 4 MiB");
+    }
+    void enableIopBootCode() {
+        if (m_iopBoot) throw std::runtime_error("IOPBOOT code cannot be enabled twice");
+        m_iopBoot = true;
+    }
+    bool ownsCode(uint32_t address) const {
+        // Reviewed flat IOPBOOT code, excluding its trailing string data.
+        // Only its actual uncached execution address is in this profile.
+        return m_iopBoot && !(address & 3u) && address >= 0xbfc4a000 && address < 0xbfc4b120;
     }
     bool allows(uint32_t address, uint32_t opcode) const {
         // Only physical, KSEG0 and KSEG1 aliases. KSEG3 includes BIU control,
@@ -34,4 +44,5 @@ public:
     }
 private:
     const std::vector<uint8_t> m_bytes;
+    bool m_iopBoot{};
 };
