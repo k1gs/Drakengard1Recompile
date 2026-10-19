@@ -18,6 +18,10 @@ function(drakengard_configure_runner)
     target_sources(ps2EntryRunner PRIVATE
         "${REPO_ROOT}/native/runner/main.cpp" ${guest_sources})
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        "${REPO_ROOT}/scripts/prepare_kernel.py"
+        "${REPO_ROOT}/scripts/prepare_firmware.py"
+        "${REPO_ROOT}/scripts/reference_state.py")
     set(kernel_units "${CMAKE_BINARY_DIR}/kernel_translation")
     execute_process(COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/scripts/prepare_kernel.py"
         "${kernel_units}" RESULT_VARIABLE kernel_result)
@@ -46,7 +50,7 @@ function(drakengard_configure_runner)
     target_link_libraries(ps2EntryRunner PRIVATE drakengard_iop_engine)
     set(firmware_host "${REPO_ROOT}/native/runner/firmware_functions.cpp")
     target_sources(ps2EntryRunner PRIVATE "${firmware_host}")
-    if(EXISTS "${REPO_ROOT}/generated/firmware-003/register_functions.cpp")
+    if(EXISTS "${REPO_ROOT}/generated/firmware-004/register_functions.cpp")
         set(firmware_units "${CMAKE_BINARY_DIR}/firmware_translation")
         execute_process(COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/scripts/prepare_firmware.py"
             --input-complete "${firmware_units}" RESULT_VARIABLE firmware_result)

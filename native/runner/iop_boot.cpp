@@ -41,6 +41,10 @@ struct IopBoot::Impl {
 IopBoot::IopBoot(const IopBootInputs& inputs) : impl(std::make_unique<Impl>(inputs)) {}
 IopBoot::~IopBoot() = default;
 void IopBoot::enableSif1Receiver() { impl->session->enableSif1Receiver(); }
+void IopBoot::feedSif1(std::span<const uint8_t> quantum) {
+    try { impl->session->feedSif1(quantum); }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+}
 void IopBoot::enableHostRtc() {
     impl->session->setClockSource([] {
         const auto now = std::time(nullptr);

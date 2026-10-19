@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <stdexcept>
 
-// Register/acknowledgement model. An explicitly enabled empty SIF1 chain receiver
-// may be armed and wait for tags. No bytes, completion flags or IRQs are fabricated.
+// Register/acknowledgement model. An explicitly enabled idle SIF1 chain receiver
+// may arm and wait for tags; the separate receive engine owns actual completion.
 class QuiescentDma {
     bool m_sif1Receiver{};
 public:
@@ -37,7 +37,7 @@ public:
         if (interruptRegister(address) || priorityRegister(address)) return true;
         if (!channelRegister(address)) return false;
         if (opcode == 0x2b && address == 0x1f801538 && value == 0x41000300 && m_sif1Receiver) {
-            if (!memory || memory->read32(0x1f801534) != 0x20 || memory->read32(0x1f801530) != 0 ||
+            if (!memory || memory->read32(0x1f801534) != 0x20 ||
                 (memory->read32(address) & 0x01000000))
                 throw std::runtime_error("Unreviewed SIF1 receiver configuration or active rearm");
             return true; // The core stores STR; it remains set until stop or an actual future transfer.
@@ -54,6 +54,7 @@ public:
         const bool flagged = ((next >> 24) & (next >> 16) & 0x7fu) != 0;
         next = (next & 0x7fffffffu) | ((force || (enabled && flagged)) ? 0x80000000u : 0);
         memory.write32(address, next);
-        if (next & 0x80000000u) memory.setInterruptStatus(memory.interruptStatus() | 8u);
+        const bool sifPending = address == 0x1f801574 && (next & 0x0c000000u);
+        if ((next & 0x80000000u) || sifPending) memory.setInterruptStatus(memory.interruptStatus() | 8u);
     }
 };

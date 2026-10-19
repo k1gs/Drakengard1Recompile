@@ -18,6 +18,7 @@ class CooperativeIopBridge {
     bool active() const { return phase != Phase::Prepared; }
     bool firmwareExperiment() const { return phase == Phase::Firmware || phase == Phase::FirmwareEntry; }
     EeSifDma firmwareDma;
+    std::span<uint8_t> eeRam;
     unsigned reads{};
     std::array<uint32_t, 3> softwareRegisters{};
     uint32_t busRegister(uint32_t number) {
@@ -25,11 +26,24 @@ class CooperativeIopBridge {
     }
     bool busAddress(uint32_t address) { return address >= 0x1000f200 && address <= 0x1000f260; }
 public:
+    bool firmwareGameEntryActive() const { return phase == Phase::FirmwareEntry; }
+    void bindFirmwareEeRam(std::span<uint8_t> ram, uint32_t initialEnableWord) {
+        if (phase != Phase::Prepared || !eeRam.empty() || ram.size() != 32 * 1024 * 1024)
+            throw StrictDeviceError("Firmware EE memory binding requires one fresh 32-MiB runtime");
+        eeRam = ram;
+        firmwareDma.seedEnableWord(initialEnableWord);
+    }
+    bool takeFirmwareDmaCompletion() { return firmwareDma.takeCompletion(); }
+    void advanceFirmwareIop() {
+        if (phase != Phase::FirmwareEntry) throw StrictDeviceError("Firmware DMA call requires experimental game entry");
+        boot->advance(4096);
+    }
     bool strictIopActive() const { return active(); }
     void enterGameAfterFirmware() {
-        if (phase != Phase::Firmware || !(boot->readEe(0x1000f230) & 0x40000u))
+        if (phase != Phase::Firmware || eeRam.empty() || !(boot->readEe(0x1000f230) & 0x40000u))
             throw StrictDeviceError("Game entry requires actual completed firmware IOP startup");
         phase = Phase::FirmwareEntry;
+        firmwareDma.enableSif1();
     }
     void prepareCooperativeIop(const IopBootInputs& inputs) {
         if (boot) throw std::runtime_error("Cooperative IOP already configured");
@@ -71,7 +85,11 @@ public:
     }
     bool firmwareDmaWrite(uint32_t address, uint32_t value) {
         if (!firmwareExperiment() || !EeSifDma::contains(address)) return false;
-        try { firmwareDma.write(address, value); }
+        try {
+            firmwareDma.write(address, value);
+            if (address == 0x1000c400 && (value & 0x100u))
+                firmwareDma.pumpSif1(eeRam, [&](std::span<const uint8_t> quantum) { boot->feedSif1(quantum); });
+        }
         catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
         std::cerr << "[firmware-ee-dma] address=0x" << std::hex << address << " value=0x" << value << std::dec << '\n';
         return true;
@@ -147,6 +165,22 @@ void enterGameAfterFirmware() {
 bool strictIopActive() {
     std::lock_guard lock(bridgeMutex);
     return bridge.strictIopActive();
+}
+bool firmwareGameEntryActive() {
+    std::lock_guard lock(bridgeMutex);
+    return bridge.firmwareGameEntryActive();
+}
+void bindFirmwareEeRam(std::span<uint8_t> ram, uint32_t initialEnableWord) {
+    std::lock_guard lock(bridgeMutex);
+    return bridge.bindFirmwareEeRam(ram, initialEnableWord);
+}
+void advanceFirmwareIop() {
+    std::lock_guard lock(bridgeMutex);
+    return bridge.advanceFirmwareIop();
+}
+bool takeFirmwareDmaCompletion() {
+    std::lock_guard lock(bridgeMutex);
+    return bridge.takeFirmwareDmaCompletion();
 }
 std::optional<uint32_t> firmwareDmaRead(uint32_t address) {
     std::lock_guard lock(bridgeMutex);

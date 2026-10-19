@@ -71,6 +71,14 @@ public:
                 std::cerr << "[strict-iop-dma-start] pc=0x" << std::hex << cpu.pc << " register=0x" << target
                           << " chcr=0x" << cpu.gpr[(instruction >> 16) & 31] << " madr=0x" << memory.read32(base)
                           << " bcr=0x" << memory.read32(base + 4) << std::dec << " steps=" << steps << '\n';
+                if (base == 0x1f801520) {
+                    const auto tadr = memory.read32(base + 12);
+                    std::cerr << "[strict-sif0-source] tadr=0x" << std::hex << tadr;
+                    if (!(tadr & 3) && tadr < IopMemory::RamSize && IopMemory::RamSize - tadr >= 16)
+                        for (unsigned n = 0; n < 4; ++n)
+                            std::cerr << " tag" << n << "=0x" << memory.read32(tadr + n * 4);
+                    std::cerr << std::dec << '\n';
+                }
             }
             if ((target >= IopMemory::RamSize || width > IopMemory::RamSize - target) &&
                 !(hardware && hardware->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31])) &&

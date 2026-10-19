@@ -32,9 +32,24 @@ foreach(reg_entry IN ITEMS
     endif()
     set(sif_directional "${sif_reg_guarded}")
 endforeach()
+foreach(dma_entry IN ITEMS "sceSifSetDma" "sceSifDmaStat")
+    if(dma_entry STREQUAL "sceSifSetDma")
+        set(dma_number "0x77u")
+    else()
+        set(dma_number "0x76u")
+    endif()
+    set(dma_signature "void ${dma_entry}(uint8_t *rdram, R5900Context *ctx, PS2Runtime *runtime)\n    {")
+    string(REPLACE "${dma_signature}"
+        "${dma_signature}\n        if (invokeFirmwareSifSyscall(rdram, ctx, runtime, ${dma_number})) return;"
+        sif_dma_routed "${sif_directional}")
+    if(sif_dma_routed STREQUAL sif_directional)
+        message(FATAL_ERROR "Pinned ${dma_entry} signature changed")
+    endif()
+    set(sif_directional "${sif_dma_routed}")
+endforeach()
 set(sif_file "${CMAKE_BINARY_DIR}/private_directional_SIF.cpp")
 file(CONFIGURE OUTPUT "${sif_file}"
-    CONTENT "#include \"sif_transport.h\"\n#include \"iop_bridge.h\"\n${sif_directional}" @ONLY)
+    CONTENT "#include \"firmware_functions.h\"\n#include \"sif_transport.h\"\n#include \"iop_bridge.h\"\n${sif_directional}" @ONLY)
 set_source_files_properties("${sif_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/Kernel/Stubs")
 get_target_property(runtime_sources ps2_runtime SOURCES)

@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 
 namespace drakengard {
@@ -13,6 +14,7 @@ public:
     ~IopBoot();
     void advance(uint32_t instructions);
     void enableSif1Receiver();
+    void feedSif1(std::span<const uint8_t> quantum);
     void enableHostRtc();
     uint32_t readEe(uint32_t address) const;
     void writeEe(uint32_t address, uint32_t value);

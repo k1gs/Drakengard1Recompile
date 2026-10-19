@@ -10,22 +10,38 @@ import zipfile
 from intake import ROOT
 
 
-def hardware_seed(snapshot):
+def hardware_component(snapshot, component):
     if not 64 <= len(snapshot) <= 128 * 1024 * 1024:
         raise ValueError('Unsupported snapshot size')
     with zipfile.ZipFile(io.BytesIO(snapshot)) as archive:
         names = archive.namelist()
-        for name in ('PCSX2 Savestate Version.id', 'iopHwRegs.bin'):
+        for name in ('PCSX2 Savestate Version.id', component):
             if names.count(name) != 1:
                 raise ValueError('Missing or ambiguous snapshot component')
         version_info = archive.getinfo('PCSX2 Savestate Version.id')
-        hardware_info = archive.getinfo('iopHwRegs.bin')
+        hardware_info = archive.getinfo(component)
         if version_info.file_size != 36 or hardware_info.file_size != 65536:
             raise ValueError('Unexpected snapshot component size')
         version = archive.read(version_info)
         if version[:4] != struct.pack('<I', 0x9a590000) or version[4:].rstrip(b'\0') != b'v2.8.2':
             raise ValueError('Snapshot layout/revision differs from pinned PCSX2 2.8.2')
         hardware = archive.read(hardware_info)
+    return hardware
+
+
+def ee_dma_config(snapshot):
+    """Only reviewed master/suspend configuration; never import IRQs/tags/channels."""
+    hardware = hardware_component(snapshot, 'eeHwRegs.bin')
+    control, = struct.unpack_from('<I', hardware, 0xe000)
+    enable, = struct.unpack_from('<I', hardware, 0xf520)
+    alias, = struct.unpack_from('<I', hardware, 0xf590)
+    if control != 1 or enable != 0x1201 or alias != enable:
+        raise ValueError('Reference EE DMA control is not the reviewed master/suspend profile')
+    return control, enable, hashlib.sha256(hardware).hexdigest()
+
+
+def hardware_seed(snapshot):
+    hardware = hardware_component(snapshot, 'iopHwRegs.bin')
     # HW_ICFG is plain stored read/write state in the pinned reference.
     # Active DMA, IRQ, timers and device replies are deliberately not imported.
     value, = struct.unpack_from('<I', hardware, 0x1450)

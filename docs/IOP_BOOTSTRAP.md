@@ -340,3 +340,41 @@ The local adapter now preserves that exception across thread completion, joins a
 then reports it through the runner's fatal exit path. Native-run-043 verifies exit 6 without timeout,
 exactly one BeforeCopy event for that packet, no AfterCopy event, and GUI cleanup before the fatal
 report. A rendered menu, frame and gameplay remain unverified.
+
+## Original EE DMA routines and first strict SIF1 payload
+
+The exact BIOS syscall table at `0x80014E80` identifies SifDmaStat (`0x76`, entry `0x80006958`),
+SifSetDma (`0x77`, entry `0x800067A0`) and SetDChain (`0x78`, entry `0x80006348`). Preparation
+checks these source slots, the unchanged firmware image hash and ten exact function ranges.
+The private `firmware-004` lift covers 2,388 instruction bytes, with no stubs or decode failures.
+Instruction guards remain active for every firmware dispatch.
+
+Only FirmwareEntry routes the DMA syscalls through an original-code call harness. It preserves the
+EE caller context, supplies a documented harness stack/return boundary, and takes the DMA ID/status
+from the guest return register. This is not a complete EE exception-entry implementation.
+
+The bounded EE SIF1 source engine accepts reviewed REFE, REF and NEXT tags in actual aligned RAM.
+It passes real quadwords to the IOP destination-chain receiver. Partial data retains STR; unknown
+tags, unavailable receivers, bad ranges, suspend and cyclic chains fail explicitly. No alignment
+padding is invented: the original firmware itself copies the source's complete quadwords.
+Consumed terminal tags clear STR and cause real controller completion. The existing EE DMAC event
+queue receives channel 6 completion; IOP channel 10 latches ICR2 flag 3 and requests its actual IRQ.
+SIF tag IRQs cannot be suppressed merely by clearing the per-channel mask. The guest rearms the
+receiver with its actual previous MADR, following the reviewed SIF manager contract.
+
+An initial experiment found the component harness's missing EE DMA master configuration. The
+firmware profile now takes only D_CTRL `1` and ENABLER/ENABLEW `0x1201` from the exact previously
+reviewed PCSX2 v2.8.2 snapshot. Its full hash, version, component sizes and allowed field values are
+checked during preparation. No busy channels, tags, IRQ flags, timing or replies are imported.
+DMAE is still checked before an actual source transfer. This passive profile is an explicit
+component-harness precondition; full BIOS hardware initialization remains unverified.
+
+Native-run-049 observes DMAE enabled, original DMA ID `1`, a terminal IOP tag for `0x1E340`, and
+32 actual payload bytes. The IOP raises its own IRQ, executes the guest handler, rearms SIF1 and
+attempts SIF0 transmission at PC `0x1B640`, CHCR `0x01000701`, after 5,388,836 instructions.
+That reverse direction remains unsupported, so no successful reply or menu is claimed.
+
+Primary hardware behavior: [source chains](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/Hw.cpp),
+[SIF1 FIFO/receiver](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/Sif1.cpp),
+[IOP DMA interrupt semantics](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopHw.cpp),
+and [pinned PS2SDK receiver rearm](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/system/sifman/src/sifman.c).

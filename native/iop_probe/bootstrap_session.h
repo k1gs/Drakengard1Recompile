@@ -1,5 +1,6 @@
 #pragma once
 #include "bare_call.h"
+#include "sif1_receiver.h"
 #include "services/iop_module_loader.h"
 #include <cstring>
 #include <span>
@@ -13,6 +14,7 @@ class BootstrapSession {
     CoherentCache cache;
     QuietInterrupts interrupts;
     QuiescentDma dma;
+    Sif1Receiver sif1;
     OwnedExceptions exceptions;
     drakengard::IopTimers timers;
     ReadOnlyRom rom;
@@ -29,6 +31,7 @@ class BootstrapSession {
 public:
     SifRegisters sif;
     void enableSif1Receiver() { dma.enableSif1Receiver(); }
+    void feedSif1(std::span<const uint8_t> quantum) { sif1.feed(memory, quantum); }
     void setClockSource(std::function<drakengard::CdvdCalendar()> source) { cdvd.setClockSource(std::move(source)); }
     BootstrapSession(std::span<const uint8_t> bundle, std::span<const uint8_t> seed,
                      std::vector<uint8_t> romBytes, drakengard::IsoMedia& media,

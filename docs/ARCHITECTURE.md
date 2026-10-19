@@ -32,6 +32,7 @@ bring-up, а не окончательный выбор renderer/audio architect
 | `native/iop_probe/bootstrap_session.h` | Размещение модулей, переход SYSMEM → LOADCORE и сохраняемое состояние CPU |
 | `native/iop_probe/bare_call.h` | Ограниченный цикл CPU, владение кодом, доставка исключений и возобновление |
 | `native/iop_probe/iop_data_bus.h` | Именованная конфигурация устройств, проверка доступа, staging до инструкции и эффекты после неё |
+| `native/iop_probe/ee_sif_dma.h`, `sif1_receiver.h` | EE source chain и IOP destination chain: настоящие FIFO-кванты, память, счётчики и завершение SIF1 |
 | `native/iop_probe/iop_diagnostics.h` | Описания остановок CPU, unresolved imports и исчерпания бюджета |
 | `native/runner/sif_channel.*`, `sif_transport.cpp` | Протокол пакетов SIF и адаптация к upstream runtime/VFS |
 | `native/runner/fileio_rpc.*`, `cdvd_rpc.*`, `cdvd_device.*`, `iso_media.*` | Сервисы файлов и диска, регистры контроллера и чтение ISO |
@@ -48,6 +49,9 @@ Reboot, Firmware и FirmwareEntry вместо независимых флаго
 Строгая SIF-передача отказывается от HLE-копирования до изменения памяти. CMake-адаптации
 выполняются в одном scope; отдельный `thread_failure.cmake` передаёт fatal device exception после
 join игрового потока и очистки окна. Upstream checkout не меняется.
+В режиме FirmwareEntry SifSetDma/SifDmaStat вызывают проверенные оригинальные EE-процедуры через
+отдельный call harness. Идентификатор DMA и теги создаёт гостевой код. Контроллер проверяет DMAE,
+suspend и поддерживаемые типы тегов; SIF0-ответ пока заканчивается явным blocker.
 Сгенерированный guest code и производные прошивки остаются в локальных ignored-каталогах.
 
 ## Контракты диагностики

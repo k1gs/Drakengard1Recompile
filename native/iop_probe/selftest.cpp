@@ -1,4 +1,5 @@
 #include "bare_call.h"
+#include "sif1_receiver.h"
 #include <cstring>
 #include <initializer_list>
 
@@ -135,6 +136,38 @@ int main() {
         rejects([&] { dma.allows(0x1f801528, 0x2b, 0x01000000); }, "requires an actual transfer engine");
         if (!dma.allows(0x1f801528, 0x2b, 0) || dma.allows(0x1f80153c, 0x2b, 0))
             throw std::runtime_error("DMA idle control/reserved register boundary failed");
+        memory.reset(); Sif1Receiver receiver;
+        memory.write32(0x1f801538, 0x41000300); memory.write32(0x1f801534, 0x20);
+        memory.write32(0x1f801570, 0x8000); memory.write32(0x1f801578, 1);
+        memory.write32(0x7fc, 0xdeadbeef); memory.write32(0x820, 0xcafebabe);
+        std::array<uint8_t, 16> tag{0, 8, 0, 0xc0, 8}, first{}, second{};
+        for (unsigned n = 0; n < 16; ++n) { first[n] = uint8_t(n + 1); second[n] = uint8_t(n + 17); }
+        receiver.feed(memory, tag);
+        if (receiver.transferredBytes() || receiver.completedChains() || memory.interruptStatus())
+            throw std::runtime_error("SIF1 tag alone fabricated a payload/completion/IRQ");
+        receiver.feed(memory, first);
+        if (receiver.transferredBytes() != 16 || receiver.completedChains() || memory.interruptStatus() ||
+            memory.read32(0x1f801538) != 0x41000300 || memory.read32(0x800) != 0x04030201)
+            throw std::runtime_error("SIF1 partial payload did not preserve STR and actual bytes");
+        receiver.feed(memory, second);
+        if (receiver.transferredBytes() != 32 || receiver.completedChains() != 1 ||
+            memory.read32(0x81c) != 0x201f1e1d || memory.read32(0x7fc) != 0xdeadbeef ||
+            memory.read32(0x820) != 0xcafebabe || memory.read32(0x1f801530) != 0x820 ||
+            memory.read32(0x1f801538) != 0x40000300 || memory.read32(0x1f801574) != 0x08000000 ||
+            memory.interruptStatus() != 8 || memory.read32(0x1f801534) != 0x20)
+            throw std::runtime_error("SIF1 completion/RAM bounds/mandatory channel IRQ failed");
+        rejects([&] { receiver.feed(memory, first); }, "ready, enabled");
+        if (!dma.allows(0x1f801538, 0x2b, 0x41000300, &memory))
+            throw std::runtime_error("A completed SIF1 receiver cannot rearm with its actual previous MADR");
+        memory.setInterruptStatus(0);
+        dma.afterWrite(memory, 0x1f801574, 0x08000000, 0); // Mask cannot suppress latched SIF1.
+        if (memory.interruptStatus() != 8) throw std::runtime_error("SIF1 pending IRQ was incorrectly masked");
+        dma.afterWrite(memory, 0x1f801574, memory.read32(0x1f801574), 0x08000000);
+        memory.setInterruptStatus(0); memory.write32(0x1f801538, 0x41000300);
+        tag[4] = 3;
+        rejects([&] { receiver.feed(memory, tag); }, "destination tag");
+        if (memory.interruptStatus() || memory.read32(0x1f801574) || receiver.transferredBytes() != 32)
+            throw std::runtime_error("Rejected SIF1 tag changed completion or payload state");
         memory.reset(); code(memory, {0x0000000c, 0x2402002a, 0x03e00008, 0});
         OwnedExceptions exceptions;
         rejects([&] { bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1100,

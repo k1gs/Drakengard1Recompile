@@ -2,6 +2,8 @@
 #include "sif_registers.h"
 #include "ee_sif_dma.h"
 #include <iostream>
+#include <algorithm>
+#include <vector>
 
 namespace {
 void require(bool value) { if (!value) throw std::runtime_error("Bootstrap interface check failed"); }
@@ -71,6 +73,51 @@ int main() {
         require(receiver.read(0x1000c400) == 0);
         refuses([&] { receiver.write(0x1000c000, 0x101); });
         refuses([&] { receiver.read(0x1000c040); });
-        std::cout << "Read-only ROM bounds/aliases and directional SIF registers passed\n";
+        std::vector<uint8_t> dmaRam(0x2000), delivered;
+        const auto word = [&](size_t at, uint32_t value) {
+            for (unsigned n = 0; n < 4; ++n) dmaRam[at + n] = uint8_t(value >> (8 * n));
+        };
+        for (unsigned n = 0; n < 48; ++n) dmaRam[0x400 + n] = uint8_t(n + 1);
+        word(0x100, 3); word(0x104, 0x400); // REFE, three actual quadwords.
+        EeSifDma sender; sender.seedEnableWord(0x1201); sender.enableSif1();
+        require(sender.read(0x1000f520) == 0x1201);
+        refuses([&] { sender.seedEnableWord(0); });
+        sender.write(0x1000c430, 0x100); sender.write(0x1000c400, 0x184);
+        require(!sender.takeCompletion());
+        sender.pumpSif1(dmaRam, [&](auto quantum) { delivered.insert(delivered.end(), quantum.begin(), quantum.end()); });
+        require(delivered.size() == 48 && std::equal(delivered.begin(), delivered.end(), dmaRam.begin() + 0x400));
+        require(sender.read(0x1000c410) == 0x430 && sender.read(0x1000c420) == 0 &&
+                sender.read(0x1000c430) == 0x110 && !(sender.read(0x1000c400) & 0x100));
+        require(sender.takeCompletion() && !sender.takeCompletion());
+        word(0x100, 0x30000001); word(0x110, 0x20000000); word(0x114, 0x150);
+        word(0x150, 1); word(0x154, 0x420); // REF -> zero-length NEXT -> REFE.
+        delivered.clear(); sender.write(0x1000c430, 0x100); sender.write(0x1000c400, 0x184);
+        sender.pumpSif1(dmaRam, [&](auto quantum) { delivered.insert(delivered.end(), quantum.begin(), quantum.end()); });
+        require(delivered.size() == 32 && delivered.front() == 1 && delivered[16] == 33 &&
+                sender.read(0x1000c430) == 0x160 && sender.takeCompletion());
+        word(0x100, 0x10000001); // Unsupported CNT cannot silently turn into REFE.
+        sender.write(0x1000c430, 0x100); sender.write(0x1000c400, 0x184);
+        unsigned calls = 0;
+        refuses([&] { sender.pumpSif1(dmaRam, [&](auto) { ++calls; }); });
+        require(!calls && !sender.takeCompletion() && (sender.read(0x1000c400) & 0x100));
+        sender.write(0x1000c400, 0); word(0x100, 2); word(0x104, 0x1ff0); // Truncated source.
+        sender.write(0x1000c400, 0x184);
+        refuses([&] { sender.pumpSif1(dmaRam, [&](auto) { ++calls; }); });
+        require(!calls && !sender.takeCompletion());
+        sender.write(0x1000c400, 0); word(0x100, 0x20000000); word(0x104, 0x100);
+        sender.write(0x1000c430, 0x100); sender.write(0x1000c400, 0x184);
+        refuses([&] { sender.pumpSif1(dmaRam, [&](auto) { ++calls; }); });
+        require(!calls && !sender.takeCompletion()); // Bounded cyclic tags do not complete.
+        sender.write(0x1000c400, 0); word(0x100, 1); word(0x104, 0x400);
+        sender.write(0x1000f590, 0x10000); require(sender.read(0x1000f520) == 0x10000);
+        sender.write(0x1000c430, 0x100); sender.write(0x1000c400, 0x184);
+        refuses([&] { sender.pumpSif1(dmaRam, [&](auto) { ++calls; }); });
+        require(!calls && !sender.takeCompletion());
+        sender.write(0x1000c400, 0); sender.write(0x1000f590, 0x1201);
+        sender.write(0x1000c430, 0x100); sender.write(0x1000c400, 0x184);
+        refuses([&] { sender.pumpSif1(dmaRam, [&](auto) { throw std::runtime_error("receiver not ready"); }); });
+        require(!sender.takeCompletion() && sender.read(0x1000c420) == 1 &&
+                (sender.read(0x1000c400) & 0x100));
+        std::cout << "Read-only ROM, directional SIF, source chains and failure bounds passed\n";
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

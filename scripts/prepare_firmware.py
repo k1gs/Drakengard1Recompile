@@ -1,4 +1,4 @@
-"""Prepare private units for the reviewed BIOS EE SIF initialization experiment."""
+"""Prepare private units for reviewed BIOS EE SIF initialization and DMA routines."""
 import csv
 import hashlib
 from pathlib import Path
@@ -8,10 +8,12 @@ import json
 from intake import ROOT, inspect_elf
 from lift import validate_map
 from prepare_kernel import write_changed
+from reference_state import ee_dma_config
 
 BIOS_SHA256 = 'ee7ae4cc152588b7da1dab17494a321ceafafaf799769baea4e8a28afa5044b1'
 KERNEL_SHA256 = '7caa05e1a4e1a6b81ed38016039e6d865567faf5af2b842afff55781da7d5a21'
 IMAGE_SHA256 = '9884ddf3c1e80a8fd9b89d83b741b3b64ec509c0edf773bd889048eaf3d55dd8'
+REFERENCE_SHA256 = '8eefaf755c38f6b5fec1dbd9616acb6f206726b18199793cf3bb7a9f1b34400c'
 
 
 def prepare(output):
@@ -20,12 +22,14 @@ def prepare(output):
     metadata = inspect_elf(image)
     if metadata['sha256'] != IMAGE_SHA256 or metadata['entry'] != 0x80006240:
         raise ValueError('Firmware translation image differs from reviewed experiment')
-    table = image_dir / 'sif-functions-002.csv'
+    table = image_dir / 'sif-functions-003.csv'
     validate_map(table, metadata)
     rows = list(csv.DictReader(table.open()))
     if [(int(r['Start'], 0), int(r['End'], 0)) for r in rows] != [
         (0x80005f00, 0x80005fdc), (0x80006240, 0x80006348), (0x80006348, 0x8000637c),
-        (0x800063b0, 0x80006414), (0x80006b90, 0x80006ba4),
+        (0x800063b0, 0x80006414), (0x80006418, 0x80006670), (0x80006670, 0x800066f8),
+        (0x800066f8, 0x800067a0), (0x800067a0, 0x80006954), (0x80006958, 0x80006ae0),
+        (0x80006b90, 0x80006ba4),
     ]:
         raise ValueError('Firmware code coverage changed')
     rom = (ROOT / 'work/pcsx2-reference/bios/Europe.bin').read_bytes()
@@ -39,6 +43,16 @@ def prepare(output):
     kernel = rom[record['offset']:record['offset'] + record['size']]
     if len(kernel) != 93544 or hashlib.sha256(kernel).hexdigest() != KERNEL_SHA256:
         raise ValueError('Firmware source extent differs')
+    # The adjacent original syscall-table slots establish identity independently
+    # of decompiler names. Never bind a handler from address similarity alone.
+    if (int.from_bytes(kernel[0x15058:0x1505c], 'little') != 0x80006958 or
+            int.from_bytes(kernel[0x1505c:0x15060], 'little') != 0x800067a0 or
+            int.from_bytes(kernel[0x15060:0x15064], 'little') != 0x80006348):
+        raise ValueError('Firmware SIF syscall table differs')
+    reference = (ROOT / 'work/reference-pine-001/savestates/SLES-52322 (79585776).01.p2s').read_bytes()
+    if hashlib.sha256(reference).hexdigest() != REFERENCE_SHA256:
+        raise ValueError('Passive EE hardware reference differs')
+    initial_dma_control, initial_dma_enable, reference_hardware_hash = ee_dma_config(reference)
     image_bytes = image.read_bytes()
     segment = metadata['load_segments'][0]
     if image_bytes[segment['offset']:segment['offset'] + len(kernel)] != kernel:
@@ -48,7 +62,7 @@ def prepare(output):
         raise ValueError('Firmware compiler units must stay inside private build/')
     output.mkdir(parents=True, exist_ok=True)
     write_changed(output / 'firmware_functions.h', (ROOT / 'native/runner/firmware_functions.h').read_text())
-    source = ROOT / 'generated/firmware-003'
+    source = ROOT / 'generated/firmware-004'
     for path in source.glob('*'):
         if path.name == 'register_functions.cpp' or path.suffix not in ('.cpp', '.h'):
             continue
@@ -80,7 +94,10 @@ def prepare(output):
         ranges.append(f'{{0x{start:08x}u, firmwareCode{i}, sizeof(firmwareCode{i})}},')
     content.extend(['const FirmwareCode firmwareCode[] = {', *ranges, '};'])
     content.append(f'constexpr uint32_t FirmwareRomOffset = {record["offset"]}u, FirmwareSize = {len(kernel)}u;')
+    content.append(f'constexpr uint32_t FirmwareInitialDmaControl = {initial_dma_control}u;')
+    content.append(f'constexpr uint32_t FirmwareInitialDmaEnable = {initial_dma_enable}u;')
     write_changed(output / 'firmware_bindings.h', '\n'.join(content))
+    print(f'Passive EE DMAC profile: reference={REFERENCE_SHA256}, hardware={reference_hardware_hash}; no active state imported')
     print(f'Prepared {len(entries)} exact firmware entries and {sum(int(r["Size"]) for r in rows)} instruction bytes')
 
 
