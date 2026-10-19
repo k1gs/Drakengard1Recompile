@@ -21,6 +21,7 @@ class CooperativeIopBridge {
     std::span<uint8_t> eeRam;
     std::function<uint32_t()> dmaControl;
     unsigned reads{};
+    unsigned idleSlices{};
     std::array<uint32_t, 3> softwareRegisters{};
     uint32_t busRegister(uint32_t number) {
         return SifRegisters::kernelAddress(number);
@@ -41,6 +42,13 @@ public:
         if (phase != Phase::FirmwareEntry) throw StrictDeviceError("Firmware DMA call requires experimental game entry");
         boot->advance(4096);
     }
+    bool advanceFirmwareIopWhileEeIdle() {
+        if (phase != Phase::FirmwareEntry) return false;
+        if (++idleSlices <= 4 || idleSlices % 256 == 0)
+            std::cerr << "[firmware-idle-iop] slice=" << idleSlices << " instructions=4096\n";
+        boot->advance(4096);
+        return true;
+    }
     bool strictIopActive() const { return active(); }
     void enterGameAfterFirmware() {
         if (phase != Phase::Firmware || eeRam.empty() || !(boot->readEe(0x1000f230) & 0x40000u))
@@ -48,7 +56,14 @@ public:
         phase = Phase::FirmwareEntry;
         firmwareDma.enableSif1();
         boot->bindSif0([this](std::span<const uint8_t> quantum) {
-            firmwareDma.feedSif0(eeRam, quantum, dmaControl());
+            try { firmwareDma.feedSif0(eeRam, quantum, dmaControl()); }
+            catch (const std::exception&) {
+                std::cerr << "[strict-sif0-receiver-blocker] chcr=0x" << std::hex
+                          << firmwareDma.read(0x1000c000) << " madr=0x" << firmwareDma.read(0x1000c010)
+                          << " qwc=0x" << firmwareDma.read(0x1000c020) << " control=0x" << dmaControl()
+                          << " enable=0x" << firmwareDma.read(0x1000f520) << std::dec << '\n';
+                throw;
+            }
         });
     }
     void prepareCooperativeIop(const IopBootInputs& inputs) {
@@ -183,6 +198,10 @@ void bindFirmwareEeRam(std::span<uint8_t> ram, uint32_t initialEnableWord, std::
 void advanceFirmwareIop() {
     std::lock_guard lock(bridgeMutex);
     return bridge.advanceFirmwareIop();
+}
+bool advanceFirmwareIopWhileEeIdle() {
+    std::lock_guard lock(bridgeMutex);
+    return bridge.advanceFirmwareIopWhileEeIdle();
 }
 bool takeFirmwareDmaCompletion() {
     std::lock_guard lock(bridgeMutex);

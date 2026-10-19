@@ -14,6 +14,7 @@ bool strictIopActive();
 bool firmwareGameEntryActive();
 void bindFirmwareEeRam(std::span<uint8_t> ram, uint32_t initialEnableWord, std::function<uint32_t()> dmaControl);
 void advanceFirmwareIop();
+bool advanceFirmwareIopWhileEeIdle();
 bool takeFirmwareDmaCompletion();
 bool takeFirmwareSif0Completion();
 std::optional<uint32_t> firmwareDmaRead(uint32_t address);

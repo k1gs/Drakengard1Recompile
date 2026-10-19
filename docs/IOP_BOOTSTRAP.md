@@ -402,11 +402,33 @@ register `0x80000002 = 1`, and a third outgoing DMA ID `0x201` with 64 actual SI
 No host reply backend or direct ready write supplies this result.
 
 The later request sleeps at EE PC `0x31FAA8`; run-055 reaches its 45-second timeout. Existing
-cooperative IOP slices run at SIF interactions, so an EE wait can starve the IOP. The next experiment
-must provide bounded scheduling during that wait, then distinguish a missing service from a
-scheduling gap. Timeout is not a successful boot. There is still no verified native frame/menu,
+cooperative IOP slices in that version run at SIF interactions, so an EE wait can starve the IOP.
+The later scheduling experiment below addresses this gap. Timeout is not a successful boot.
+There is still no verified native frame/menu,
 gameplay, audio-content or save acceptance.
 
 Synthetic coverage includes 0..8 and 129 source words, both padding histories, multiple tags,
 CNT/END, partial payloads, invalid and truncated RAM, suspend/DMAE, receiver refusal, tag budget,
 pending completion preservation, and an actual IOP instruction storing CHCR before delivery.
+
+## IOP progress while EE has no ready thread
+
+The local scheduler adapter advances one 4,096-instruction IOP slice immediately before an
+actual no-ready-thread EE wait. This executes on the EE executor, outside the event mutex;
+the UI thread does not access either CPU's RAM. Only FirmwareEntry enables this path.
+Completed DMA events use the existing masked DMAC handler dispatch. A resulting guest invocation
+is selected before sleeping; otherwise the original EE event/deadline wait remains in place.
+The total eight-million-instruction IOP bound remains unchanged. This is functional scheduling,
+not a measured EE/IOP clock ratio, and it does not replace a general scheduler/checkpoint model.
+
+Native-run-058/059 pass the former semaphore wait: ten completed SIF1 chains carry 1,632 actual
+bytes, and nine SIF0 source chains complete, including two-record replies of 72 and 68 source
+bytes. The next IOP start occurs at PC `0x1B640`, instruction count 5,533,413, while EE SIF0
+CHCR is `0x90000084` (STR clear), QWC is zero, DMA control is `1`, and enable is `0x1201`.
+The synchronous sink refuses this next packet instead of discarding it or inventing readiness.
+Both runs report fatal exit 6 without timeout; this is a reproducible device boundary.
+
+Next work is an actual bounded SIF0 FIFO that retains emitted data across EE completion/rearm
+and pauses a full producer without inventing an early completion. Preserve tag history and
+partial source progress. Do not bypass the boundary by shortening instruction slices, force-arming
+the EE channel, dropping packets, or supplying a host RPC reply. No rendered menu/gameplay claim.
