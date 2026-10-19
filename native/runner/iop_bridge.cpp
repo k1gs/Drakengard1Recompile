@@ -13,10 +13,10 @@ namespace {
 // Public hooks below serialize access; internal calls stay within this owner.
 class CooperativeIopBridge {
     std::unique_ptr<IopBoot> boot;
-    enum class Phase { Prepared, Reboot, Firmware };
+    enum class Phase { Prepared, Reboot, Firmware, FirmwareEntry };
     Phase phase{Phase::Prepared};
     bool active() const { return phase != Phase::Prepared; }
-    bool firmwareExperiment() const { return phase == Phase::Firmware; }
+    bool firmwareExperiment() const { return phase == Phase::Firmware || phase == Phase::FirmwareEntry; }
     EeSifDma firmwareDma;
     unsigned reads{};
     std::array<uint32_t, 3> softwareRegisters{};
@@ -25,6 +25,12 @@ class CooperativeIopBridge {
     }
     bool busAddress(uint32_t address) { return address >= 0x1000f200 && address <= 0x1000f260; }
 public:
+    bool strictIopActive() const { return active(); }
+    void enterGameAfterFirmware() {
+        if (phase != Phase::Firmware || !(boot->readEe(0x1000f230) & 0x40000u))
+            throw StrictDeviceError("Game entry requires actual completed firmware IOP startup");
+        phase = Phase::FirmwareEntry;
+    }
     void prepareCooperativeIop(const IopBootInputs& inputs) {
         if (boot) throw std::runtime_error("Cooperative IOP already configured");
         boot = std::make_unique<IopBoot>(inputs);
@@ -133,6 +139,14 @@ void beginFirmwareExperiment() {
 void finishFirmwareExperiment() {
     std::lock_guard lock(bridgeMutex);
     return bridge.finishFirmwareExperiment();
+}
+void enterGameAfterFirmware() {
+    std::lock_guard lock(bridgeMutex);
+    return bridge.enterGameAfterFirmware();
+}
+bool strictIopActive() {
+    std::lock_guard lock(bridgeMutex);
+    return bridge.strictIopActive();
 }
 std::optional<uint32_t> firmwareDmaRead(uint32_t address) {
     std::lock_guard lock(bridgeMutex);

@@ -9,7 +9,8 @@
 
 int main(int argc, char** argv) {
     if ((argc != 2 && argc != 3 && argc != 11 && argc != 12) ||
-        (argc == 12 && std::string(argv[11]) != "--ee-firmware-init")) {
+        (argc == 12 && std::string(argv[11]) != "--ee-firmware-init" &&
+                       std::string(argv[11]) != "--ee-firmware-entry")) {
         std::cerr << "Pass the locally verified boot ELF; use scripts/run_native.py\n";
         return 2;
     }
@@ -56,7 +57,9 @@ int main(int argc, char** argv) {
         if (!runtime->loadELF(argv[1])) return 4;
         if (argc == 12) {
             runFirmwareInitialization(*runtime, argv[7]);
-            return 5; // This is an isolated firmware experiment; never continue as a claimed full boot.
+            if (std::string(argv[11]) == "--ee-firmware-init") return 5;
+            drakengard::enterGameAfterFirmware();
+            std::cerr << "[firmware-game-entry] start loaded ELF after guest BOOTEND; experimental, not full BIOS boot\n";
         }
         runtime->run();
         std::cerr << "Diagnostic run ended; this is not a playable-port acceptance result\n";

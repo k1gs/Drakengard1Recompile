@@ -305,8 +305,38 @@ clock or emulate persistent console NVM. Other profiles without a configured clo
 that command. See [MEDIA.md](MEDIA.md) for the device contracts and limits.
 
 Native-run-035 passes that RTC read and stops at CDVD SCMD `0x1B`, no parameters, PC `0x27A08`.
-No BOOTEND or native game frame is yet verified. A changed private BIOS copy, even supplied with
+At that checkpoint neither BOOTEND nor a native game frame was verified. A changed private BIOS copy, even supplied with
 its own matching intake hash, was rejected by the specific firmware binding before guest execution.
 
 Primary receive behavior: [PS2SDK SIF manager](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/system/sifman/src/sifman.c),
 [PCSX2 SIF1 FIFO/transfer logic](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/Sif1.cpp).
+
+## Guest BOOTEND and experimental ELF entry (2026-10-19)
+
+Native-run-041 completed the component experiment: after quiescent CDVD `0x1B` cancellation,
+actual guest instructions set BOOTEND and the observed SMFLAG becomes `0x50000`. No ready flag
+or boot-end bit is installed by the host. This remains a selected module boot plan and a reviewed
+EE firmware call with harness context, rather than execution of the entire BIOS reset path.
+
+The launcher keeps isolated initialization and experimental game entry separate:
+
+```powershell
+python scripts/run_native.py --input-complete --iop-bootstrap --ee-firmware-init --seconds 60 --run N
+python scripts/run_native.py --input-complete --iop-bootstrap --ee-firmware-entry --seconds 60 --run N
+```
+
+Use a fresh numeric run ID. Both modes require the same locally prepared, verified inputs.
+Entry checks actual BOOTEND before preserving the strict IOP session and running the loaded ELF.
+The diagnostic runtime still supplies EE kernel/scheduler state; this is not full BIOS boot acceptance.
+
+Native-run-042 reached the game's first SIF initialization packet: command `0x80000002`, 20 bytes,
+EE source `0x6B0980`, actual IOP receive destination `0x1E340`, EE reply-buffer field `0x6B08C0`.
+The transfer is rejected before copying into upstream HLE memory. Strict active IOP also refuses
+GetOtherData transfers from that unrelated memory. Next work is actual SIF1 tags/payload delivery,
+controller state/IRQ and execution of the real guest receive handler, followed by SIF0 replies.
+
+The upstream game-thread catch used to print a fatal device error and return to the GUI loop.
+The local adapter now preserves that exception across thread completion, joins and cleans up,
+then reports it through the runner's fatal exit path. Native-run-043 verifies exit 6 without timeout,
+exactly one BeforeCopy event for that packet, no AfterCopy event, and GUI cleanup before the fatal
+report. A rendered menu, frame and gameplay remain unverified.

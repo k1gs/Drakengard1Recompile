@@ -131,13 +131,28 @@ int main() {
         device.writeRegister(4, 6);
         check(device.pendingBytes() == 4096 && device.actualSectorsRead() == 2);
         check(device.readRegister(5) == 0x80 && device.readRegister(8) == 0 && !device.takeInterruptEdge());
+        // Cancelling power readiness cannot finish an unrelated sector read.
+        device.writeRegister(0x16, 0x1b);
+        check(device.readRegister(0x17) == 0 && device.readRegister(0x18) == 0);
+        check(device.readRegister(0x17) == 0x40 && device.pendingBytes() == 4096 &&
+              device.actualSectorsRead() == 2 && device.readRegister(5) == 0x80 &&
+              device.readRegister(8) == 0 && !device.takeInterruptEdge());
         std::array<uint8_t, 2048> one{};
         check(device.drainUserSectors(one) == 2048 && std::memcmp(one.data(), "abc123", 6) == 0);
         check(device.pendingBytes() == 2048 && !device.takeInterruptEdge());
         check(device.drainUserSectors(one) == 2048 && std::memcmp(one.data(), "xyz", 3) == 0);
         check(device.pendingBytes() == 0 && device.readRegister(5) == 0x40 && device.takeInterruptEdge());
         check(!device.takeInterruptEdge() && device.readRegister(8) == 1);
+        device.writeRegister(0x16, 0x1b);
+        check(device.readRegister(0x18) == 0 && device.readRegister(8) == 1 && !device.takeInterruptEdge());
         device.writeRegister(8, 1); check(device.readRegister(8) == 0);
+        for (unsigned repeat = 0; repeat < 3; ++repeat) {
+            device.writeRegister(0x16, 0x1b);
+            check(device.readRegister(0x16) == 0x1b && device.readRegister(0x17) == 0);
+            bool unreadRejected = false;
+            try { device.writeRegister(0x16, 0x1b); } catch (const std::runtime_error&) { unreadRejected = true; }
+            check(unreadRejected && device.readRegister(0x18) == 0 && device.readRegister(0x17) == 0x40);
+        }
         device.writeRegister(0x17, 0); device.writeRegister(0x16, 3);
         for (uint8_t expected : {1, 2, 3, 4}) check(device.readRegister(0x18) == expected);
         unsigned clockReads = 0;
@@ -159,6 +174,15 @@ int main() {
         bool rawRejected = false;
         try { device.writeRegister(4, 8); } catch (const std::runtime_error&) { rawRejected = true; }
         check(rawRejected && !device.takeInterruptEdge());
+        drakengard::CdvdDevice malformedPower(media);
+        malformedPower.writeRegister(0x17, 1);
+        bool powerArgsRejected = false;
+        try { malformedPower.writeRegister(0x16, 0x1b); } catch (const std::runtime_error&) { powerArgsRejected = true; }
+        check(powerArgsRejected && malformedPower.readRegister(0x17) == 0x40 && !malformedPower.takeInterruptEdge());
+        drakengard::CdvdDevice powerOff(media);
+        bool powerOffRejected = false;
+        try { powerOff.writeRegister(0x16, 0x0f); } catch (const std::runtime_error&) { powerOffRejected = true; }
+        check(powerOffRejected && powerOff.readRegister(0x17) == 0x40 && !powerOff.takeInterruptEdge());
         auto bad = image; bad[16 * Sector + 84] ^= 1; rejects(bad);
         bad = image; bad[16 * Sector + 129] = 4; rejects(bad);
         bad = image; bad[16 * Sector + 156 + 1] = 1; rejects(bad);

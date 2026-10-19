@@ -15,7 +15,7 @@ if(runtime_extended STREQUAL runtime_guarded)
     message(FATAL_ERROR "Pinned lookupFunction contract changed")
 endif()
 string(REPLACE "m_iopSubsystem->onSifTransfer(transfer);"
-    "diagnoseSifTransfer(rdram, transfer);\n    m_iopSubsystem->onSifTransfer(transfer);\n    drakengard::processSifTransfer(this, rdram, transfer);"
+    "diagnoseSifTransfer(rdram, transfer);\n    if (transfer.phase == ps2x::iop::SifTransferPhase::BeforeCopy) drakengard::processSifTransfer(this, rdram, transfer);\n    m_iopSubsystem->onSifTransfer(transfer);\n    if (transfer.phase != ps2x::iop::SifTransferPhase::BeforeCopy) drakengard::processSifTransfer(this, rdram, transfer);"
     runtime_traced "${runtime_extended}")
 if(runtime_traced STREQUAL runtime_extended)
     message(FATAL_ERROR "Pinned SIF transfer contract changed")
@@ -32,9 +32,10 @@ string(REPLACE "catch (const std::exception &)\n    {"
 if(runtime_fatal_devices STREQUAL runtime_reset)
     message(FATAL_ERROR "Pinned runtime memory exception contract changed")
 endif()
+include("${REPO_ROOT}/native/runner/cmake/thread_failure.cmake")
 set(runtime_file "${CMAKE_BINARY_DIR}/private_extended_Runtime.cpp")
 file(CONFIGURE OUTPUT "${runtime_file}"
-    CONTENT "#include \"kernel_functions.h\"\n#include \"firmware_functions.h\"\n#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"sif_transport.h\"\n${runtime_fatal_devices}" @ONLY)
+    CONTENT "#include <exception>\n#include \"kernel_functions.h\"\n#include \"firmware_functions.h\"\n#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"sif_transport.h\"\n${runtime_fatal_devices}" @ONLY)
 set_source_files_properties("${runtime_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
 get_target_property(runtime_sources ps2_runtime SOURCES)

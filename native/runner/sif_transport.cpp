@@ -3,6 +3,7 @@
 #include "fileio_rpc.h"
 #include "cdvd_rpc.h"
 #include "iop_bridge.h"
+#include "strict_device_error.h"
 #include "runtime/ps2_memory.h"
 #include "ps2_iop_transport.h"
 #include <cstring>
@@ -209,7 +210,10 @@ std::unordered_map<PS2Runtime*, std::shared_ptr<RuntimeBackend>> channels;
 }
 
 void processSifTransfer(PS2Runtime* runtime, uint8_t* ram, const ps2x::iop::SifTransfer& transfer) {
-    if (!runtime || transfer.kind != ps2x::iop::SifTransferKind::SetDma ||
+    if (!runtime) return;
+    if (transfer.phase == ps2x::iop::SifTransferPhase::BeforeCopy && strictIopActive())
+        throw StrictDeviceError("Strict SIF transfer requires actual IOP memory/tag/payload routing; HLE copy refused");
+    if (transfer.kind != ps2x::iop::SifTransferKind::SetDma ||
         transfer.phase != ps2x::iop::SifTransferPhase::AfterCopy) return;
     std::lock_guard lock(channelsMutex);
     auto state = channels[runtime];

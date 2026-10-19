@@ -85,7 +85,14 @@ year offset from 2000. Invalid dates/times or years outside 2000..2099 fail befo
 Clock/NVM writes and physical-console RTC state remain unsupported. No host clock setting is changed.
 Synthetic fixtures cover BCD order, leap days, invalid calendar refusal, FIFO state and no IRQ.
 
-The current next SCMD is `0x1B` (cancel power-off readiness); it remains explicitly unsupported.
-Its control-state contract must be reviewed before adding a successful response.
+SCMD `0x1B` accepts no parameters and returns one zero status byte for the quiescent virtual
+drive. This is the idempotent cancellation contract from the pinned reference, with no external
+power-button event source in this device. A pending power-event IRQ remains an explicit blocker;
+physical-event cancellation is not inferred from the quiescent case. Other IRQs, unread sector
+payloads and the host's power state are untouched. SCMD `0x0F` (power off) remains unsupported.
+Tests check repeated cancellation, reply consumption, malformed parameters, preservation of
+pending sectors and existing completion IRQs, and refusal of power-off commands.
 
 Primary contracts: [PCSX2 2.8.2 CDVD FIFO, RTC setup and command implementation](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/CDVD/CDVD.cpp).
+The zero-input/one-output `0x1B` controller ABI and separate power-event IRQ are also visible in
+[pinned PS2SDK CDVDMAN](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/cdvd/cdvdman/src/cdvdman.c).

@@ -114,6 +114,13 @@ void CdvdDevice::scommand(uint8_t command) {
         m_response = {0, bcd(date.second), bcd(date.minute), bcd(date.hour), 0,
             bcd(date.day), bcd(date.month), bcd(date.year - 2000)};
         m_responsePosition = 0;
+    } else if (command == 0x1b && m_sparameters.empty()) {
+        // This virtual drive has no external power-button event source. In its
+        // quiescent state cancel-readiness is idempotent (zero inputs, one status
+        // byte in pinned CDVD/PS2SDK). An actual power event needs its own model;
+        // do not silently consume that IRQ if one is introduced later.
+        deviceCheck(!(m_interrupt & 4u), "CDVD power-event cancellation requires an event model");
+        m_response = {0}; m_responsePosition = 0;
     } else unknownDevice("S-command", command, m_sparameters);
     m_scommand = command; m_sparameters.clear();
 }
