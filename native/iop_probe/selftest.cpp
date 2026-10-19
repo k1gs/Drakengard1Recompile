@@ -136,6 +136,27 @@ int main() {
         rejects([&] { dma.allows(0x1f801528, 0x2b, 0x01000000); }, "requires an actual transfer engine");
         if (!dma.allows(0x1f801528, 0x2b, 0) || dma.allows(0x1f80153c, 0x2b, 0))
             throw std::runtime_error("DMA idle control/reserved register boundary failed");
+        memory.reset(); dma.reset(memory); dma.enableSif0Sender();
+        memory.write32(0x1f801524, 0x20); memory.write32(0x1f801578, 1);
+        memory.write32(0x1f801570, 0x800); memory.write32(0x1f80152c, 0x3004);
+        memory.write32(0x3004, 0x80004000); memory.write32(0x3008, 1);
+        memory.write32(0x300c, 0x90000001); memory.write32(0x3010, 0x800);
+        memory.write32(0x3014, 0x13579bdf); memory.write32(0x3018, 0x2468ace0);
+        memory.write32(0x4000, 0x11223344);
+        Sif0Sender sif0; unsigned quanta = 0;
+        sif0.bind([&](auto quantum) {
+            if (memory.read32(0x1f801528) != 0x01000701 || memory.interruptStatus())
+                throw std::runtime_error("SIF0 transfer ran before the actual CHCR store or invented early IRQ");
+            if (quanta == 1 && (quantum[0] != 0x44 || quantum[5] != 8 || quantum[8] != 0xdf))
+                throw std::runtime_error("IOP SIF0 payload/history differs from actual RAM");
+            ++quanta;
+        });
+        code(memory, {0x3c020100, 0x34420701, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
+        result = bareCall(memory, 0x1000, 0, 0xbf801528, 0x1000, 0x1100,
+            {.dma = &dma, .sif0 = &sif0});
+        if (quanta != 2 || result.value != 0x701 || memory.interruptStatus() != 8 ||
+            memory.read32(0x1f801520) != 0x4004 || memory.read32(0x1f801574) != 0x04000000)
+            throw std::runtime_error("Actual IOP CHCR store did not deliver SIF0 and latch completion");
         memory.reset(); Sif1Receiver receiver;
         memory.write32(0x1f801538, 0x41000300); memory.write32(0x1f801534, 0x20);
         memory.write32(0x1f801570, 0x8000); memory.write32(0x1f801578, 1);

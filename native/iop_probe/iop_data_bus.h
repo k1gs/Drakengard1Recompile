@@ -10,6 +10,7 @@
 #include "iop_timers.h"
 #include "read_only_rom.h"
 #include "sif_registers.h"
+#include "sif0_sender.h"
 #include <iostream>
 #include <stdexcept>
 #include <optional>
@@ -26,6 +27,7 @@ struct IopDevices {
     drakengard::IopTimers* timers{};
     const ReadOnlyRom* rom{};
     SifRegisters* sif{};
+    Sif0Sender* sif0{};
 };
 
 // Adapts explicit device contracts to the pinned CPU's backing memory.
@@ -40,14 +42,15 @@ public:
     struct Effects {
         uint32_t interruptRead{}, dmaWrite{}, dmaPrevious{}, dmaValue{}, sifWrite{};
         std::optional<std::pair<uint32_t, uint32_t>> romRestore;
+        bool sif0Start{};
     };
     IopDataBus(Memory& memory, const IopDevices& devices) : memory(memory), devices(devices) {}
     Effects prepare(const Cpu& cpu, uint32_t instruction, uint32_t steps) {
         using ps2x::iop::detail::IopMemory;
-        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif] = devices;
+        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0] = devices;
         const uint32_t opcode = instruction >> 26;
         Effects effects;
-        auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore] = effects;
+        auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start] = effects;
         if ((opcode >= 0x20 && opcode <= 0x26) || (opcode >= 0x28 && opcode <= 0x2b) || opcode == 0x2e) {
             const uint32_t address = cpu.gpr[(instruction >> 21) & 31] +
                 static_cast<uint32_t>(static_cast<int16_t>(instruction));
@@ -121,18 +124,21 @@ public:
             if (dma && opcode == 0x2b && dma->interruptRegister(target)) {
                 dmaWrite = target; dmaPrevious = memory.read32(target); dmaValue = cpu.gpr[(instruction >> 16) & 31];
             }
+            sif0Start = sif0 && opcode == 0x2b && target == 0x1f801528 &&
+                (cpu.gpr[(instruction >> 16) & 31] & 0x01000000u);
         }
         return effects;
     }
     void complete(const Cpu& cpu, const Effects& effects) {
-        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif] = devices;
-        const auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore] = effects;
+        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0] = devices;
+        const auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start] = effects;
         // Temporary staging preserves the upstream core's load-delay behavior
         // without leaving ROM words in the masked hardware map (BIU aliases).
         if (romRestore) memory.write32(romRestore->first, romRestore->second);
         if (sifWrite) memory.write32(sifWrite, sif->read(sifWrite));
         if (!cpu.exception && interruptRead) interrupts->afterRead(memory, interruptRead);
         if (!cpu.exception && dmaWrite) dma->afterWrite(memory, dmaWrite, dmaPrevious, dmaValue);
+        if (!cpu.exception && sif0Start) sif0->start(memory);
         if (cdvd && cdvd->takeInterruptEdge()) memory.setInterruptStatus(memory.interruptStatus() | 4u);
         if (timers) memory.setInterruptStatus(memory.interruptStatus() | timers->advance(1));
     }

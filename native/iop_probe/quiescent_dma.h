@@ -7,8 +7,10 @@
 // may arm and wait for tags; the separate receive engine owns actual completion.
 class QuiescentDma {
     bool m_sif1Receiver{};
+    bool m_sif0Sender{};
 public:
     void enableSif1Receiver() { m_sif1Receiver = true; }
+    void enableSif0Sender() { m_sif0Sender = true; }
     static bool interruptRegister(uint32_t address) {
         return address == 0x1f8010f4 || address == 0x1f801574;
     }
@@ -36,6 +38,12 @@ public:
         if (opcode != 0x23 && opcode != 0x2b) return false;
         if (interruptRegister(address) || priorityRegister(address)) return true;
         if (!channelRegister(address)) return false;
+        if (opcode == 0x2b && address == 0x1f801528 && value == 0x01000701 && m_sif0Sender) {
+            if (!memory || memory->read32(0x1f801524) != 0x20 ||
+                (memory->read32(address) & 0x01000000))
+                throw std::runtime_error("Unreviewed SIF0 source configuration or active rearm");
+            return true;
+        }
         if (opcode == 0x2b && address == 0x1f801538 && value == 0x41000300 && m_sif1Receiver) {
             if (!memory || memory->read32(0x1f801534) != 0x20 ||
                 (memory->read32(address) & 0x01000000))

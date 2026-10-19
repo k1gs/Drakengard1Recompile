@@ -372,9 +372,41 @@ component-harness precondition; full BIOS hardware initialization remains unveri
 Native-run-049 observes DMAE enabled, original DMA ID `1`, a terminal IOP tag for `0x1E340`, and
 32 actual payload bytes. The IOP raises its own IRQ, executes the guest handler, rearms SIF1 and
 attempts SIF0 transmission at PC `0x1B640`, CHCR `0x01000701`, after 5,388,836 instructions.
-That reverse direction remains unsupported, so no successful reply or menu is claimed.
+That run stopped before the reverse direction, which the later experiment below implements.
 
 Primary hardware behavior: [source chains](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/Hw.cpp),
 [SIF1 FIFO/receiver](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/Sif1.cpp),
 [IOP DMA interrupt semantics](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopHw.cpp),
 and [pinned PS2SDK receiver rearm](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/system/sifman/src/sifman.c).
+
+## First actual SIF0 reply
+
+The strict source engine now accepts the observed IOP SIF0 mode, validates global/channel
+enables and walks at most 128 actual RAM tags. Each tag forwards the real quadword starting
+at TADR+8, then advances TADR by 16. Word-aligned tags need not be quadword aligned.
+Payload MADR advances only for real source words. A partial final quadword repeats the matching
+tail positions of the preceding complete FIFO quadword, including tag history for short packets.
+This is the reviewed [SIF0 transfer contract](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/Sif0.cpp)
+and [FIFO padding behavior](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/Sif.h).
+
+The EE receiver supports destination CNT/END tags in owned RAM. It checks live DMA control and
+suspend state, retains STR until all declared quadwords arrive, and publishes channel 5 completion
+through the runtime's existing DMAC consumer. IOP completion clears its own STR and latches the
+channel 2 ICR2 flag and IRQ. Unsupported tags, ranges, modes and unavailable receivers fail closed.
+This bounded synchronous model does not claim cycle accuracy or a general queued SIF FIFO.
+
+Native-run-054 delivered the first 24 source bytes but exposed an unused completion-drain hook;
+the run timed out. Run-055 moved publication to the actual DMAC completion consumer. It observes
+SIF0 source completion, EE channel 5 publication, guest receiver rearm, guest-owned software ready
+register `0x80000002 = 1`, and a third outgoing DMA ID `0x201` with 64 actual SIF1 bytes.
+No host reply backend or direct ready write supplies this result.
+
+The later request sleeps at EE PC `0x31FAA8`; run-055 reaches its 45-second timeout. Existing
+cooperative IOP slices run at SIF interactions, so an EE wait can starve the IOP. The next experiment
+must provide bounded scheduling during that wait, then distinguish a missing service from a
+scheduling gap. Timeout is not a successful boot. There is still no verified native frame/menu,
+gameplay, audio-content or save acceptance.
+
+Synthetic coverage includes 0..8 and 129 source words, both padding histories, multiple tags,
+CNT/END, partial payloads, invalid and truncated RAM, suspend/DMAE, receiver refusal, tag budget,
+pending completion preservation, and an actual IOP instruction storing CHCR before delivery.

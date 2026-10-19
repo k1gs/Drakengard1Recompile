@@ -4,13 +4,15 @@
 #include <span>
 #include <stdexcept>
 #include <utility>
+#include <algorithm>
 
-// Empty SIF0 receiver plus a bounded SIF1 source-chain engine. Only accepted
+// Bounded SIF0 destination and SIF1 source chains. Only accepted
 // source data changes progress/completion; empty receiver reads never clear STR.
 class EeSifDma {
     std::array<uint32_t, 8> registers{};
     uint32_t enableWord{};
     bool sif1Enabled{}, completion{};
+    bool sif0Payload{}, sif0Terminal{}, sif0Completion{};
     static unsigned slot(uint32_t address) {
         const auto base = address & ~0xffu, offset = address & 0xffu;
         if ((base != 0x1000c000 && base != 0x1000c400) || offset > 0x30 || (offset & 15))
@@ -25,6 +27,7 @@ public:
     }
     void enableSif1() { sif1Enabled = true; }
     bool takeCompletion() { return std::exchange(completion, false); }
+    bool takeSif0Completion() { return std::exchange(sif0Completion, false); }
     static bool contains(uint32_t address) {
         return address == 0x1000f520 || address == 0x1000f590 ||
                (address >= 0x1000c000 && address < 0x1000c100) ||
@@ -39,9 +42,42 @@ public:
         const auto index = slot(address);
         if (index == 4 && value != 0 && (!sif1Enabled || (value & 0xffffu) != 0x184))
             throw std::runtime_error("EE SIF1 DMA start requires an actual transfer engine");
-        if (index == 0 && value != 0 && value != 0x184)
+        if (index == 0 && value != 0 && (value & 0xffffu) != 0x184)
             throw std::runtime_error("Unreviewed EE SIF0 receiver mode");
+        if (index <= 3 && sif0Payload)
+            throw std::runtime_error("EE SIF0 cannot reset/rearm a partial payload");
         registers[index] = value;
+    }
+    void feedSif0(std::span<uint8_t> ram, std::span<const uint8_t> quantum, uint32_t control) {
+        if (quantum.size() != 16 || (registers[0] & 0xffffu) != 0x184 ||
+            (enableWord & 0x10000u) || control != 1)
+            throw std::runtime_error("SIF0 requires a ready EE destination chain and reviewed DMAE/control state");
+        if (!sif0Payload) {
+            if (sif0Completion) throw std::runtime_error("EE SIF0 completion must be serviced before the next chain");
+            const auto word = [&](unsigned at) {
+                return uint32_t(quantum[at]) | uint32_t(quantum[at + 1]) << 8 |
+                    uint32_t(quantum[at + 2]) << 16 | uint32_t(quantum[at + 3]) << 24;
+            };
+            const uint32_t header = word(0), destination = word(4), id = (header >> 28) & 7;
+            const uint32_t count = header & 0xffffu;
+            if ((header & 0x0fff0000u) || (id != 1 && id != 7) || (destination & 15) ||
+                destination >= ram.size() || uint64_t(count) * 16 > ram.size() - destination || registers[2])
+                throw std::runtime_error("Unreviewed EE SIF0 destination tag/range/QWC");
+            registers[0] = (registers[0] & 0xffffu) | (header & 0xffff0000u);
+            registers[1] = destination; registers[2] = count;
+            sif0Terminal = id == 7 || (header & 0x80000000u);
+            sif0Payload = count != 0;
+        } else {
+            if (registers[1] >= ram.size() || 16 > ram.size() - registers[1])
+                throw std::runtime_error("EE SIF0 payload exceeds bound RAM");
+            std::copy(quantum.begin(), quantum.end(), ram.begin() + registers[1]);
+            registers[1] += 16; --registers[2];
+            sif0Payload = registers[2] != 0;
+        }
+        if (!sif0Payload && sif0Terminal) {
+            registers[0] &= ~0x100u;
+            sif0Terminal = false; sif0Completion = true;
+        }
     }
     template<class Sink> void pumpSif1(std::span<const uint8_t> ram, Sink sink) {
         if (!(registers[4] & 0x100)) return;

@@ -17,8 +17,15 @@ if(memory_bridged STREQUAL memory_traced)
     message(FATAL_ERROR "Pinned EE memory register-read entry changed")
 endif()
 set(memory_file "${CMAKE_BINARY_DIR}/private_traced_Memory.cpp")
+set(pending_entry "std::vector<uint32_t> PS2Memory::consumeCompletedDmacCauses()\n{")
+string(REPLACE "${pending_entry}"
+    "${pending_entry}\n    if (drakengard::takeFirmwareSif0Completion()) { std::cerr << \"[strict-ee-sif0-complete] queue actual DMAC cause5\\n\"; completeDmacChannel(0x1000c000u, 5u); }"
+    memory_pending "${memory_bridged}")
+if(memory_pending STREQUAL memory_bridged)
+    message(FATAL_ERROR "Pinned EE DMA completion-consumer entry changed")
+endif()
 file(CONFIGURE OUTPUT "${memory_file}"
-    CONTENT "#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"iop_bridge.h\"\n${memory_bridged}" @ONLY)
+    CONTENT "#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"iop_bridge.h\"\n${memory_pending}" @ONLY)
 set_source_files_properties("${memory_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
 get_target_property(runtime_sources ps2_runtime SOURCES)

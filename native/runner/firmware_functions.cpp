@@ -52,7 +52,8 @@ void runFirmwareInitialization(PS2Runtime& runtime, const char* path) {
     // channel, tag, ready flag, IRQ or in-flight transfer state is imported.
     runtime.memory().write32(0x1000e000u, FirmwareInitialDmaControl);
     std::cerr << "[firmware-passive-ee] reviewed reference DMAE/suspend configuration; no channel/IRQ state imported\n";
-    drakengard::bindFirmwareEeRam({ram, PS2_RAM_SIZE}, FirmwareInitialDmaEnable);
+    drakengard::bindFirmwareEeRam({ram, PS2_RAM_SIZE}, FirmwareInitialDmaEnable,
+        [&runtime] { return runtime.memory().read32(0x1000e000u); });
     drakengard::beginFirmwareExperiment();
     R5900Context context;
     context.pc = 0x80006240;

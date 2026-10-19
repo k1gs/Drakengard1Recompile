@@ -19,6 +19,7 @@ class CooperativeIopBridge {
     bool firmwareExperiment() const { return phase == Phase::Firmware || phase == Phase::FirmwareEntry; }
     EeSifDma firmwareDma;
     std::span<uint8_t> eeRam;
+    std::function<uint32_t()> dmaControl;
     unsigned reads{};
     std::array<uint32_t, 3> softwareRegisters{};
     uint32_t busRegister(uint32_t number) {
@@ -27,13 +28,15 @@ class CooperativeIopBridge {
     bool busAddress(uint32_t address) { return address >= 0x1000f200 && address <= 0x1000f260; }
 public:
     bool firmwareGameEntryActive() const { return phase == Phase::FirmwareEntry; }
-    void bindFirmwareEeRam(std::span<uint8_t> ram, uint32_t initialEnableWord) {
+    void bindFirmwareEeRam(std::span<uint8_t> ram, uint32_t initialEnableWord, std::function<uint32_t()> control) {
         if (phase != Phase::Prepared || !eeRam.empty() || ram.size() != 32 * 1024 * 1024)
             throw StrictDeviceError("Firmware EE memory binding requires one fresh 32-MiB runtime");
-        eeRam = ram;
+        if (!control) throw StrictDeviceError("EE DMA control reader is required");
+        eeRam = ram; dmaControl = std::move(control);
         firmwareDma.seedEnableWord(initialEnableWord);
     }
     bool takeFirmwareDmaCompletion() { return firmwareDma.takeCompletion(); }
+    bool takeFirmwareSif0Completion() { return firmwareDma.takeSif0Completion(); }
     void advanceFirmwareIop() {
         if (phase != Phase::FirmwareEntry) throw StrictDeviceError("Firmware DMA call requires experimental game entry");
         boot->advance(4096);
@@ -44,6 +47,9 @@ public:
             throw StrictDeviceError("Game entry requires actual completed firmware IOP startup");
         phase = Phase::FirmwareEntry;
         firmwareDma.enableSif1();
+        boot->bindSif0([this](std::span<const uint8_t> quantum) {
+            firmwareDma.feedSif0(eeRam, quantum, dmaControl());
+        });
     }
     void prepareCooperativeIop(const IopBootInputs& inputs) {
         if (boot) throw std::runtime_error("Cooperative IOP already configured");
@@ -170,9 +176,9 @@ bool firmwareGameEntryActive() {
     std::lock_guard lock(bridgeMutex);
     return bridge.firmwareGameEntryActive();
 }
-void bindFirmwareEeRam(std::span<uint8_t> ram, uint32_t initialEnableWord) {
+void bindFirmwareEeRam(std::span<uint8_t> ram, uint32_t initialEnableWord, std::function<uint32_t()> dmaControl) {
     std::lock_guard lock(bridgeMutex);
-    return bridge.bindFirmwareEeRam(ram, initialEnableWord);
+    return bridge.bindFirmwareEeRam(ram, initialEnableWord, std::move(dmaControl));
 }
 void advanceFirmwareIop() {
     std::lock_guard lock(bridgeMutex);
@@ -181,6 +187,10 @@ void advanceFirmwareIop() {
 bool takeFirmwareDmaCompletion() {
     std::lock_guard lock(bridgeMutex);
     return bridge.takeFirmwareDmaCompletion();
+}
+bool takeFirmwareSif0Completion() {
+    std::lock_guard lock(bridgeMutex);
+    return bridge.takeFirmwareSif0Completion();
 }
 std::optional<uint32_t> firmwareDmaRead(uint32_t address) {
     std::lock_guard lock(bridgeMutex);

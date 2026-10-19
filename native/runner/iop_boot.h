@@ -3,6 +3,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <functional>
 
 namespace drakengard {
 struct IopBootInputs {
@@ -15,6 +16,7 @@ public:
     void advance(uint32_t instructions);
     void enableSif1Receiver();
     void feedSif1(std::span<const uint8_t> quantum);
+    void bindSif0(std::function<void(std::span<const uint8_t>)> sink);
     void enableHostRtc();
     uint32_t readEe(uint32_t address) const;
     void writeEe(uint32_t address, uint32_t value);

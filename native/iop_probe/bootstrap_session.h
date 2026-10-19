@@ -15,6 +15,7 @@ class BootstrapSession {
     QuietInterrupts interrupts;
     QuiescentDma dma;
     Sif1Receiver sif1;
+    Sif0Sender sif0;
     OwnedExceptions exceptions;
     drakengard::IopTimers timers;
     ReadOnlyRom rom;
@@ -32,6 +33,9 @@ public:
     SifRegisters sif;
     void enableSif1Receiver() { dma.enableSif1Receiver(); }
     void feedSif1(std::span<const uint8_t> quantum) { sif1.feed(memory, quantum); }
+    void bindSif0(std::function<void(std::span<const uint8_t>)> sink) {
+        sif0.bind(std::move(sink)); dma.enableSif0Sender();
+    }
     void setClockSource(std::function<drakengard::CdvdCalendar()> source) { cdvd.setClockSource(std::move(source)); }
     BootstrapSession(std::span<const uint8_t> bundle, std::span<const uint8_t> seed,
                      std::vector<uint8_t> romBytes, drakengard::IsoMedia& media,
@@ -79,7 +83,7 @@ public:
         const IopDevices devices{
             .hardware = &hardware, .cache = &cache, .interrupts = &interrupts,
             .dma = &dma, .exceptions = &exceptions, .cdvd = &cdvd,
-            .timers = &timers, .rom = &rom, .sif = &sif};
+            .timers = &timers, .rom = &rom, .sif = &sif, .sif0 = &sif0};
         const auto result = bareCall(memory, entry, gp, argument, start, SourcePool,
                                     devices, &state, instructions);
         if (!result.completed) return;
