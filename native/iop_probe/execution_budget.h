@@ -1,0 +1,36 @@
+#pragma once
+#include <cstdint>
+#include <stdexcept>
+
+// Initial boot, at most one guest reboot, then one post-reboot runtime phase. Counters
+// stay monotonic; an idle loop or device poll cannot renew the deadline.
+class IopExecutionBudget {
+    uint32_t begin{}, end{PhaseLimit};
+    bool rebootAllowed{}, rebootStarted{}, runtimeStarted{};
+public:
+    static constexpr uint32_t PhaseLimit = 8000000;
+    uint32_t deadline() const { return end; }
+    bool inReboot() const { return rebootStarted && !runtimeStarted; }
+    bool inRuntime() const { return runtimeStarted; }
+    void enableGuestReboot() {
+        if (rebootAllowed) throw std::runtime_error("IOP reboot budget already enabled");
+        rebootAllowed = true;
+    }
+    // Called only after a successfully retired, verified original IOPBOOT entry.
+    bool retiredRebootEntry(uint32_t retired) {
+        if (!rebootAllowed) return false;
+        if (rebootStarted || !retired || retired > PhaseLimit)
+            throw std::runtime_error("IOP reboot budget cannot be renewed");
+        rebootStarted = true;
+        begin = retired - 1;
+        end = retired - 1 + PhaseLimit;
+        return true;
+    }
+    // Only a new, successfully retired guest BOOTEND after the reboot may enter runtime.
+    void retiredRebootCompletion(uint32_t retired) {
+        if (!rebootStarted || runtimeStarted || retired <= begin || retired > end)
+            throw std::runtime_error("IOP runtime budget requires a single completed guest reboot");
+        runtimeStarted = true;
+        end = retired + PhaseLimit; // At most three finite phases, below 24M instructions.
+    }
+};

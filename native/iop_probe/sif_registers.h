@@ -1,11 +1,18 @@
 #pragma once
 #include <cstdint>
 #include <stdexcept>
+#include <iostream>
 
 // Directional SIF bus, initially quiescent, following pinned functional register
 // contracts. Only explicit peer writes change flags; completion is not synthesized.
 class SifRegisters {
 public:
+    uint32_t observedBootEnds() const { return m_bootEnds; }
+    void observeRetiredBootEnd() {
+        ++m_bootEnds;
+        std::cerr << "[iop-bootend-store] count=" << m_bootEnds << " flags=0x" << std::hex
+                  << m_iopFlags << std::dec << "; original guest SW retired\n";
+    }
     static uint32_t kernelAddress(uint32_t number) {
         if (number < 1 || number > 4) throw std::runtime_error("Unreviewed SIF kernel register number");
         return 0x1000f200u + (number - 1) * 16;
@@ -68,4 +75,5 @@ public:
     }
 private:
     uint32_t m_eeAddress{}, m_iopAddress{}, m_eeFlags{}, m_iopFlags{}, m_control{}, m_unused{};
+    uint32_t m_bootEnds{};
 };

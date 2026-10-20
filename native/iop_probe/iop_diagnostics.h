@@ -38,6 +38,18 @@ using ps2x::iop::detail::IopCpuState;
               << " instruction=0x" << instruction << " cause=0x" << cpu.cop0[13]
               << " badvaddr=0x" << cpu.cop0[8] << " target=0x" << cpu.pc
               << " status=0x" << cpu.cop0[12] << " epc=0x" << cpu.cop0[14] << std::dec << '\n';
+    for (unsigned index = 0; index < cpu.gpr.size(); ++index)
+        std::cerr << "[stopped-iop-reg] r" << index << "=0x" << std::hex << cpu.gpr[index] << std::dec << '\n';
+    const auto physical = IopMemory::physicalAddress(previous);
+    if (physical >= 32 && physical < IopMemory::RamSize - 64)
+        for (uint32_t at = physical - 32; at < physical + 64; at += 4)
+            std::cerr << "[stopped-iop-code] address=0x" << std::hex << at << " word=0x" << memory.read32(at)
+                      << std::dec << '\n';
+    const auto stack = IopMemory::physicalAddress(cpu.gpr[29]);
+    if (memory.ownsRamRange(stack, 64))
+        for (uint32_t n = 0; n < 64; n += 4)
+            std::cerr << "[stopped-iop-stack] address=0x" << std::hex << stack + n << " word=0x"
+                      << memory.read32(stack + n) << std::dec << '\n';
     if (cpu.exception)
         for (uint32_t at = 0x80; at < 0xa0; at += 4)
             std::cerr << "[exception-vector] address=0x" << std::hex << at << " word=0x"

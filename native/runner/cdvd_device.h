@@ -17,6 +17,10 @@ public:
     uint8_t readRegister(uint8_t index);
     void writeRegister(uint8_t index, uint8_t value);
     size_t drainUserSectors(std::span<uint8_t> destination);
+    size_t drainDmaSectors(std::span<uint8_t> destination);
+    size_t dmaSectorSize() const { return m_sectorSize; }
+    bool pendingToc() const { return m_toc; }
+    size_t drainToc(std::span<uint8_t> destination);
     bool takeInterruptEdge();
     void setClockSource(std::function<CdvdCalendar()> source) { m_clock = std::move(source); }
     size_t pendingBytes() const { return m_payload.size() - m_position; }
@@ -30,10 +34,14 @@ private:
     std::function<CdvdCalendar()> m_clock;
     uint8_t m_ncommand{}, m_scommand{}, m_error{}, m_interrupt{}, m_status{0x0a}, m_traySticky{};
     uint8_t m_howTo{};
+    uint8_t m_spindle{};
+    bool m_spinning{};
     uint32_t m_sector{};
     bool m_edge{};
     uint64_t m_actualSectors{};
     std::vector<uint8_t> m_nparameters, m_sparameters, m_response, m_payload;
     size_t m_responsePosition{}, m_position{};
+    size_t m_sectorSize{2048};
+    bool m_toc{};
 };
 }

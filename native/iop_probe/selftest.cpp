@@ -1,5 +1,6 @@
 #include "bare_call.h"
 #include "sif1_receiver.h"
+#include "unaligned_load_tests.h"
 #include <cstring>
 #include <initializer_list>
 
@@ -21,6 +22,7 @@ template<class Action> void rejects(Action action, const std::string& reason) {
 
 int main() {
     try {
+        iop_tests::unalignedLoadPairs();
         IopMemory memory;
         code(memory, {0x2402002a, 0x03e00008, 0});
         auto result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030);
@@ -277,6 +279,25 @@ int main() {
             }
             if (!result.completed || result.value != 0x8c820000 || memory.interruptStatus())
                 throw std::runtime_error("Sliced ROM instruction/data load or delay slot failed");
+            if (romState.budget.inReboot()) throw std::runtime_error("Default ROM call acquired a reboot budget");
+            {
+                code(memory, {0x3c08bfc4, 0x3508a000, 0x01000008, 0});
+                BareCallState epoch;
+                result = bareCall(memory, 0x1000, 0, 0xbfc4a000, 0x1000, 0x1100,
+                    {.rom = &codeRom}, &epoch, 4);
+                if (result.completed || epoch.cpu.pc != 0xbfc4a000)
+                    throw std::runtime_error("Synthetic ROM handoff did not execute the real jump/delay slot");
+                epoch.budget.enableGuestReboot();
+                epoch.instructions = IopExecutionBudget::PhaseLimit - 1; // Synthetic elapsed-counter boundary fixture.
+                result = bareCall(memory, 0x1000, 0, 0xbfc4a000, 0x1000, 0x1100,
+                    {.rom = &codeRom}, &epoch, 1);
+                if (result.completed || result.instructions != 8000000 || epoch.budget.deadline() != 15999999)
+                    throw std::runtime_error("Retired original ROM entry failed bounded monotonic budget handoff");
+                result = bareCall(memory, 0x1000, 0, 0xbfc4a000, 0x1000, 0x1100,
+                    {.rom = &codeRom}, &epoch, 3);
+                if (!result.completed || result.value != 0x8c820000 || result.instructions != 8000003)
+                    throw std::runtime_error("Reboot budget reset CPU state or retired instruction accounting");
+            }
             instruction(0, 0xac800000); // Store to ROM must fail before modifying the owned ROM bytes.
             ReadOnlyRom storeRom(romBytes); storeRom.enableIopBootCode();
             rejects([&] { bareCall(memory, 0xbfc4a000, 0, 0xbfc4a000, 0, 0x200000,
@@ -486,6 +507,17 @@ int main() {
         result = bareCall(memory, 0x1000, 0, 0xbd000030, 0x1000, 0x1100,
             {.sif = &sif});
         if (result.value != 0x50000) throw std::runtime_error("SIF set flags were overwritten by CPU SW backing storage");
+        {
+            SifRegisters observed; code(memory, {0x3c020004, 0xac820000, 0x03e00008, 0});
+            const auto writeBootEnd = [&] { return bareCall(memory, 0x1000, 0, 0xbd000030, 0x1000, 0x1100,
+                {.sif = &observed}); };
+            writeBootEnd(); writeBootEnd();
+            if (observed.observedBootEnds() != 1 || observed.readEe(0x1000f230) != 0x40000)
+                throw std::runtime_error("BOOTEND observer changed flags or counted an already-set bit");
+            observed.writeEe(0x1000f230, 0x40000); writeBootEnd();
+            if (observed.observedBootEnds() != 2 || memory.interruptStatus())
+                throw std::runtime_error("BOOTEND observer missed a real rising guest store or invented an IRQ");
+        }
         memory.reset(); SifRegisters peerBus; BareCallState waiting;
         code(memory, {0x3c08bd00, 0x8d020020, 0, 0x1040fffd, 0, 0x03e00008, 0});
         const auto poll = [&] {

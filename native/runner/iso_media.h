@@ -23,6 +23,7 @@ public:
     bool readSectors(uint32_t lsn, uint32_t count, std::span<uint8_t> destination);
     std::optional<IsoFile> find(const std::string& path) const;
     uint32_t sectors() const { return m_sectors; }
+    bool singleVolumeImage() const { return uint64_t(m_sectors) * 2048 == m_size; }
     size_t fileCount() const { return m_files.size(); }
 private:
     void readBytes(uint64_t offset, std::span<uint8_t> data);

@@ -798,3 +798,87 @@ and return in seven instructions; its default profile refuses the same alias. Re
 110 and 111 preserve isolated initial BOOTEND (exit 5) and ordinary bounded execution (exit 6),
 with no alias enabled in those modes. All four runs finish without timeout and verify their
 inputs; changed BIOS and both ROM1 companion cases remain refused on the final executable.
+
+## Local experiment: completed guest reboot and subsequent DVD loading
+
+The old single budget included both initial IOP startup and the subsequent game-requested reboot.
+The observed LOADCORE fill makes progress from `0x3CC88` at instruction 8,000,000 to `0x100188`
+at 9,000,000 and then exits that loop. No host fill or CPU state replacement is needed.
+`IopExecutionBudget` now permits three finite phases: initial startup, one explicitly enabled
+reboot after the verified original IOPBOOT entry retires, and runtime after a second actual
+guest BOOTEND rising store retires. Each has an 8,000,000-instruction allowance; the same
+monotonic counter stays below 24,000,000. No idle poll, repeated BOOTEND or second reboot
+can renew it. Non-entry modes retain the original budget.
+
+The actual ROM entry is at instruction 6,032,020, giving a reboot deadline of 14,032,020.
+The second BOOTEND store retires at 13,048,540, giving a runtime deadline of 21,048,540.
+The observer counts successful CPU stores without altering SIF flags or inventing an IRQ.
+This establishes the requested IOP reboot and new post-reboot traffic; it does not establish
+a rendered menu or gameplay.
+
+The DVD device now retains the full HOWTO byte, as the pinned functional controller does,
+and derives SPEED from its accepted spindle setting and spinning state. DMA geometry is
+checked against whole 512-word user sectors or 516-word reference DVD packets. The pending
+device format resolves geometries that can represent both. Unsupported partial sectors,
+destinations, formats and active rearms remain refused.
+
+This new DVD subset follows the pinned
+[CDVD command/transfer implementation](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/CDVD/CDVD.cpp)
+and [ISO provider](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/CDVD/CDVDisoReader.cpp).
+It requires equal primary-volume and file sector counts; the verified input has 2,170,432
+of each. Command `0x08` constructs the reference 2,064-byte single-layer packet from the
+actual 2,048 ISO bytes, a derived sector ID and the reference's zero IED/CPR_MAI/EDC fields.
+These are explicitly functional reference packets, not physical raw-sector reconstruction,
+physical CRC validation, encryption or authentication support.
+
+Command `0x09`, parameter zero, has a distinct contract: copy a 2,048-byte reference DVD
+structure with its last LSN derived from the actual image. It completes DMA3 without advancing
+MADR/BCR, matching the pinned TOC path; the following 16 bytes remain untouched. It is not
+counted as an ISO-sector read. Completion still needs the actual structure copy and DMA gates.
+
+At the 2026-10-20 checkpoint, the clean native path completed 34 DMA transfers: 136 initial user sectors, another 61 user
+sectors in reference DVD packets, and one TOC structure, totaling 406,480 DMA bytes. The next
+stop is an actual address-error store at instruction 14,573,618: PC `0x11978`, bad address
+`0x11`. A private bounded CPU history and RAM snapshot identify the caller as the MCMAN module
+at text base `0x5A830`, entry `0x5A9A8`. Its original HI16, LO16 and 26-bit call relocations at
+offsets `0x194`, `0x198` and `0x19C` are present in the exact supplied IRX, but their runtime
+words still match the unrelocated source. The call at `0x5A9CC` therefore reaches `0x11954`
+inside THREADMAN instead of the relocated local target. Why the guest loader reaches this
+state was unresolved at that checkpoint; the next section records its cause. No pointer, import, relocated code or exception handler
+has been supplied by the host to conceal the error.
+
+Tests cover finite phase transitions and refusals, real CPU ROM retirement with a monotonic
+counter, successful BOOTEND rising stores, all HOWTO bytes preserving pending data and IRQs,
+DVD framing and block geometries, exact TOC bytes, untouched TOC tail, format mismatches and
+single-volume refusal. Temporary address-specific instrumentation and snapshot writing are
+removed from the source; evidence stays ignored. Native graphics/menu/gameplay, audio-content
+and saves remain unverified.
+
+## Local experiment: unaligned load merge and complete MCMAN intake (2026-10-21)
+
+The pinned CPU merged each LWL/LWR instruction with the old architectural register, losing
+the preceding partial load that was still pending. The MIPS I exception for adjacent unaligned
+loads requires forwarding that pending merge value while retaining the final load delay; see
+the IDT R30xx Family Software Reference Manual, section 2, pages 2-6/2-7
+([manual](https://manuals.plus/m/921bbff6fec5c6fb953a0fefbc4c62e99cdd1d422ad8c6dd2d73892a23d8bcaa)).
+The source overlay now changes only those two merge operands. Effective-address and ordinary
+instruction operands keep their previous semantics. The pinned tools checkout remains clean;
+configuration refuses an unexpected replacement count.
+
+A synthetic regression failed before the fix and passes after it for all four byte alignments
+and both instruction orders. It verifies byte-accurate merging, the pending first load and the
+delay after the second load using the actual CPU core, with no game data in the fixture.
+
+Controlled native file-call observations show the earlier end-of-file seek returning `0x76A5`
+(30,373), followed by a read of that same truncated length. With the CPU merge corrected, both
+return the full `0x176A5` (95,909). The original guest LOADCORE then reaches MCMAN's actual
+relocation sections with 2,647 text, 23 rodata and 31 data relocation entries. The host does
+not relocate the module, override its arguments or replace its calls.
+
+The cleaned native path advances to 41 DMA transfers and 509,680 bytes: 136 initial user sectors,
+111 user sectors in reference DVD packets and one 2,048-byte TOC. The previous MCMAN/THREADMAN
+address error is passed. The next explicit stop is instruction 15,042,867, PC `0x868A4`, SW
+`0xACC20000`, attempting value `0xBF900000` at `0xBF801404`, the SPU bus base configuration
+register. Its supported values remain restricted; this observation does not establish SPU audio.
+Temporary loader/file-call instrumentation is removed. Rendered graphics/menu, gameplay,
+audio-content, saves and recovery remain unverified.

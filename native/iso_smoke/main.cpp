@@ -85,6 +85,16 @@ int main() {
         const auto image = fixture(); write("iso-fixture.iso", image);
         drakengard::IsoMedia media("iso-fixture.iso");
         checkCdvdDma(media, image);
+        {
+            auto trailing = image; trailing.resize(image.size() + Sector);
+            write("iso-trailing-fixture.iso", trailing);
+            drakengard::IsoMedia extra("iso-trailing-fixture.iso");
+            check(!extra.singleVolumeImage() && media.singleVolumeImage());
+            drakengard::CdvdDevice drive(extra); drive.writeRegister(5, 0);
+            bool refused = false;
+            try { drive.writeRegister(4, 9); } catch (const std::runtime_error&) { refused = true; }
+            check(refused && !drive.pendingBytes() && !drive.takeInterruptEdge());
+        }
         check(media.sectors() == 32 && media.fileCount() == 2);
         auto file = media.find("cdrom0:\\test.bin;1");
         check(file && file->lsn == 24 && file->size == 6);
@@ -132,12 +142,13 @@ int main() {
         for (auto byte : {0, 0, 0}) device.writeRegister(5, uint8_t(byte));
         device.writeRegister(4, 6);
         check(device.pendingBytes() == 4096 && device.actualSectorsRead() == 2);
+        check(device.readRegister(0x13) == 0x12);
         device.writeRegister(6, 0x80);
+        device.writeRegister(6, 0x84);
         check(device.readRegister(6) == 0 && device.pendingBytes() == 4096 &&
               device.actualSectorsRead() == 2 && !device.takeInterruptEdge());
-        bool howToRejected = false;
-        try { device.writeRegister(6, 1); } catch (const std::runtime_error&) { howToRejected = true; }
-        check(howToRejected && device.readRegister(6) == 0 && device.pendingBytes() == 4096);
+        for (unsigned value = 0; value < 256; ++value) device.writeRegister(6, uint8_t(value));
+        check(device.readRegister(6) == 0 && device.pendingBytes() == 4096);
         check(device.readRegister(5) == 0x80 && device.readRegister(8) == 0 && !device.takeInterruptEdge());
         device.writeRegister(0x16, 5);
         check(device.readRegister(0x0b) == 0 && device.readRegister(0x17) == 0);

@@ -35,8 +35,20 @@ string(REPLACE "cpu.cop0[rd] = cpu.gpr[rt];"
 if(identified_cpu STREQUAL isolated_cpu)
     message(FATAL_ERROR "Pinned IOP read-only CP0.PRId contract changed")
 endif()
+# MIPS I unaligned loads merge against the preceding pending destination value.
+# The pair needs no intervening NOP; the second load retains its normal delay.
+# Forward only the merge operand, never the effective-address register or other
+# instruction operands. Keep the pinned checkout unchanged.
+string(REGEX MATCHALL "const uint32_t old = cpu.gpr\\[rt\\]" merge_operands "${identified_cpu}")
+list(LENGTH merge_operands merge_operand_count)
+if(NOT merge_operand_count EQUAL 2)
+    message(FATAL_ERROR "Pinned IOP LWL/LWR merge operand contract changed")
+endif()
+string(REPLACE "const uint32_t old = cpu.gpr[rt];"
+    "const uint32_t old = cpu.pendingLoad && cpu.pendingLoadReg == rt ? cpu.pendingLoadValue : cpu.gpr[rt];"
+    merged_cpu "${identified_cpu}")
 file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/private_isolated_cpu.cpp"
-    CONTENT "${identified_cpu}" @ONLY)
+    CONTENT "${merged_cpu}" @ONLY)
 add_library(${target} STATIC
     "${IOP_ROOT}/src/ps2_path.cpp"
     "${IOP_ROOT}/src/emulator/core/iop_memory.cpp"

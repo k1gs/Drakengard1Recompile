@@ -1,6 +1,7 @@
 #include "read_only_rom.h"
 #include "sif_registers.h"
 #include "ee_sif_dma.h"
+#include "execution_budget.h"
 #include <iostream>
 #include <algorithm>
 #include <vector>
@@ -29,6 +30,28 @@ int main() {
         checkSio2Control();
         checkRamCode();
         checkGuestImports();
+        {
+            IopExecutionBudget budget;
+            refuses([&] { budget.retiredRebootCompletion(1); });
+            require(!budget.retiredRebootEntry(6000001) && budget.deadline() == 8000000);
+            budget.enableGuestReboot();
+            require(budget.deadline() == 8000000 && !budget.inReboot());
+            refuses([&] { budget.enableGuestReboot(); });
+            refuses([&] { budget.retiredRebootEntry(0); });
+            refuses([&] { budget.retiredRebootEntry(8000001); });
+            require(budget.retiredRebootEntry(6032021) && budget.deadline() == 14032020 && budget.inReboot());
+            refuses([&] { budget.retiredRebootEntry(7000000); });
+            require(budget.deadline() == 14032020);
+            refuses([&] { budget.retiredRebootCompletion(6032020); });
+            refuses([&] { budget.retiredRebootCompletion(14032021); });
+            budget.retiredRebootCompletion(12000001);
+            require(budget.deadline() == 20000001 && budget.inRuntime() && !budget.inReboot());
+            refuses([&] { budget.retiredRebootCompletion(13000000); });
+            refuses([&] { budget.retiredRebootEntry(7000000); });
+            IopExecutionBudget edge; edge.enableGuestReboot();
+            require(edge.retiredRebootEntry(8000000) && edge.deadline() == 15999999);
+            edge.retiredRebootCompletion(15999999); require(edge.deadline() == 23999999);
+        }
         refuses([] { ReadOnlyRom wrong(std::vector<uint8_t>(16)); });
         std::vector<uint8_t> bytes(0x400000);
         bytes[0] = 0x78; bytes[1] = 0x56; bytes[2] = 0x34; bytes[3] = 0x92;

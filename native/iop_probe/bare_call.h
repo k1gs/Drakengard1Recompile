@@ -4,12 +4,14 @@
 #include "imports/iop_imports.h"
 #include "iop_data_bus.h"
 #include "iop_diagnostics.h"
+#include "execution_budget.h"
 
 struct BareCallResult { uint32_t value{}, instructions{}; bool completed{true}; };
 struct BareCallState {
     ps2x::iop::detail::IopCpuState cpu;
     const ps2x::iop::detail::IopMemory* memory{};
     uint32_t instructions{}, codeBegin{}, codeEnd{}, entry{}, gp{}, argument{};
+    IopExecutionBudget budget;
 };
 
 // Execute owned RAM code or an explicitly enabled, reviewed ROM code window.
@@ -43,10 +45,12 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
         throw std::runtime_error("IOP resume context changed its memory or call contract");
     }
     const uint32_t sliceBegin = state.instructions;
-    // A legitimate 2-MiB word fill alone uses ~2.62M instructions (five per word).
-    // Keep a finite bound that also permits the following module bootstrap work.
-    for (auto& steps = state.instructions; steps < 8000000 && steps - sliceBegin < sliceInstructions; ++steps) {
+    for (auto& steps = state.instructions; steps < state.budget.deadline() && steps - sliceBegin < sliceInstructions; ++steps) {
         if (cpu.pc == ReturnBoundary) return {cpu.gpr[2], steps};
+        if ((state.budget.inReboot() || state.budget.inRuntime()) && steps % 1000000 == 0)
+            std::cerr << (state.budget.inRuntime() ? "[iop-runtime-progress] instructions=" : "[iop-reboot-progress] instructions=")
+                      << steps << " pc=0x" << std::hex << cpu.pc
+                      << " a0=0x" << cpu.gpr[4] << " a1=0x" << cpu.gpr[5] << std::dec << '\n';
         if (interrupts) {
             const bool pending = interrupts->pending(memory);
             if (pending) cpu.cop0[13] |= 0x400u;
@@ -89,8 +93,18 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
         const uint32_t previous = cpu.pc;
         const bool running = core.executeInstruction(cpu);
         bus.complete(cpu, effects);
-        if (romCode && previous == 0xbfc4a000 && !cpu.exception)
+        if (!cpu.exception && effects.bootEndRise && state.budget.inReboot() &&
+            devices.sif->observedBootEnds() == 2) {
+            state.budget.retiredRebootCompletion(steps + 1);
+            std::cerr << "[iop-runtime-budget] begin=" << steps + 1 << " deadline=" << state.budget.deadline()
+                      << "; actual post-reboot BOOTEND retired\n";
+        }
+        if (romCode && previous == 0xbfc4a000 && !cpu.exception && running && !cpu.stopped && !cpu.yielded) {
             std::cerr << "[iop-rom-entry] pc=0xbfc4a000 first instruction retired; steps=" << steps << '\n';
+            if (state.budget.retiredRebootEntry(steps + 1))
+                std::cerr << "[iop-reboot-budget] begin=" << steps << " deadline=" << state.budget.deadline()
+                          << "; monotonic counter, single guest reboot phase\n";
+        }
         if (interrupts) {
             if (interrupts->pending(memory)) cpu.cop0[13] |= 0x400u;
             else cpu.cop0[13] &= ~0x400u;
@@ -103,6 +117,6 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
         }
     }
     if (cpu.pc == ReturnBoundary) return {cpu.gpr[2], state.instructions};
-    if (state.instructions < 8000000) return {0, state.instructions, false};
+    if (state.instructions < state.budget.deadline()) return {0, state.instructions, false};
     iop_diagnostics::exhaustedBudget(memory, cpu, devices.cache ? devices.cache->isolatedStores : 0);
 }

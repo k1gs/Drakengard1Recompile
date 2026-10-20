@@ -1,4 +1,5 @@
 #include "cdvd_device.h"
+#include "dvd_frame.h"
 #include <algorithm>
 #include <iostream>
 #include <sstream>
@@ -31,6 +32,7 @@ uint8_t CdvdDevice::readRegister(uint8_t index) {
     case 0x0a: return m_status;
     case 0x0b: return m_traySticky;
     case 0x0f: return 0x14; // Explicit virtual PS2 DVD media type.
+    case 0x13: return m_spinning ? uint8_t(((m_spindle & 0x3f) ? (m_spindle & 0x3f) : 3) + 0xf) : 0;
     case 0x16: return m_scommand;
     case 0x17: return m_responsePosition < m_response.size() ? 0 : 0x40;
     case 0x18:
@@ -49,8 +51,9 @@ void CdvdDevice::writeRegister(uint8_t index, uint8_t value) {
         deviceCheck(m_nparameters.size() < 16, "CDVD N-command parameter FIFO full");
         m_nparameters.push_back(value); return;
     case 0x06:
-        deviceCheck(value == 0x80, "Unsupported CDVD HOWTO write profile");
-        m_howTo = value; return; // Write latch; reads at 0x06 still consume ERROR.
+        // Pinned functional controller retains all eight HOWTO bits without
+        // changing transfer state. Reads at this offset still consume ERROR.
+        m_howTo = value; return;
     case 0x08: m_interrupt &= ~value; return;
     case 0x16: scommand(value); return;
     case 0x17:
@@ -77,25 +80,51 @@ void CdvdDevice::ncommand(uint8_t command) {
         }
         if (command == 1 || command == 3) m_status = 0;
         else if (command == 2 || command == 4) m_status = 0x0a;
+        if (command == 1 || command == 3) m_spinning = false;
+        else if (command == 2) m_spinning = true;
         if (command == 2) m_sector = 0;
         complete();
     } else if (command == 5) {
         deviceCheck(args.size() == 4, "Invalid CDVD logical-seek parameters");
         const auto sector = deviceWord(args, 0);
         deviceCheck(sector < m_image.sectors(), "CDVD seek exceeds actual image");
-        m_sector = sector; m_status = 0x0a; complete();
-    } else if (command == 6) {
+        m_sector = sector; m_status = 0x0a; m_spinning = true; complete();
+    } else if (command == 9) {
+        deviceCheck(args.size() == 1 && args[0] == 0 && m_image.singleVolumeImage(),
+            "Only reference single-volume DVD TOC command zero supported");
+        std::array<uint8_t, 2048> toc;
+        referenceDvdToc(m_image.sectors(), toc);
+        m_payload.assign(toc.begin(), toc.end()); m_position = 0; m_toc = true; m_status = 6;
+        std::cerr << "[cdvd-reference-toc] sectors=" << m_image.sectors() << " bytes=" << m_payload.size() << '\n';
+    } else if (command == 6 || command == 8) {
         deviceCheck(args.size() == 11 && args[10] == 0, "Only actual 2048-byte CDVD user-sector reads supported");
         const uint32_t sector = deviceWord(args, 0), count = deviceWord(args, 4);
         deviceCheck(count && uint64_t(count) * 2048 <= 32 * 1024 * 1024, "CDVD read count exceeds supported bound");
+        deviceCheck((args[9] & 0x7f) <= 3, "Unsupported virtual DVD spindle profile");
+        const bool dvd = command == 8;
+        if (dvd) {
+            deviceCheck(m_image.singleVolumeImage(), "Reference DVD frames require a complete single-volume ISO");
+            deviceCheck((args[9] & 0x7f) <= 3 && uint64_t(sector) + count <= 0xfd0000u,
+                "Unsupported reference DVD spindle or frame range");
+        }
         std::vector<uint8_t> bytes(size_t(count) * 2048);
         deviceCheck(m_image.readSectors(sector, count, bytes), "CDVD read exceeds actual image; no zero padding");
+        if (dvd) {
+            std::vector<uint8_t> frames(size_t(count) * 2064);
+            for (uint32_t n = 0; n < count; ++n)
+                referenceDvdFrame(sector + n, std::span(bytes).subspan(size_t(n) * 2048, 2048),
+                    std::span(frames).subspan(size_t(n) * 2064, 2064));
+            bytes = std::move(frames);
+        }
+        m_sectorSize = dvd ? 2064 : 2048;
+        m_spindle = (args[9] & 0x3f) ? args[9] : uint8_t((args[9] & 0x80) | 3);
+        m_spinning = true;
         m_payload = std::move(bytes); m_position = 0; m_sector = sector; m_status = 6;
         m_actualSectors += count;
-        std::cerr << "[cdvd-user-read] lsn=" << sector << " sectors=" << count
+        std::cerr << (dvd ? "[cdvd-reference-dvd-read] lsn=" : "[cdvd-user-read] lsn=") << sector << " sectors=" << count
                   << " bytes=" << m_payload.size() << '\n';
     } else {
-        // Raw 2064-byte DVD frames, key/TOC/auth commands are not synthesized from plain ISO data.
+        // Physical raw DVD, key/TOC/auth commands have no generic ISO fallback.
         unknownDevice("N-command", command, args);
     }
     m_ncommand = command; m_nparameters.clear();
@@ -138,13 +167,27 @@ void CdvdDevice::scommand(uint8_t command) {
 }
 
 size_t CdvdDevice::drainUserSectors(std::span<uint8_t> destination) {
-    deviceCheck(!destination.empty() && destination.size() % 2048 == 0 && destination.size() <= pendingBytes(),
+    deviceCheck(m_sectorSize == 2048, "User-sector DMA cannot consume framed DVD data");
+    return drainDmaSectors(destination);
+}
+
+size_t CdvdDevice::drainDmaSectors(std::span<uint8_t> destination) {
+    deviceCheck(!m_toc, "DVD TOC requires its separate transfer contract");
+    deviceCheck(!destination.empty() && destination.size() % m_sectorSize == 0 && destination.size() <= pendingBytes(),
                 "CDVD DMA must consume actual complete pending sectors");
     std::copy_n(m_payload.begin() + m_position, destination.size(), destination.begin());
-    m_position += destination.size(); m_sector += static_cast<uint32_t>(destination.size() / 2048);
+    m_position += destination.size(); m_sector += static_cast<uint32_t>(destination.size() / m_sectorSize);
     if (!pendingBytes()) {
         m_payload.clear(); m_position = 0; m_status = 0x0a; complete();
     }
+    return destination.size();
+}
+
+size_t CdvdDevice::drainToc(std::span<uint8_t> destination) {
+    deviceCheck(m_toc && destination.size() == 2048 && pendingBytes() == 2048,
+        "DVD TOC DMA requires its complete actual reference structure");
+    std::copy(m_payload.begin(), m_payload.end(), destination.begin());
+    m_payload.clear(); m_position = 0; m_toc = false; m_status = 0x0a; complete();
     return destination.size();
 }
 

@@ -46,6 +46,7 @@ public:
         pio.enable(); cache.enableRebootControls(); rom.enableIopBootCode(); rom.enableAbsentRom1();
         sio2.enable(); dma.enableCdvdReceiver();
         ramCode = makeUdnlCodeProfile(rom, start, SourcePool);
+        state.budget.enableGuestReboot();
     }
     void setClockSource(std::function<drakengard::CdvdCalendar()> source) { cdvd.setClockSource(std::move(source)); }
     BootstrapSession(std::span<const uint8_t> bundle, std::span<const uint8_t> seed,

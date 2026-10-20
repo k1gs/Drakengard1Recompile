@@ -54,6 +54,7 @@ public:
         std::optional<PioWrite> pioWrite;
         std::optional<CoherentCache::ControlWrite> cpuControl;
         bool sio2Write{};
+        bool bootEndRise{};
     };
     IopDataBus(Memory& memory, const IopDevices& devices) : memory(memory), devices(devices) {}
     Effects prepare(const Cpu& cpu, uint32_t instruction, uint32_t steps) {
@@ -61,7 +62,7 @@ public:
         const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio, sio2, ramCode, cdvdDma] = devices;
         const uint32_t opcode = instruction >> 26;
         Effects effects;
-        auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite, cpuControl, sio2Write] = effects;
+        auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite, cpuControl, sio2Write, bootEndRise] = effects;
         if ((opcode >= 0x20 && opcode <= 0x26) || (opcode >= 0x28 && opcode <= 0x2b) || opcode == 0x2e) {
             const uint32_t address = cpu.gpr[(instruction >> 21) & 31] +
                 static_cast<uint32_t>(static_cast<int16_t>(instruction));
@@ -117,6 +118,8 @@ public:
             sio2Write = sio2Access && opcode == 0x2b;
             if (sifAccess) {
                 if (opcode == 0x2b) {
+                    bootEndRise = target == 0x1d000030 && (cpu.gpr[(instruction >> 16) & 31] & 0x40000u) &&
+                        !(sif->read(target) & 0x40000u);
                     sif->write(target, cpu.gpr[(instruction >> 16) & 31]);
                     sifWrite = target;
                 }
@@ -150,12 +153,13 @@ public:
     }
     void complete(const Cpu& cpu, const Effects& effects) {
         const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio, sio2, ramCode, cdvdDma] = devices;
-        const auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite, cpuControl, sio2Write] = effects;
+        const auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite, cpuControl, sio2Write, bootEndRise] = effects;
         // Temporary staging preserves the upstream core's load-delay behavior
         // without leaving ROM words in the masked hardware map (BIU aliases).
         if (romRestore) memory.write32(romRestore->first, romRestore->second);
         if (cpuControl) cache->completeControl(memory, *cpuControl, cpu.exception);
         if (sifWrite) memory.write32(sifWrite, sif->read(sifWrite));
+        if (!cpu.exception && bootEndRise) sif->observeRetiredBootEnd();
         if (!cpu.exception && interruptRead) interrupts->afterRead(memory, interruptRead);
         if (!cpu.exception && dmaWrite) dma->afterWrite(memory, dmaWrite, dmaPrevious, dmaValue);
         if (!cpu.exception && sif0Start) sif0->start(memory);
