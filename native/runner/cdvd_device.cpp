@@ -29,7 +29,7 @@ uint8_t CdvdDevice::readRegister(uint8_t index) {
     case 0x07: return 0;
     case 0x08: return m_interrupt;
     case 0x0a: return m_status;
-    case 0x0b: return 0; // The indexed virtual image has a closed, unchanged tray.
+    case 0x0b: return m_traySticky;
     case 0x0f: return 0x14; // Explicit virtual PS2 DVD media type.
     case 0x16: return m_scommand;
     case 0x17: return m_responsePosition < m_response.size() ? 0 : 0x40;
@@ -48,6 +48,9 @@ void CdvdDevice::writeRegister(uint8_t index, uint8_t value) {
     case 0x05:
         deviceCheck(m_nparameters.size() < 16, "CDVD N-command parameter FIFO full");
         m_nparameters.push_back(value); return;
+    case 0x06:
+        deviceCheck(value == 0x80, "Unsupported CDVD HOWTO write profile");
+        m_howTo = value; return; // Write latch; reads at 0x06 still consume ERROR.
     case 0x08: m_interrupt &= ~value; return;
     case 0x16: scommand(value); return;
     case 0x17:
@@ -101,6 +104,13 @@ void CdvdDevice::scommand(uint8_t command) {
     if (command == 3 && m_sparameters.size() == 1 && m_sparameters[0] == 0 && m_mecha) {
         // Caller-supplied reference device property; no hardcoded SCE/physical revision.
         m_response.assign(m_mecha->begin(), m_mecha->end()); m_responsePosition = 0;
+    } else if (command == 5 && m_sparameters.empty()) {
+        // Acknowledge tray detection by latching the current closed-tray bit.
+        // Only the fixed, closed ISO drive is modeled; this does not open/close
+        // a tray, complete pending sectors or acknowledge a command IRQ.
+        deviceCheck(!(m_status & 1u), "CDVD tray detection requires the closed virtual-drive profile");
+        m_traySticky = m_status & 1u;
+        m_response = {0}; m_responsePosition = 0;
     } else if (command == 8 && m_sparameters.empty() && m_clock) {
         const auto date = m_clock();
         deviceCheck(date.year >= 2000 && date.year <= 2099 && date.month >= 1 && date.month <= 12 &&

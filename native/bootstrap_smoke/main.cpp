@@ -7,6 +7,8 @@
 void checkSif0();
 void checkPioCapture();
 void checkSio2Control();
+void checkRamCode();
+void checkGuestImports();
 
 namespace {
 void require(bool value) { if (!value) throw std::runtime_error("Bootstrap interface check failed"); }
@@ -25,11 +27,16 @@ int main() {
         checkSif0();
         checkPioCapture();
         checkSio2Control();
+        checkRamCode();
+        checkGuestImports();
         refuses([] { ReadOnlyRom wrong(std::vector<uint8_t>(16)); });
         std::vector<uint8_t> bytes(0x400000);
         bytes[0] = 0x78; bytes[1] = 0x56; bytes[2] = 0x34; bytes[3] = 0x92;
         bytes.back() = 0xa5;
         ReadOnlyRom rom(std::move(bytes));
+        require(rom.image(0, 4)[0] == 0x78);
+        refuses([&] { rom.image(0x3fffff, 2); });
+        refuses([&] { rom.image(size_t(-1), 0); });
         require(!rom.ownsCode(0xbfc4a000));
         rom.enableIopBootCode();
         refuses([&] { rom.enableIopBootCode(); });

@@ -28,7 +28,8 @@ private:
     IsoMedia& m_image;
     std::optional<std::array<uint8_t, 4>> m_mecha;
     std::function<CdvdCalendar()> m_clock;
-    uint8_t m_ncommand{}, m_scommand{}, m_error{}, m_interrupt{}, m_status{0x0a};
+    uint8_t m_ncommand{}, m_scommand{}, m_error{}, m_interrupt{}, m_status{0x0a}, m_traySticky{};
+    uint8_t m_howTo{};
     uint32_t m_sector{};
     bool m_edge{};
     uint64_t m_actualSectors{};

@@ -646,3 +646,64 @@ initialization (run-094) still reaches actual guest BOOTEND with exit 5; ordinar
 retains its fixed-budget exit 6. These non-entry modes do not enable ROM1/SIO2 entry devices.
 All runs verify their inputs and finish without timeout. Separate negative checks still reject
 a changed BIOS before guest execution and either ROM1 companion before enabling entry devices.
+
+## Verified guest-loaded UDNL and original linked imports
+
+The ROM image review confirms UDNL at offset `0xADF70`, size `0x1EF5`, SHA-256
+`dd05d86f9e47e900904c3eb1a5ee6a7fa700a678effc267ec3cdd929a8200051`.
+Its load segment is `0x1860` bytes and its `.text` spans `0x17B0` bytes. The existing pinned
+bootstrap loader computes relocations in a separate temporary memory object at `0x100030`;
+the expected entry is `0x10019C`. Its rounded allocation size is `0x1900`. The host never
+loads, repairs or patches this reference into the running guest.
+
+`VerifiedRamCode` enables the new window only at the actual entry, with the entire text in
+owned guest RAM and every executable word matching its relocated reference. Initial run-096
+correctly refused a changed import-table link field; treating mutable link metadata as an
+instruction would have been the wrong contract. The original import headers and terminators
+are now non-executable data, with identity/version/link mode validated separately.
+
+The import binding review follows the pinned
+[PS2SDK guest linker](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/system/loadcore/src/loadcore.c).
+For each original stub, the validator requires a real MIPS jump, the unchanged ordinal delay
+instruction and a matching guest export. The export must have the same library identity and
+major version, be enabled, include this actual import table in its bounded caller chain, and
+map the requested ordinal to that exact jump target. Targets stay within the existing owned
+bootstrap-code range. Unregistered tables, unresolved returns, missing exports, invalid modes,
+cycles beyond the finite bound and jumps into unreviewed upper RAM are refused.
+
+Only the validator's private expected bytes are adjusted for proven guest linking. The actual
+guest tables and jumps are never written by this mechanism. Each subsequent instruction in
+the new module window is checked again before execution. Metadata, adjacent data, alternate
+entry before validation, unknown aliases and later changed instructions remain forbidden.
+No upper-RAM-wide permission, host import implementation or instruction-budget increase occurs.
+
+Run-097 verifies the 6,064-byte text extent and all 14 linked imports across six libraries,
+then the original UDNL reaches CDVD S-command `0x05`, at step 7,375,027. This is execution of
+the original module through the existing CPU core, not a loader-output or host-return claim.
+
+The virtual closed ISO drive now models the tray-detection latch operation: no parameters,
+one response byte, and its sticky tray bit follows the current closed-tray state. It neither
+opens a tray nor completes sector reads or acknowledges IRQs. This functional profile follows
+the pinned [CDVD implementation](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/CDVD/CDVD.cpp).
+Run-098 then reaches a HOWTO write at register `0x06`. Its observed `0x80` profile is retained
+as a write latch; reads at the same offset still consume ERROR. Other HOWTO values fail closed.
+
+Run-099 reaches a real request to arm CDVD DMA3: PC `0x1B020`, step 7,375,321,
+CHCR `0x41000200`, MADR `0x1F7D0`, BCR `0x00100020`. The existing DMA guard rejects this
+before the CPU writes STR, because this strict IOP path has no CDVD transfer engine yet.
+No bytes, DMA completion or IRQ are invented. Exit 6 without timeout; 16 SIF1 chains still
+carry 2,160 bytes. Next work is a reviewed DMA3 receive engine with actual sector bytes,
+pending receiver state, register progress, gates and independent device/DMA completion.
+Completed reboot, repeated BOOTEND, native frame/menu/gameplay, audio-content and saves remain
+unverified.
+
+Synthetic checks cover altered instructions before/after activation, unowned text, an invalid
+entry, caller-chain cycles, wrong library versions, ordinals, missing exports, unowned or escaped
+jump targets, and attempted execution of metadata. The actual CPU executes a synthetic module
+outside the old window and rejects later modification without repairing it. CDVD checks cover
+unconsumed replies, invalid tray parameters, pending sectors and preserved IRQ/error state.
+Run-100 repeats the same verified UDNL and DMA3 boundary on the final executable. Isolated
+initialization (run-101) still reaches actual guest BOOTEND with exit 5; ordinary mode (run-102)
+retains its fixed-budget exit 6. Neither non-entry mode enables the new module window. All
+four runs verify inputs and finish without timeout. Negative checks continue to reject a changed
+BIOS before guest execution and either ROM1 companion before enabling entry devices.

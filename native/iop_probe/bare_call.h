@@ -61,7 +61,8 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
         const uint32_t physical = IopMemory::physicalAddress(cpu.pc);
         const bool vector = exceptions && exceptions->vectorOwns(memory, physical);
         const bool romCode = devices.rom && devices.rom->ownsCode(cpu.pc);
-        if (!romCode && (((physical < codeBegin || uint64_t(physical) + 4 > codeEnd) && !vector) || (cpu.pc & 3) ||
+        const bool moduleCode = devices.ramCode && devices.ramCode->allows(memory, cpu.pc);
+        if (!romCode && !moduleCode && (((physical < codeBegin || uint64_t(physical) + 4 > codeEnd) && !vector) || (cpu.pc & 3) ||
             !memory.ownsRamRange(physical, 4))) {
             std::cerr << "[bootstrap-execution-blocker] steps=" << steps << " pc=0x" << std::hex << cpu.pc
                       << " physical=0x" << physical << " ra=0x" << cpu.gpr[31]

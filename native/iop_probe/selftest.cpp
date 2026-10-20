@@ -26,6 +26,20 @@ int main() {
         auto result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030);
         if (result.value != 42 || result.instructions != 3)
             throw std::runtime_error("Bare IOP return/delay-slot contract failed");
+        {
+            constexpr uint32_t base = 0x110000;
+            memory.write32(base, 0x2402002a); memory.write32(base + 4, 0x03e00008); memory.write32(base + 8, 0);
+            std::array<uint8_t, 12> text{}; memory.readRam(base, text.data(), text.size());
+            VerifiedRamCode module(base, base, text);
+            rejects([&] { bareCall(memory, base, 0, 0, 0x1000, 0x1100); }, "owned bootstrap code RAM");
+            result = bareCall(memory, base, 0, 0, 0x1000, 0x1100, {.ramCode = &module});
+            if (result.value != 42 || result.instructions != 3 || memory.interruptStatus())
+                throw std::runtime_error("Verified RAM module did not execute its actual CPU return/delay slot");
+            memory.write32(base + 4, 0);
+            rejects([&] { bareCall(memory, base, 0, 0, 0x1000, 0x1100, {.ramCode = &module}); }, "verified relocated reference");
+            if (memory.read32(base + 4) != 0)
+                throw std::runtime_error("RAM code verification repaired guest code");
+        }
         memory.reset(); memory.write32(0x800, 42);
         code(memory, {0x8c820000, 0, 0x03e00008, 0x24420001}); // lw; nop; jr ra; addiu v0,1.
         BareCallState sliced;

@@ -1,6 +1,7 @@
 #pragma once
 #include "bare_call.h"
 #include "sif1_receiver.h"
+#include "udnl_code_profile.h"
 #include "services/iop_module_loader.h"
 #include <cstring>
 #include <span>
@@ -18,6 +19,7 @@ class BootstrapSession {
     Sif0Sender sif0;
     PioWriteCapture pio;
     QuiescentSio2 sio2;
+    std::optional<VerifiedRamCode> ramCode;
     OwnedExceptions exceptions;
     drakengard::IopTimers timers;
     ReadOnlyRom rom;
@@ -42,6 +44,7 @@ public:
     void enableEntryDevices() {
         pio.enable(); cache.enableRebootControls(); rom.enableIopBootCode(); rom.enableAbsentRom1();
         sio2.enable();
+        ramCode = makeUdnlCodeProfile(rom, start, SourcePool);
     }
     void setClockSource(std::function<drakengard::CdvdCalendar()> source) { cdvd.setClockSource(std::move(source)); }
     BootstrapSession(std::span<const uint8_t> bundle, std::span<const uint8_t> seed,
@@ -91,7 +94,8 @@ public:
         const IopDevices devices{
             .hardware = &hardware, .cache = &cache, .interrupts = &interrupts,
             .dma = &dma, .exceptions = &exceptions, .cdvd = &cdvd,
-            .timers = &timers, .rom = &rom, .sif = &sif, .sif0 = &sif0, .pio = &pio, .sio2 = &sio2};
+            .timers = &timers, .rom = &rom, .sif = &sif, .sif0 = &sif0, .pio = &pio, .sio2 = &sio2,
+            .ramCode = ramCode ? &*ramCode : nullptr};
         const auto result = bareCall(memory, entry, gp, argument, start, SourcePool,
                                     devices, &state, instructions);
         if (!result.completed) return;

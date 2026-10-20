@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+#include <span>
 
 // The caller verifies the file hash before constructing this owned copy. Data
 // mapping alone never grants execution; the runner separately gates IOPBOOT code
@@ -12,6 +13,11 @@ class ReadOnlyRom {
 public:
     explicit ReadOnlyRom(std::vector<uint8_t> bytes) : m_bytes(std::move(bytes)) {
         if (m_bytes.size() != 0x400000) throw std::runtime_error("Boot ROM must contain exactly 4 MiB");
+    }
+    std::span<const uint8_t> image(size_t offset, size_t size) const {
+        if (offset > m_bytes.size() || size > m_bytes.size() - offset)
+            throw std::runtime_error("ROM image slice exceeds its owned source");
+        return std::span(m_bytes).subspan(offset, size);
     }
     void enableIopBootCode() {
         if (m_iopBoot) throw std::runtime_error("IOPBOOT code cannot be enabled twice");

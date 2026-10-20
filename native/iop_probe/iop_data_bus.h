@@ -13,6 +13,7 @@
 #include "sif0_sender.h"
 #include "pio_write_capture.h"
 #include "quiescent_sio2.h"
+#include "verified_ram_code.h"
 #include <iostream>
 #include <stdexcept>
 #include <optional>
@@ -32,6 +33,7 @@ struct IopDevices {
     Sif0Sender* sif0{};
     PioWriteCapture* pio{};
     QuiescentSio2* sio2{};
+    VerifiedRamCode* ramCode{};
 };
 
 // Adapts explicit device contracts to the pinned CPU's backing memory.
@@ -55,7 +57,7 @@ public:
     IopDataBus(Memory& memory, const IopDevices& devices) : memory(memory), devices(devices) {}
     Effects prepare(const Cpu& cpu, uint32_t instruction, uint32_t steps) {
         using ps2x::iop::detail::IopMemory;
-        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio, sio2] = devices;
+        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio, sio2, ramCode] = devices;
         const uint32_t opcode = instruction >> 26;
         Effects effects;
         auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite, cpuControl, sio2Write] = effects;
@@ -146,7 +148,7 @@ public:
         return effects;
     }
     void complete(const Cpu& cpu, const Effects& effects) {
-        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio, sio2] = devices;
+        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio, sio2, ramCode] = devices;
         const auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite, cpuControl, sio2Write] = effects;
         // Temporary staging preserves the upstream core's load-delay behavior
         // without leaving ROM words in the masked hardware map (BIU aliases).
