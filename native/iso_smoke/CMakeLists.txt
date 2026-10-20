@@ -6,7 +6,7 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 add_library(iso_media "${REPO_ROOT}/native/runner/iso_media.cpp" "${REPO_ROOT}/native/runner/cdvd_rpc.cpp"
     "${REPO_ROOT}/native/runner/cdvd_device.cpp")
 target_include_directories(iso_media PUBLIC "${REPO_ROOT}/native/runner")
-add_executable(iso_media_smoke main.cpp)
+add_executable(iso_media_smoke main.cpp cdvd_dma_tests.cpp)
 target_link_libraries(iso_media_smoke PRIVATE iso_media)
 add_executable(iso_probe probe.cpp)
 target_link_libraries(iso_probe PRIVATE iso_media)

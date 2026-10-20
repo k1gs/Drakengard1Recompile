@@ -1,14 +1,17 @@
 #pragma once
 #include "core/iop_memory.h"
+#include "cdvd_dma.h"
 #include <cstdint>
 #include <stdexcept>
 
-// Register/acknowledgement model. An explicitly enabled idle SIF1 chain receiver
-// may arm and wait for tags; the separate receive engine owns actual completion.
+// Register/acknowledgement model. Explicitly enabled SIF and CDVD channels may
+// arm and wait; their separate engines own actual transfers and completion.
 class QuiescentDma {
     bool m_sif1Receiver{};
     bool m_sif0Sender{};
+    bool m_cdvdReceiver{};
 public:
+    void enableCdvdReceiver() { m_cdvdReceiver = true; }
     void enableSif1Receiver() { m_sif1Receiver = true; }
     void enableSif0Sender() { m_sif0Sender = true; }
     static bool interruptRegister(uint32_t address) {
@@ -38,6 +41,11 @@ public:
         if (opcode != 0x23 && opcode != 0x2b) return false;
         if (interruptRegister(address) || priorityRegister(address)) return true;
         if (!channelRegister(address)) return false;
+        if (opcode == 0x2b && address == 0x1f8010b8 && (value & 0x01000000) && m_cdvdReceiver) {
+            if (!memory) throw std::runtime_error("CDVD DMA3 requires backing memory");
+            CdvdDma::validateStart(*memory, value);
+            return true;
+        }
         if (opcode == 0x2b && address == 0x1f801528 && value == 0x01000701 && m_sif0Sender) {
             if (!memory || memory->read32(0x1f801524) != 0x20 ||
                 (memory->read32(address) & 0x01000000))

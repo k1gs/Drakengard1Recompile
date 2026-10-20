@@ -8,6 +8,7 @@
 #include <iterator>
 #include <stdexcept>
 #include <vector>
+void checkCdvdDma(drakengard::IsoMedia&, std::span<const uint8_t>);
 
 namespace {
 using Bytes = std::vector<uint8_t>;
@@ -83,6 +84,7 @@ int main() {
     try {
         const auto image = fixture(); write("iso-fixture.iso", image);
         drakengard::IsoMedia media("iso-fixture.iso");
+        checkCdvdDma(media, image);
         check(media.sectors() == 32 && media.fileCount() == 2);
         auto file = media.find("cdrom0:\\test.bin;1");
         check(file && file->lsn == 24 && file->size == 6);

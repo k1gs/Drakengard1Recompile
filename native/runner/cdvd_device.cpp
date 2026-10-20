@@ -92,6 +92,8 @@ void CdvdDevice::ncommand(uint8_t command) {
         deviceCheck(m_image.readSectors(sector, count, bytes), "CDVD read exceeds actual image; no zero padding");
         m_payload = std::move(bytes); m_position = 0; m_sector = sector; m_status = 6;
         m_actualSectors += count;
+        std::cerr << "[cdvd-user-read] lsn=" << sector << " sectors=" << count
+                  << " bytes=" << m_payload.size() << '\n';
     } else {
         // Raw 2064-byte DVD frames, key/TOC/auth commands are not synthesized from plain ISO data.
         unknownDevice("N-command", command, args);

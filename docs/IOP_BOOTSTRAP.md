@@ -707,3 +707,52 @@ initialization (run-101) still reaches actual guest BOOTEND with exit 5; ordinar
 retains its fixed-budget exit 6. Neither non-entry mode enables the new module window. All
 four runs verify inputs and finish without timeout. Negative checks continue to reject a changed
 BIOS before guest execution and either ROM1 companion before enabling entry devices.
+
+## CDVD DMA3: actual user-sector reception
+
+The entry experiment now enables a separate functional DMA3 receiver. Its reviewed profile
+is CHCR `0x41000200`, 32 words per block, a nonzero whole-sector block count and a fully
+bounded, aligned physical RAM destination. Unsupported modes, zero or partial-sector counts,
+active rearming and escaped destinations fail before consuming sector data. Other channels
+retain their existing start guards. Non-entry modes do not enable this receiver.
+
+The contract follows pinned PCSX2 v2.8.2:
+[DMA3 arming](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/CDVD/Ps1CD.cpp),
+[sector copy and MADR/BCR progress](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/CDVD/CDVD.cpp),
+[channel enable](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopHw.h) and
+[DMA interrupt latching](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopHw.cpp).
+This receiver also requires the strict IOP global DMA-enable profile to permit transfer.
+DMA3 interrupt latching is channel-mask dependent; it does not inherit SIF's unmaskable IRQs.
+
+An actual CPU store arms STR. With no payload or a disabled DMA gate, registers and payload
+remain pending. With actual sectors, one complete 2,048-byte sector is copied per service
+step; MADR advances and the BCR block count decreases by the amount actually transferred.
+STR clears only when the DMA count is exhausted. A longer drive command can span multiple
+DMA transfers, and drive-command completion remains separate from DMA completion. No sector
+padding, fabricated read data or RPC response is introduced. Raw DVD frames remain unsupported.
+This is a synchronous functional model, not a measured hardware timing implementation.
+
+Run-103 first crosses the old boundary. Final-build runs 104 and 105 repeat 21 actual DMA3
+completions, 278,528 bytes (136 user sectors), from the hash-verified ISO. Original code requests
+LSNs 16, 257 and 262 before the subsequent reads; the last request is LSN 2818. The trace
+records accepted reads and actual DMA completions separately. On this path ICR remains zero,
+so no DMA3 interrupt is invented; the original guest proceeds by polling and drive IRQ handling.
+
+The next refusal is at step 7,665,075: PC `0xA010148C`, physical `0x10148C`, RA `0x100A90`.
+The physical address is within the UDNL text extent, but the current verified-code profile
+does not admit that uncached alias. Next work is to review the original transition and memory
+mapping, then retain ownership, instruction and metadata checks for any explicitly admitted
+alias. This run does not establish a completed reboot, repeated BOOTEND, native frame/menu,
+gameplay, audio-content or saves. The 8,000,000-instruction bound is unchanged.
+
+Synthetic ISO tests compare every transferred byte against the source fixture, check canaries,
+armed waiting, both DMA gates, partial progress across two sectors, multiple DMA completions
+within one drive command, channel/master IRQ masks, preserved unrelated IRQ bits and no duplicate
+completion. Invalid configurations are refused without consuming data. The real CPU smoke test
+checks that a disabled profile refuses the STR store and the enabled profile retains the actual
+store without inventing bytes, register progress or IRQ. All tests use original synthetic data.
+
+Final regression runs preserve isolated initial BOOTEND (run-106, exit 5) and ordinary bounded
+execution (run-107, exit 6). These modes do not enable DMA3 or the UDNL window. All final runs
+verify their inputs and finish without timeout. Changed BIOS and both ROM1 companion cases
+remain refused on the same final executable; original inputs remain unchanged.

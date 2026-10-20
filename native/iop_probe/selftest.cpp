@@ -342,6 +342,22 @@ int main() {
         rejects([&] { dma.allows(0x1f801528, 0x2b, 0x01000000); }, "requires an actual transfer engine");
         if (!dma.allows(0x1f801528, 0x2b, 0) || dma.allows(0x1f80153c, 0x2b, 0))
             throw std::runtime_error("DMA idle control/reserved register boundary failed");
+        {
+            memory.reset(); QuiescentDma cdvdRegisters; cdvdRegisters.reset(memory);
+            memory.write32(0x1f8010b0, 0x4000); memory.write32(0x1f8010b4, 0x00100020);
+            code(memory, {0x3c024100, 0x34420200, 0xac820000, 0x8c820000, 0, 0x03e00008, 0});
+            rejects([&] { bareCall(memory, 0x1000, 0, 0xbf8010b8, 0x1000, 0x1100,
+                {.dma = &cdvdRegisters}); }, "requires an actual transfer engine");
+            if (memory.read32(0x1f8010b8)) throw std::runtime_error("Disabled DMA3 guard allowed STR store");
+            cdvdRegisters.enableCdvdReceiver();
+            result = bareCall(memory, 0x1000, 0, 0xbf8010b8, 0x1000, 0x1100, {.dma = &cdvdRegisters});
+            if (result.value != 0x41000200 || memory.read32(0x1f8010b8) != 0x41000200 ||
+                memory.read32(0x1f8010b0) != 0x4000 || memory.read32(0x1f8010b4) != 0x00100020 ||
+                memory.interruptStatus()) throw std::runtime_error("DMA3 arm invented transfer/completion/IRQ");
+            rejects([&] { cdvdRegisters.allows(0x1f8010b8, 0x2b, 0x41000200, &memory); }, "active rearm");
+            memory.write32(0x1f8010b8, 0);
+            rejects([&] { cdvdRegisters.allows(0x1f8010b8, 0x2b, 0x41000201, &memory); }, "configuration");
+        }
         memory.reset(); dma.reset(memory); dma.enableSif0Sender();
         memory.write32(0x1f801524, 0x20); memory.write32(0x1f801578, 1);
         memory.write32(0x1f801570, 0x800); memory.write32(0x1f80152c, 0x3004);

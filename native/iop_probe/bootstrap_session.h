@@ -15,6 +15,7 @@ class BootstrapSession {
     CoherentCache cache;
     QuietInterrupts interrupts;
     QuiescentDma dma;
+    CdvdDma cdvdDma;
     Sif1Receiver sif1;
     Sif0Sender sif0;
     PioWriteCapture pio;
@@ -43,7 +44,7 @@ public:
     void pumpSif0() { sif0.pump(memory); }
     void enableEntryDevices() {
         pio.enable(); cache.enableRebootControls(); rom.enableIopBootCode(); rom.enableAbsentRom1();
-        sio2.enable();
+        sio2.enable(); dma.enableCdvdReceiver();
         ramCode = makeUdnlCodeProfile(rom, start, SourcePool);
     }
     void setClockSource(std::function<drakengard::CdvdCalendar()> source) { cdvd.setClockSource(std::move(source)); }
@@ -95,7 +96,7 @@ public:
             .hardware = &hardware, .cache = &cache, .interrupts = &interrupts,
             .dma = &dma, .exceptions = &exceptions, .cdvd = &cdvd,
             .timers = &timers, .rom = &rom, .sif = &sif, .sif0 = &sif0, .pio = &pio, .sio2 = &sio2,
-            .ramCode = ramCode ? &*ramCode : nullptr};
+            .ramCode = ramCode ? &*ramCode : nullptr, .cdvdDma = ramCode ? &cdvdDma : nullptr};
         const auto result = bareCall(memory, entry, gp, argument, start, SourcePool,
                                     devices, &state, instructions);
         if (!result.completed) return;

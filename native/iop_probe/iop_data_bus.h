@@ -34,6 +34,7 @@ struct IopDevices {
     PioWriteCapture* pio{};
     QuiescentSio2* sio2{};
     VerifiedRamCode* ramCode{};
+    CdvdDma* cdvdDma{};
 };
 
 // Adapts explicit device contracts to the pinned CPU's backing memory.
@@ -57,7 +58,7 @@ public:
     IopDataBus(Memory& memory, const IopDevices& devices) : memory(memory), devices(devices) {}
     Effects prepare(const Cpu& cpu, uint32_t instruction, uint32_t steps) {
         using ps2x::iop::detail::IopMemory;
-        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio, sio2, ramCode] = devices;
+        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio, sio2, ramCode, cdvdDma] = devices;
         const uint32_t opcode = instruction >> 26;
         Effects effects;
         auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite, cpuControl, sio2Write] = effects;
@@ -148,7 +149,7 @@ public:
         return effects;
     }
     void complete(const Cpu& cpu, const Effects& effects) {
-        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio, sio2, ramCode] = devices;
+        const auto& [hardware, cache, interrupts, dma, exceptions, cdvd, timers, rom, sif, sif0, pio, sio2, ramCode, cdvdDma] = devices;
         const auto& [interruptRead, dmaWrite, dmaPrevious, dmaValue, sifWrite, romRestore, sif0Start, pioWrite, cpuControl, sio2Write] = effects;
         // Temporary staging preserves the upstream core's load-delay behavior
         // without leaving ROM words in the masked hardware map (BIU aliases).
@@ -160,6 +161,7 @@ public:
         if (!cpu.exception && sif0Start) sif0->start(memory);
         if (!cpu.exception && pioWrite) pio->afterWrite(memory, pioWrite->opcode, pioWrite->value, pioWrite->pc);
         if (!cpu.exception && sio2Write) sio2->afterWrite(memory);
+        if (cdvdDma && cdvd) cdvdDma->pump(memory, *cdvd);
         if (cdvd && cdvd->takeInterruptEdge()) memory.setInterruptStatus(memory.interruptStatus() | 4u);
         if (timers) memory.setInterruptStatus(memory.interruptStatus() | timers->advance(1));
     }
