@@ -36,8 +36,8 @@ revision or dump authenticity. Game-specific bindings require the verified ELF h
 | --- | --- | --- |
 | Input & toolchain | Read-only intake, pinned tools and local European ELF lift | Broader translation and runtime coverage |
 | EE ↔ IOP | Guest-owned SIF handshake, initial BOOTEND and actual packet replies | Complete the game-requested IOP reboot |
-| Guest modules | Original IOPBOOT and verified UDNL execute; 14 imports checked against real guest linking | Complete the verified reboot into game IOP services |
-| Disc services | Original guest code drives 21 CDVD DMA3 transfers from the verified ISO | Review the next uncached code transition |
+| Guest modules | Original IOPBOOT and verified UDNL execute, including guarded KSEG1 code; 14 imports checked | Audit the LOADCORE fill against the bounded boot budget |
+| Disc services | Original guest code drives 21 CDVD DMA3 transfers from the verified ISO | Complete IOP reboot and validate subsequent disc operations |
 | Graphics & gameplay | Acceptance criteria documented | First native frame, rendered menu, then real gameplay |
 | Audio, saves & recovery | Validation matrix documented | Verify these in actual gameplay |
 

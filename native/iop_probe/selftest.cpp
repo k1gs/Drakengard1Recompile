@@ -41,6 +41,24 @@ int main() {
                 throw std::runtime_error("RAM code verification repaired guest code");
         }
         memory.reset(); memory.write32(0x800, 42);
+        {
+            constexpr uint32_t base = 0x110000;
+            const std::array<uint32_t, 7> instructions{
+                0x3c08a011, 0x35080010, 0x01000008, 0x24020029, 0x24420001, 0x03e00008, 0};
+            for (unsigned n = 0; n < instructions.size(); ++n) memory.write32(base + n * 4, instructions[n]);
+            std::array<uint8_t, sizeof(instructions)> text{}; memory.readRam(base, text.data(), text.size());
+            VerifiedRamCode physicalOnly(base, base, text);
+            rejects([&] { bareCall(memory, base, 0, 0, 0x1000, 0x1100,
+                {.ramCode = &physicalOnly}); }, "owned bootstrap code RAM");
+            VerifiedRamCode alias(base, base, text); alias.enableUncachedAlias();
+            result = bareCall(memory, base, 0, 0, 0x1000, 0x1100, {.ramCode = &alias});
+            if (result.value != 42 || result.instructions != 7 || memory.interruptStatus())
+                throw std::runtime_error("Actual KSEG1 module jump/delay-slot/return execution failed");
+            memory.write32(base + 16, 0);
+            rejects([&] { bareCall(memory, base, 0, 0, 0x1000, 0x1100,
+                {.ramCode = &alias}); }, "verified relocated reference");
+            if (memory.read32(base + 16)) throw std::runtime_error("Alias verifier repaired guest instructions");
+        }
         code(memory, {0x8c820000, 0, 0x03e00008, 0x24420001}); // lw; nop; jr ra; addiu v0,1.
         BareCallState sliced;
         const auto step = [&] {

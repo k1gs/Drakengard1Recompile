@@ -756,3 +756,45 @@ Final regression runs preserve isolated initial BOOTEND (run-106, exit 5) and or
 execution (run-107, exit 6). These modes do not enable DMA3 or the UDNL window. All final runs
 verify their inputs and finish without timeout. Changed BIOS and both ROM1 companion cases
 remain refused on the same final executable; original inputs remain unchanged.
+
+## Verified UDNL uncached execution
+
+The original, independently hash-checked ROM UDNL contains its own KSEG1 transition:
+it saves CP0 Status, constructs its relocated procedure address, combines it with
+`0xA0000000` and jumps there. The Status-zeroing instruction also executes as the real
+jump delay slot. This identifies the observed target `0xA010148C`; the host does not supply
+a jump, CPU context change or replacement procedure. The pinned
+[PCSX2 IOP memory mapping](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopMem.cpp)
+and the pinned CPU core both map this KSEG1 address to the same physical RAM.
+
+`VerifiedRamCode` now has an explicit, single-use uncached-alias option. Only the reviewed
+UDNL profile enables it, before activation. The actual physical entry must still pass the
+full relocated-text and guest-import validation first. Later KSEG1 instruction fetches use
+the same bounded physical reference and ownership checks; import headers and terminators
+remain non-executable. KSEG0, other segments, adjacent data, unaligned addresses and changed
+instructions remain refused. A policy cannot gain this option after becoming active.
+The coherent functional cache model and all BIOS/ELF gates remain unchanged.
+
+Runs 108 and 109 repeat the 21 DMA3 completions and then verify original code at the uncached
+target. Execution proceeds to the existing 8,000,000-instruction limit, at LOADCORE PC `0x2B48`.
+The selected original LOADCORE image matches the bounded fill-loop instructions and its
+observed base `0x1830`. At the limit, the next destination is `0x3CC88`, the exclusive end is
+`0x101D00`, and the stored pattern is `0x400D`. The loop increments by four and compares against
+that end: 201,758 word stores remain. Its five-instruction body therefore needs approximately
+1,008,790 more instructions, excluding the pending branch and final return overhead. This is
+an instruction-count estimate, not hardware timing or evidence of a completed reboot.
+The pinned [PS2SDK LOADCORE](https://github.com/ps2dev/ps2sdk/blob/329e2bb43287e16af16c4dde1c614e2662c24468/iop/system/loadcore/src/loadcore.c)
+also documents the memory-fill pattern during initialization.
+
+Next work is to observe guest phase boundaries and finite fill progress before changing budget
+accounting. The cap is unchanged here; the guest fill is neither skipped nor replaced with a
+host memory operation. No second BOOTEND, native frame/menu/gameplay, audio-content or saves
+have been established.
+
+Portable checks cover default refusal, alias-before-entry, duplicate/late option activation,
+ownership, exact boundaries, other segments, instruction mutation without repair and aliased
+import metadata. A real CPU synthetic test executes the jump, delay slot, aliased instructions
+and return in seven instructions; its default profile refuses the same alias. Regression runs
+110 and 111 preserve isolated initial BOOTEND (exit 5) and ordinary bounded execution (exit 6),
+with no alias enabled in those modes. All four runs finish without timeout and verify their
+inputs; changed BIOS and both ROM1 companion cases remain refused on the final executable.

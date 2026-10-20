@@ -17,5 +17,9 @@ inline VerifiedRamCode makeUdnlCodeProfile(const ReadOnlyRom& rom, uint32_t code
     std::vector<uint8_t> text(0x17b0);
     if (!reference.readRam(loaded.base, text.data(), text.size()))
         throw std::runtime_error("Cannot read independently relocated UDNL text");
-    return VerifiedRamCode(loaded.base, loaded.entry, text, codeBegin, codeEnd);
+    VerifiedRamCode code(loaded.base, loaded.entry, text, codeBegin, codeEnd);
+    // Original UDNL switches its cache-control procedures into KSEG1 itself.
+    // The alias can execute only after full normal-entry verification.
+    code.enableUncachedAlias();
+    return code;
 }

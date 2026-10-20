@@ -56,6 +56,15 @@ void checkGuestImports() {
     Fixture changed; changed.memory.put(Base, 0);
     refuses([&] { auto policy = changed.code(); policy.allows(changed.memory, Base); });
     if (changed.memory.read32(Base)) throw std::runtime_error("Import verifier repaired guest instructions");
+    {
+        Fixture alias; auto policy = alias.code(); policy.enableUncachedAlias();
+        if (!policy.allows(alias.memory, Base) || !policy.allows(alias.memory, 0xa0000000u + Base + 28) ||
+            policy.allows(alias.memory, 0xa0000000u + Base + 8) ||
+            policy.allows(alias.memory, 0xa0000000u + Base + 36))
+            throw std::runtime_error("Aliased linked-import code/data separation failed");
+        alias.memory.put(Base + 28, 0);
+        refuses([&] { policy.allows(alias.memory, 0xa0000000u + Base + 28); });
+    }
     Fixture version; version.memory.put(Export + 8, 0x201);
     refuses([&] { auto policy = version.code(); policy.allows(version.memory, Base); });
     Fixture unlinked; unlinked.memory.put(Base + 16, 0x101);

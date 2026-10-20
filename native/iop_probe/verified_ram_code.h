@@ -16,6 +16,7 @@ class VerifiedRamCode {
     std::vector<uint8_t> executable;
     uint32_t trustedBegin{}, trustedEnd{};
     bool active{};
+    bool uncachedAlias{}, aliasObserved{};
     uint32_t word(size_t offset) const {
         return uint32_t(text[offset]) | uint32_t(text[offset + 1]) << 8 |
             uint32_t(text[offset + 2]) << 16 | uint32_t(text[offset + 3]) << 24;
@@ -30,11 +31,19 @@ public:
             (trustedBegin & 3) || (trustedEnd & 3) || trustedBegin > trustedEnd || trustedEnd > 0x200000)
             throw std::runtime_error("Invalid verified RAM code profile");
     }
+    void enableUncachedAlias() {
+        if (active || uncachedAlias)
+            throw std::runtime_error("Uncached module alias requires inactive single activation");
+        uncachedAlias = true;
+    }
     template<class Memory> bool allows(const Memory& memory, uint32_t pc) {
-        if ((pc & 3) || pc < base || uint64_t(pc) + 4 > uint64_t(base) + text.size()) return false;
+        const bool uncached = pc >> 29 == 5;
+        if (uncached && (!uncachedAlias || !active)) return false;
+        const uint32_t address = uncached ? pc & 0x1fffffffu : pc;
+        if ((address & 3) || address < base || uint64_t(address) + 4 > uint64_t(base) + text.size()) return false;
         if (!active && pc != entry) return false;
-        if (active && !executable[(pc - base) / 4]) return false;
-        if (!memory.ownsRamRange(active ? pc : base, active ? 4 : text.size()))
+        if (active && !executable[(address - base) / 4]) return false;
+        if (!memory.ownsRamRange(active ? address : base, active ? 4 : text.size()))
             throw std::runtime_error("Verified module text is not wholly owned guest RAM");
         const auto check = [&](size_t offset) {
             const auto actual = memory.read32(base + uint32_t(offset)), expected = word(offset);
@@ -62,7 +71,12 @@ public:
             active = true;
             std::cerr << "[iop-ram-code-verified] base=0x" << std::hex << base << " entry=0x" << entry
                       << std::dec << " text_bytes=" << text.size() << " imports=" << linked.imports << '\n';
-        } else check(pc - base);
+        } else check(address - base);
+        if (uncached && !aliasObserved) {
+            aliasObserved = true;
+            std::cerr << "[iop-ram-code-alias] pc=0x" << std::hex << pc << " physical=0x" << address
+                      << std::dec << "; original instruction verified\n";
+        }
         return true;
     }
 };

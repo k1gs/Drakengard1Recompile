@@ -28,4 +28,17 @@ void checkRamCode() {
     check(code.allows(memory, 0x1000) && code.allows(memory, 0x1004));
     memory.words[1] = 0; refuses([&] { code.allows(memory, 0x1004); });
     check(!code.allows(memory, 0x100c) && !code.allows(memory, 0x80001000));
+    memory.words[1] = 0x03e00008;
+    check(!code.allows(memory, 0xa0001000)); // Default profile remains physical-only.
+    refuses([&] { code.enableUncachedAlias(); }); // Cannot expand an active policy.
+    VerifiedRamCode alias(0x1000, 0x1000, bytes); alias.enableUncachedAlias();
+    refuses([&] { alias.enableUncachedAlias(); });
+    check(!alias.allows(memory, 0xa0001000)); // Alias cannot activate the module.
+    check(alias.allows(memory, 0x1000) && alias.allows(memory, 0xa0001004));
+    for (auto address : {0x80001000u, 0xc0001000u, 0xe0001000u, 0x20001000u,
+                         0xa0000ffcu, 0xa000100cu, 0xa0001001u, 0xbfc01000u})
+        check(!alias.allows(memory, address));
+    memory.owned = false; refuses([&] { alias.allows(memory, 0xa0001004); }); memory.owned = true;
+    memory.words[1] = 0; refuses([&] { alias.allows(memory, 0xa0001004); });
+    check(memory.words[1] == 0); // Verification never repairs the aliased RAM.
 }
