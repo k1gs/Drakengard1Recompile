@@ -6,6 +6,14 @@ save files, captures и private reports остаются локальными. .
 `scripts/check_public_tree.py` проверяет tracked/index paths, размер и текстовый формат.
 Он не заменяет ручную проверку на игровые данные, credentials или чужой код.
 
+По прямому запросу пользователя опубликованы две иллюстрации README:
+`docs/images/native-frame-before.png` и `docs/images/native-frame-after.png`.
+Это визуально проверенные native-кадры с сообщением об отсутствии контроллера,
+без UI рабочего стола и без PNG metadata; яркость и пиксели не менялись.
+Исключение закреплено точными SHA-256 в `scripts/check_public_tree.py`: произвольные
+PNG и замена содержимого этих файлов не допускаются автоматически. Скриншоты не
+свидетельствуют о работающем меню или gameplay. Остальные captures остаются локальными.
+
 Перед focused commit/push:
 
 ```powershell

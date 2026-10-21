@@ -6,7 +6,7 @@
 
 A source-only project working toward a native PC port of **Drakengard**.
 
-[![Checks](https://github.com/k1gs/Drakengard1Recompile/actions/workflows/ci.yml/badge.svg)](https://github.com/k1gs/Drakengard1Recompile/actions/workflows/ci.yml)
+[![Checks](https://github.com/k1gs/Drakengard1Recompile/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/k1gs/Drakengard1Recompile/actions/workflows/ci.yml?query=branch%3Amain)
 [![License: MIT](https://img.shields.io/badge/project_code-MIT-blue.svg)](LICENSE)
 ![Platform: PS2](https://img.shields.io/badge/platform-PlayStation_2-003791)
 ![Region: Europe PAL](https://img.shields.io/badge/region-Europe_%C2%B7_PAL-6750A4)
@@ -18,7 +18,8 @@ A source-only project working toward a native PC port of **Drakengard**.
 
 > **Research in progress. No playable build is available.**
 > The European executable has been lifted locally. Original guest code reaches
-> IOP reboot and module loading; a native rendered menu and gameplay are still unverified.
+> IOP reboot, resource loading and a recognizable native controller-warning screen.
+> A rendered menu and gameplay are still unverified.
 
 ## The project
 
@@ -35,15 +36,32 @@ revision or dump authenticity. Game-specific bindings require the verified ELF h
 | Area | Verified milestone | Remaining work |
 | --- | --- | --- |
 | Input & toolchain | Read-only intake, pinned tools and local European ELF lift | Broader translation and runtime coverage |
-| EE ↔ IOP | Guest-owned SIF handshake, initial BOOTEND and actual packet replies | Complete the game-requested IOP reboot |
-| Guest modules | Original IOPBOOT and verified UDNL execute, including guarded KSEG1 code; 14 imports checked | Audit the LOADCORE fill against the bounded boot budget |
-| Disc services | Original guest code drives 21 CDVD DMA3 transfers from the verified ISO | Complete IOP reboot and validate subsequent disc operations |
-| Graphics & gameplay | Acceptance criteria documented | First native frame, rendered menu, then real gameplay |
+| EE ↔ IOP | Guest-owned reboot, two actual BOOTEND stores and SIF transfers | Broader device and service coverage |
+| Guest modules & input | Original IOP modules execute; optional VBlank experiment reaches SIO2 port setup | Command queue, FIFO, DMA and DualShock protocol |
+| Disc services | 226 CDVD transfers and 5,997,856 bytes read from the verified ISO | Validate later disc operations |
+| Graphics & gameplay | Recognizable native warning screen; duplicate scanout corrected | Investigate dim output, reach menu, then real gameplay |
 | Audio, saves & recovery | Validation matrix documented | Verify these in actual gameplay |
 
 Passing CI validates preparation tools and synthetic service contracts.
 It does **not** establish a working port. Detailed evidence and the current boundary
 live in [IOP bootstrap notes](docs/IOP_BOOTSTRAP.md) and the [roadmap](docs/ROADMAP.md).
+
+### Native screenshots
+
+Actual guest GS output, captured locally on Windows. These show the game's **DualShock 2
+not detected** warning, not a working menu. The images retain their original brightness;
+dim output and controller support remain unresolved.
+
+**Current frame — corrected scanout**
+
+![Native controller warning after correcting interlaced scanout](docs/images/native-frame-after.png)
+
+<details>
+<summary>Earlier frame — before the scanout correction</summary>
+
+![Earlier native frame with vertically duplicated text](docs/images/native-frame-before.png)
+
+</details>
 
 ## Getting started
 
@@ -57,6 +75,7 @@ python scripts/check_public_tree.py
 
 Standalone C++ service checks additionally require **CMake 3.21+** and a **C++20 compiler**.
 [CI](.github/workflows/ci.yml) runs synthetic checks on Windows and Linux.
+This does not build or validate the private native game runner on Ubuntu.
 
 To work with your own completed local input, start with the [intake procedure](docs/INTAKE.md),
 then follow the [pinned toolchain and local build guide](docs/TOOLCHAIN.md).
