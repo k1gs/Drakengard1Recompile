@@ -1,6 +1,15 @@
 #include "bare_call.h"
 #include "sif1_receiver.h"
 #include "unaligned_load_tests.h"
+#include "spdif_setup_tests.h"
+#include "spu_volume_tests.h"
+#include "spu_control_tests.h"
+#include "spu_idle_voice_tests.h"
+#include "spu_setup_transfer_tests.h"
+#include "spu_dma_tests.h"
+#include "cooperative_clock.h"
+#include "../runner/gs_interrupt_line.h"
+#include "../runner/empty_gif_chain.h"
 #include <cstring>
 #include <initializer_list>
 
@@ -22,7 +31,46 @@ template<class Action> void rejects(Action action, const std::string& reason) {
 
 int main() {
     try {
+        CooperativeClock clock;
+        if (clock.charge(32767) || clock.charge(32768)!=4096 || clock.charge(32768) ||
+            clock.charge(32768*3)!=4096 || clock.charge(32768*3)!=4096 || clock.charge(32768*3))
+            throw std::runtime_error("Cooperative clock lost bounded accumulated work");
+        bool backwards=false;
+        try { clock.charge(0); } catch (const std::runtime_error&) { backwards=true; }
+        if (!backwards) throw std::runtime_error("Cooperative clock accepted time reversal");
+        IopExecutionBudget runBudget; runBudget.enableGuestReboot();
+        runBudget.retiredRebootEntry(100); runBudget.retiredRebootCompletion(1000);
+        if (runBudget.deadline()!=1000+IopExecutionBudget::RuntimeLimit || !runBudget.inRuntime())
+            throw std::runtime_error("Post-boot budget lost its finite monotonic allowance");
+        rejects([&] { runBudget.retiredRebootCompletion(2000); },"single completed guest reboot");
+        GsInterruptLine line;
+        if (line.observe(0,0,true) || line.observe(2,0x7f00,true) ||
+            !line.observe(2,0x7d00,true) || line.observe(2,0x7d00,true) || line.observe(0,0x7d00,true))
+            throw std::runtime_error("GS masked FINISH/held-line/ack behavior differs");
+        if (line.observe(2,0x7d00,false) || !line.observe(0,0x7d00,true) || line.observe(0,0x7d00,true))
+            throw std::runtime_error("GS interrupt was lost while INTC disabled or repeated after delivery");
+        {
+            std::array<uint8_t,128> ram{};
+            const auto put=[&](unsigned at,uint32_t value) { std::memcpy(ram.data()+at,&value,4); };
+            put(0,0x20000000); put(4,64); put(64,0x70000000);
+            const auto chain=inspectEmptyGifChain(ram,0x105,0);
+            if (!chain || chain->madr!=80 || chain->tadr!=64 || chain->retired!=2)
+                throw std::runtime_error("Zero-QWC NEXT/END chain did not retire its actual tags");
+            put(64,0x70000001);
+            if (inspectEmptyGifChain(ram,0x105,0)) throw std::runtime_error("Empty chain consumed nonzero payload");
+            put(64,0x20000000); put(68,0);
+            rejects([&] { inspectEmptyGifChain(ram,0x105,0); },"terminal tag");
+            if (inspectEmptyGifChain(ram,0x145,0)) throw std::runtime_error("Empty GIF chain accepted TTE");
+        }
         iop_tests::unalignedLoadPairs();
+        iop_tests::spdifSetup();
+        iop_tests::spuVolumeRegisters();
+        iop_tests::spuQuiescentControl();
+        iop_tests::stoppedSpuVoices();
+        iop_tests::silentSpuVoices();
+        iop_tests::zeroInputSpuEffects();
+        iop_tests::spuSetupTransfers();
+        iop_tests::plainSpuDmaWrite();
         IopMemory memory;
         code(memory, {0x2402002a, 0x03e00008, 0});
         auto result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030);
@@ -196,7 +244,8 @@ int main() {
                 throw std::runtime_error("SSBUS rejected write changed state or accepted width/unseeded profile");
         }
         for (uint32_t port : {0x1f801da8u, 0x1f402000u, 0x1e000000u, 0x1f400010u, 0x14000000u,
-                              0x1f801424u, 0xfffe0140u, 0xfffe0144u})
+                              0x1f801424u, 0x1f900000u, 0x1f900800u, 0x1f9001a8u,
+                              0xfffe0140u, 0xfffe0144u})
             if (hardware.allows(port, 0x23, 0) || hardware.allows(port, 0x2b, 0xff))
                 throw std::runtime_error("SSBUS configuration opened an unrelated device/CPU port");
         memory.reset(); memory.write32(0x800, 0xdeadbeef);

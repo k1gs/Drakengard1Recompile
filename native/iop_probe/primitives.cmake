@@ -49,9 +49,21 @@ string(REPLACE "const uint32_t old = cpu.gpr[rt];"
     merged_cpu "${identified_cpu}")
 file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/private_isolated_cpu.cpp"
     CONTENT "${merged_cpu}" @ONLY)
+# Bare devices own SPU DMA. The upstream HLE memory map clears STR and creates
+# a completion timer without copying samples; remove that path in this target.
+file(READ "${IOP_ROOT}/src/emulator/core/iop_memory.cpp" memory_source)
+string(FIND "${memory_source}" "        if ((address != kDmaSpu0Chcr" dma_stub_begin)
+string(FIND "${memory_source}" "\n    }\n\n    std::optional<IopMemory::DmaStart>" dma_stub_end)
+if(dma_stub_begin LESS 0 OR dma_stub_end LESS dma_stub_begin)
+    message(FATAL_ERROR "Pinned IOP HLE DMA completion block changed")
+endif()
+string(SUBSTRING "${memory_source}" 0 ${dma_stub_begin} memory_prefix)
+string(SUBSTRING "${memory_source}" ${dma_stub_end} -1 memory_suffix)
+file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/private_strict_iop_memory.cpp"
+    CONTENT "${memory_prefix}${memory_suffix}" @ONLY)
 add_library(${target} STATIC
     "${IOP_ROOT}/src/ps2_path.cpp"
-    "${IOP_ROOT}/src/emulator/core/iop_memory.cpp"
+    "${CMAKE_BINARY_DIR}/private_strict_iop_memory.cpp"
     "${CMAKE_BINARY_DIR}/private_isolated_cpu.cpp"
     "${IOP_ROOT}/src/emulator/imports/iop_imports.cpp"
     "${REPO_ROOT}/native/runner/iso_media.cpp"

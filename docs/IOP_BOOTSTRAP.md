@@ -882,3 +882,115 @@ address error is passed. The next explicit stop is instruction 15,042,867, PC `0
 register. Its supported values remain restricted; this observation does not establish SPU audio.
 Temporary loader/file-call instrumentation is removed. Rendered graphics/menu, gameplay,
 audio-content, saves and recovery remain unverified.
+
+## Local experiment: original LIBSD bus and SPDIF setup (2026-10-21)
+
+The original LIBSD writes `0xBF900000` and `0xBF900800` to the SPU/SPU1 SSBUS base latches,
+then sets the SPU1 bus delay to `0x200B31E1`. These exact values are now accepted by the
+existing configuration profile. They retain register storage without opening the mapped
+device ports or simulating bus timing. The pinned
+[IOP hardware write implementation](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/ps2/Iop/IopHwWrite.cpp)
+routes these addresses to generic backing storage.
+
+`SpdifSetup` is a separate, initially inactive component enabled only with the reviewed
+entry-device profile. It accepts halfword stores of MODE=`0x0900`, MEDIA=`0x0200`, raw
+latch `0x7CA`=`8`, and OUT=`0` or `0x8000`. The pinned
+[SPU2 register handlers](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SPU2/spu2sys.cpp)
+store these fields; both supported OUT values retain normal routing in `UpdateSpdifMode`.
+This subset does not implement PCM clone, bypass, data streaming, IRQINFO, core control,
+SPU memory transfers, synthesis or audible output. Reads and other widths/values are refused.
+State and the bounded diagnostic counter update only after the original CPU SH retires.
+
+Synthetic CPU tests cover the configuration stores through all three address aliases,
+halfword canaries, retained values, inactive refusal and unchanged IRQ state. Writes to
+output mode `0xC032`, IRQINFO, core control and even a zero master-volume store remain
+refused before changing state. No generic SPU zero-write fallback is installed.
+
+The native path executes five actual SPDIF stores and next stops at instruction 15,621,176:
+PC `0x87238`, instruction `0xA6C00000`, attempting SH zero to `0xBF900760`, the core-0
+master-volume-left register. The existing 41 DMA transfers, 247 user sectors, 509,680 DMA
+bytes and two guest BOOTEND stores remain intact. The next work is a stateful core-volume
+and control model, including its interaction with timing and transfers. No rendered menu,
+gameplay, game audio, saves or recovery is established by this setup experiment.
+
+## Local experiment: direct volume and quiescent SPU core control (2026-10-21)
+
+`SpuVolumeRegisters` owns the master/effect/external/input gains for both cores, with separate
+raw and current master-volume reads. Direct master values are signed 15-bit values doubled
+into a signed 16-bit coefficient; the other gain registers retain signed 16-bit values.
+Initial master/effect gains are zero, external/input gains are `0x7FFF`, matching the pinned
+core initialization. The conversion follows
+[ADSR.cpp](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SPU2/ADSR.cpp)'s volume setter and
+the [register handlers](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SPU2/spu2sys.cpp).
+Sweep-mode writes and writes to current-volume registers remain refused. No sample-time or
+audio-output behavior is inferred from these direct gains.
+
+`SpuQuiescentControl` accepts only ADMAS zero and ATTR zero/`0x8000`, together with halfword
+reads of those latches and STATX. The reference finishes initialization with STATX=`0x80`;
+a real ATTR store with DMA mode zero clears that flag when no transfer is busy. The guest
+observes this state transition rather than a prefilled ready flag. This component has no
+operation that starts a transfer, enables DMA/IRQ/reverb or starts a voice; attempts remain
+explicit blockers. Existing IOP DMA gates also refuse SPU channel 4/7 starts. It does not
+implement cancellation of an active transfer or a timed physical reset.
+
+Both components stage temporary CPU halfword reads and restore backing slots after each
+instruction. Device writes commit only after a successful guest SH; faulted operations retain
+the previous state. Tests cover signed extrema, master raw/current differences, both cores,
+all three aliases, halfword canaries, load delays, exception restoration and refusals. The
+control tests verify initial STATX=`0x80` before the first ATTR store and its subsequent clear.
+
+The native guest executes eight volume stores and six control stores, then passes its
+quiescent-status polling. The next stop is instruction 15,623,182, PC `0x8733C`, SH
+`0xA4430000`, writing `0xFFFF` to core-0 KOFF at `0xBF9001A4`. The next experiment needs the
+pending KeyOff mask and voice-envelope behavior at sample boundaries; an unconditional
+success/no-op for KOFF is not provided. The existing two guest BOOTEND stores and 41 real
+DMA transfers (247 user sectors, 509,680 DMA bytes) remain intact. Native graphics/menu,
+gameplay, game audio, saves and recovery remain unverified.
+
+## Local experiment: SPU data transfers and graphics DMA progress (2026-10-22)
+
+Earlier sections record historical diagnostic boundaries. The KOFF stop described above
+has been passed locally. Voice setup now retains pending key masks, sample-clock envelope
+state, addresses and ENDX. Key-on is limited to a verified zero-sample ADPCM loop in actual
+SPU RAM; other samples, noise and sweeps fail closed. Reverb is limited to the invariant
+of zero input, history and workspace, checked against the real shared RAM at sample time.
+This is not general DSP or audible playback support.
+
+The shared 2-MiB RAM receives actual CPU halfwords and plain DMA4/7 writes from IOP RAM.
+DMA copies bounded bursts, preserves busy/STR until the last modeled interval, updates
+MADR/TSA, retains BCR and raises a masked completion only after copying the data. The
+functional 256-halfword burst and 24-cycle charge follow the pinned
+[SPU2 DMA reference](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SPU2/Dma.cpp).
+Instruction charging is approximate; physical timing is not established. ADMA, DMA reads,
+active cancellation and SPU IRQ are unsupported. The strict memory overlay removes the
+upstream HLE shortcut that cleared STR without copying samples. The pinned tool checkout
+remains unchanged.
+
+The native experiment completed 67 SPU DMA writes, copying 574,784 bytes. DVD DMA reached
+226 transfers and 5,997,856 bytes. The next run permits longer bounded resource loading:
+8M initial instructions, at most one 8M reboot phase, then a non-renewable 256M runtime
+allowance. No device poll renews this budget. The launcher accepts at most 300 seconds.
+
+Both CPUs run on the EE executor. Safe points advance bounded IOP work and consume real
+DMA completions even when an EE thread busy-polls RAM. GS CSR/IMR observations route actual
+unmasked events to the registered HLE INTC handler; they do not generate FINISH flags.
+
+A separate graphics defect was reproduced: an empty source DMA chain fetched NEXT/END
+tags but never queued completion because it had no payload buffer. Real zero-QWC chains
+now retire their actual aligned RAM tags, update address/status registers and complete
+the channel, following the pinned
+[source-chain semantics](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/Hw.cpp) and
+[GIF completion path](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/Gif.cpp).
+CALL/RET and payload chains remain with the existing engine. Bounded cycles and invalid
+tag ranges fail closed. CHCR reads retain STR instead of clearing it. This fix passed
+the previously stuck graphics initialization and led to further resource loading.
+
+The capture helper observes the latched guest GS presentation after actual draw commands.
+An initial dark two-band clear was visually rejected. After resource loading, two native
+runs produced recognizable game text: the DualShock 2 controller is not detected in port 1.
+Both were visually inspected; a second capture 120 presentation callbacks later retains
+the message. The image is dark and duplicated vertically; menu and gameplay are not proven.
+Brightness/contrast filtering only selects captures and never changes rendered pixels.
+Captures and executor-owned RAM snapshots stay in ignored work/.
+Synthetic checks and successful resource transfers do not establish menu, gameplay,
+audio, save or recovery success.

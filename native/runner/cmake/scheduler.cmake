@@ -1,17 +1,27 @@
-# Included by overlay.cmake. The EE executor owns both CPUs: only an actual
-# no-ready-thread wait advances this extra bounded IOP slice. No host/UI worker
-# touches guest RAM, and no IRQ is dispatched without a completed DMA event.
-file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/Kernel/EeScheduler.cpp" scheduler_original)
+# Keep the pinned checkout unchanged. Only the EE executor advances strict
+# devices and delivers real completion events, including during guest spin loops.
+file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/Kernel/EeScheduler.cpp" scheduler_source)
+macro(replace_scheduler anchor replacement)
+    string(REPLACE "${anchor}" "${replacement}" scheduler_next "${scheduler_source}")
+    if(scheduler_next STREQUAL scheduler_source)
+        message(FATAL_ERROR "Pinned EE scheduler contract changed: ${anchor}")
+    endif()
+    set(scheduler_source "${scheduler_next}")
+endmacro()
 set(scheduler_wait "                waitForEvent();\n                continue;")
-string(REPLACE "${scheduler_wait}"
-    "                if (drakengard::advanceFirmwareIopWhileEeIdle()) {\n                    for (uint32_t cause : m_runtime.memory().consumeCompletedDmacCauses()) dispatchIrq(true, cause);\n                    if (!m_pendingInvocations.empty()) continue;\n                }\n${scheduler_wait}"
-    scheduler_cooperative "${scheduler_original}")
-if(scheduler_cooperative STREQUAL scheduler_original)
-    message(FATAL_ERROR "Pinned EE no-ready-thread wait contract changed")
-endif()
+replace_scheduler("${scheduler_wait}"
+    "                if (drakengard::advanceFirmwareIopWhileEeIdle()) {\n                    for (uint32_t cause : m_runtime.memory().consumeCompletedDmacCauses()) dispatchIrq(true, cause);\n                    if (!m_pendingInvocations.empty()) continue;\n                }\n${scheduler_wait}")
+set(scheduler_run_entry "    m_running.store(true, std::memory_order_release);")
+replace_scheduler("${scheduler_run_entry}" "${scheduler_run_entry}\n    EeDeviceSafePoint devices;")
+replace_scheduler("        processPendingEvents();"
+    "        devices.advance(*this,m_runtime,m_eeCycle,(m_enabledIntcMask & 1u)!=0,thread(kMainThreadId) ? &thread(kMainThreadId)->context : nullptr);\n        processPendingEvents();")
+replace_scheduler("    handlers.emplace(id,"
+    "    logEeIrqRegistration(dmac,cause,handler,argument,gp);\n    handlers.emplace(id,")
+replace_scheduler("    std::sort(matching.begin(), matching.end(),"
+    "    logEeIrqDelivery(dmac,cause,matching.size());\n    std::sort(matching.begin(), matching.end(),")
 set(scheduler_file "${CMAKE_BINARY_DIR}/private_cooperative_Scheduler.cpp")
 file(CONFIGURE OUTPUT "${scheduler_file}"
-    CONTENT "#include \"iop_bridge.h\"\n${scheduler_cooperative}" @ONLY)
+    CONTENT "#include \"ee_device_safe_point.h\"\n${scheduler_source}" @ONLY)
 get_target_property(runtime_sources ps2_runtime SOURCES)
 list(FILTER runtime_sources EXCLUDE REGEX "/EeScheduler[.]cpp$")
 set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")

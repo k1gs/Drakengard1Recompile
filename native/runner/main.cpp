@@ -2,6 +2,7 @@
 #include "verify_input.h"
 #include "iop_bridge.h"
 #include "firmware_functions.h"
+#include "guest_frame_capture.h"
 #include "runtime/ee_scheduler.h"
 #include <exception>
 #include <iostream>
@@ -35,11 +36,13 @@ int main(int argc, char** argv) {
                 argv[7], argv[8], argv[9], argv[10], argv[2]});
         }
         auto runtime = std::make_unique<PS2Runtime>();
-        unsigned frames = 0;
+        struct Diagnostics { unsigned frames{}; GuestFrameCapture capture; } diagnostics;
         runtime->setDebugUiCallbacks(
             [](PS2Runtime&, void*) {},
             [](PS2Runtime& rt, void* data) {
-                auto& ticks = *static_cast<unsigned*>(data);
+                auto& state = *static_cast<Diagnostics*>(data);
+                state.capture.observe(rt.gs());
+                auto& ticks = state.frames;
                 if (++ticks % 120 != 0) return;
                 const auto snapshot = rt.eeScheduler().snapshot();
                 std::cerr << "[diagnostic] frame=" << ticks << " sequence=" << snapshot.sequence
@@ -51,9 +54,10 @@ int main(int argc, char** argv) {
                               << " wait=" << static_cast<int>(thread.waitReason);
                 }
                 std::cerr << std::endl;
-            }, nullptr, &frames);
+            }, nullptr, &diagnostics);
         runtime->setMissingFunctionPolicy(PS2Runtime::MissingFunctionPolicy::Stop);
         if (!runtime->initialize("Drakengard Europe - diagnostic runtime")) return 3;
+        diagnostics.capture.enable(runtime->gs());
         if (!runtime->loadELF(argv[1])) return 4;
         if (argc == 12) {
             runFirmwareInitialization(*runtime, argv[7]);

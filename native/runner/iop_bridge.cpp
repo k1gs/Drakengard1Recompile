@@ -7,6 +7,7 @@
 #include "../iop_probe/ee_sif_dma.h"
 #include "../iop_probe/sif0_fifo.h"
 #include "strict_device_error.h"
+#include "../iop_probe/cooperative_clock.h"
 
 namespace drakengard {
 namespace {
@@ -25,6 +26,8 @@ class CooperativeIopBridge {
     std::function<uint32_t()> dmaControl;
     unsigned reads{};
     unsigned idleSlices{};
+    CooperativeClock executionClock;
+    unsigned runningSlices{};
     std::array<uint32_t, 3> softwareRegisters{};
     uint32_t busRegister(uint32_t number) {
         return SifRegisters::kernelAddress(number);
@@ -44,6 +47,16 @@ class CooperativeIopBridge {
         catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
     }
 public:
+    void advanceFirmwareIopForEeCycles(uint64_t cycles) {
+        if (phase!=Phase::FirmwareEntry) return;
+        if (const auto quantum=executionClock.charge(cycles)) {
+            if (++runningSlices<=4 || runningSlices%256==0)
+                std::cerr << "[firmware-running-iop] slice=" << runningSlices << " ee_cycle=" << cycles
+                          << " instructions=" << quantum << '\n';
+            boot->advance(quantum);
+            serviceSif0();
+        }
+    }
     bool firmwareGameEntryActive() const { return phase == Phase::FirmwareEntry; }
     void bindFirmwareEeRam(std::span<uint8_t> ram, uint32_t initialEnableWord, std::function<uint32_t()> control) {
         if (phase != Phase::Prepared || !eeRam.empty() || ram.size() != 32 * 1024 * 1024)
@@ -218,6 +231,10 @@ void advanceFirmwareIop() {
 bool advanceFirmwareIopWhileEeIdle() {
     std::lock_guard lock(bridgeMutex);
     return bridge.advanceFirmwareIopWhileEeIdle();
+}
+void advanceFirmwareIopForEeCycles(uint64_t cycles) {
+    std::lock_guard lock(bridgeMutex);
+    bridge.advanceFirmwareIopForEeCycles(cycles);
 }
 bool takeFirmwareDmaCompletion() {
     std::lock_guard lock(bridgeMutex);

@@ -20,6 +20,13 @@ class BootstrapSession {
     Sif0Sender sif0;
     PioWriteCapture pio;
     QuiescentSio2 sio2;
+    SpdifSetup spdif;
+    SpuVolumeRegisters volumes;
+    SpuQuiescentControl spuControl;
+    SpuIdleVoices voices;
+    SpuReverbSetup reverb;
+    SpuRamWritePort spuRam;
+    SpuDmaWrite spuDma{spuRam,spuControl};
     std::optional<VerifiedRamCode> ramCode;
     OwnedExceptions exceptions;
     drakengard::IopTimers timers;
@@ -47,6 +54,9 @@ public:
         sio2.enable(); dma.enableCdvdReceiver();
         ramCode = makeUdnlCodeProfile(rom, start, SourcePool);
         state.budget.enableGuestReboot();
+        spdif.enable(); volumes.enable(); spuRam.enable();
+        voices.enable(timers.cycles(),&spuRam); reverb.enable(&spuRam); spuControl.enable(&reverb,true);
+        dma.enableSpuWriter(spuDma);
     }
     void setClockSource(std::function<drakengard::CdvdCalendar()> source) { cdvd.setClockSource(std::move(source)); }
     BootstrapSession(std::span<const uint8_t> bundle, std::span<const uint8_t> seed,
@@ -97,7 +107,8 @@ public:
             .hardware = &hardware, .cache = &cache, .interrupts = &interrupts,
             .dma = &dma, .exceptions = &exceptions, .cdvd = &cdvd,
             .timers = &timers, .rom = &rom, .sif = &sif, .sif0 = &sif0, .pio = &pio, .sio2 = &sio2,
-            .ramCode = ramCode ? &*ramCode : nullptr, .cdvdDma = ramCode ? &cdvdDma : nullptr};
+            .ramCode = ramCode ? &*ramCode : nullptr, .cdvdDma = ramCode ? &cdvdDma : nullptr,
+            .spdif = &spdif, .volumes = &volumes, .spuControl = &spuControl, .voices = &voices, .reverb = &reverb, .spuRam = &spuRam};
         const auto result = bareCall(memory, entry, gp, argument, start, SourcePool,
                                     devices, &state, instructions);
         if (!result.completed) return;

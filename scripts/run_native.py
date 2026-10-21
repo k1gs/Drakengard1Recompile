@@ -1,6 +1,7 @@
 """Bounded diagnostic native launch for the exact verified Europe ELF."""
 import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -13,7 +14,7 @@ ISO_SHA256 = "73d3a3e7261ecfb134efbcf84c1b47278817e927dc62b5982f9bf95802be4706"
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-complete", action="store_true")
-    parser.add_argument("--seconds", type=int, default=20, choices=range(1, 61))
+    parser.add_argument("--seconds", type=int, default=20, choices=range(1, 301))
     parser.add_argument("--run", type=int, default=1)
     parser.add_argument("--iop-bootstrap", action="store_true", help="Use the verified local strict IOP bootstrap experiment")
     firmware = parser.add_mutually_exclusive_group()
@@ -60,14 +61,24 @@ def main(argv=None):
         elif args.ee_firmware_entry:
             command.append("--ee-firmware-entry")
             result["ee_firmware_entry_experiment"] = True
+        environment = os.environ.copy()
+        environment.pop("DRAKENGARD_FRAME_OUTPUT", None)
+        environment.pop("DRAKENGARD_EE_RAM_OUTPUT", None)
+        frame = run / "first-guest-frame.ppm"
+        if args.ee_firmware_entry:
+            environment["DRAKENGARD_FRAME_OUTPUT"] = str(frame)
+            environment["DRAKENGARD_EE_RAM_OUTPUT"] = str(run / "ee-progress-ram.bin")
         with (run / "runtime.log").open("x", encoding="utf-8") as log:
             try:
                 child = subprocess.run(command, cwd=elf.parent,
-                                       stdout=log, stderr=subprocess.STDOUT, timeout=args.seconds)
+                                       stdout=log, stderr=subprocess.STDOUT, timeout=args.seconds, env=environment)
                 result["exit_code"] = child.returncode
             except subprocess.TimeoutExpired:
                 result.update({"exit_code": None, "timed_out": True})
         result["disc_verified_by_native"] = "Verified Europe ISO SHA-256" in (run / "runtime.log").read_text(encoding="utf-8", errors="replace")
+        result["guest_frame_candidate"] = frame.name if frame.is_file() else None
+        followup = run / "review-guest-frame.ppm"
+        result["guest_frame_followup"] = followup.name if followup.is_file() else None
         (run / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
         print(json.dumps(result, indent=2))
         return 124 if result["timed_out"] else result["exit_code"]

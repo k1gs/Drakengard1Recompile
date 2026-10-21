@@ -1,6 +1,7 @@
 #pragma once
 #include "core/iop_memory.h"
 #include "cdvd_dma.h"
+#include "spu_dma_write.h"
 #include <cstdint>
 #include <stdexcept>
 
@@ -10,7 +11,10 @@ class QuiescentDma {
     bool m_sif1Receiver{};
     bool m_sif0Sender{};
     bool m_cdvdReceiver{};
+    SpuDmaWrite* spuWriter{};
 public:
+    void enableSpuWriter(SpuDmaWrite& writer) { spuWriter=&writer; }
+    void pumpSpu(ps2x::iop::detail::IopMemory& memory) { if (spuWriter) spuWriter->pump(memory); }
     void enableCdvdReceiver() { m_cdvdReceiver = true; }
     void enableSif1Receiver() { m_sif1Receiver = true; }
     void enableSif0Sender() { m_sif0Sender = true; }
@@ -41,6 +45,10 @@ public:
         if (opcode != 0x23 && opcode != 0x2b) return false;
         if (interruptRegister(address) || priorityRegister(address)) return true;
         if (!channelRegister(address)) return false;
+        if (opcode==0x2b && SpuDmaWrite::channel(address) && (value&0x01000000) && spuWriter) {
+            if (!memory) throw std::runtime_error("SPU DMA requires backing memory");
+            spuWriter->validateStart(*memory,address,value); return true;
+        }
         if (opcode == 0x2b && address == 0x1f8010b8 && (value & 0x01000000) && m_cdvdReceiver) {
             if (!memory) throw std::runtime_error("CDVD DMA3 requires backing memory");
             CdvdDma::validateStart(*memory, value);

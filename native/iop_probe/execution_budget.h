@@ -9,6 +9,9 @@ class IopExecutionBudget {
     bool rebootAllowed{}, rebootStarted{}, runtimeStarted{};
 public:
     static constexpr uint32_t PhaseLimit = 8000000;
+    // Post-boot guest services now execute continuously during EE spin loops.
+    // Keep a finite diagnostic run allowance; idle loops cannot renew it.
+    static constexpr uint32_t RuntimeLimit = 256000000;
     uint32_t deadline() const { return end; }
     bool inReboot() const { return rebootStarted && !runtimeStarted; }
     bool inRuntime() const { return runtimeStarted; }
@@ -31,6 +34,6 @@ public:
         if (!rebootStarted || runtimeStarted || retired <= begin || retired > end)
             throw std::runtime_error("IOP runtime budget requires a single completed guest reboot");
         runtimeStarted = true;
-        end = retired + PhaseLimit; // At most three finite phases, below 24M instructions.
+        end = retired + RuntimeLimit; // Three finite phases, below 272M instructions.
     }
 };

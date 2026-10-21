@@ -19,11 +19,11 @@ inline constexpr std::array settings{
     Setting{0x1f80101c, {0x000d2077, 0xff}},       // PIO delay
     Setting{0x1f801020, {0x00001225, 0x00001225}}, // common delay
     Setting{0x1f801400, {0x1e000000, 0xbe000000}}, // DEV1 base and its fixed KSEG1 alias
-    Setting{0x1f801404, {0x1f801da8, 0x1f801da8}}, // SPU base
+    Setting{0x1f801404, {0x1f801da8, 0xbf900000}}, // SPU base: reboot and original LIBSD configuration
     Setting{0x1f801408, {0x1f402000, 0x1f402000}}, // DEV5 base
-    Setting{0x1f80140c, {0x1f400010, 0x1f400010}}, // SPU1 base
+    Setting{0x1f80140c, {0x1f400010, 0xbf900800}}, // SPU1 base: reboot and original LIBSD configuration
     Setting{0x1f801410, {0x14000000, 0x14000000}}, // DEV9 base 3
-    Setting{0x1f801414, {0x200931e1, 0xff}},       // SPU1 delay
+    Setting{0x1f801414, {0x200931e1, 0xff, 0x200b31e1}}, // SPU1 delay, including original LIBSD setup
     Setting{0x1f801418, {0xff, 0xff}},             // DEV9 delay 2
     Setting{0x1f80141c, {0x001a1055, 0xff}},       // DEV9 delay 3
     Setting{0x1f801420, {0x000510ff, 0x000510ff}}, // DEV9 delay 1
