@@ -12,6 +12,7 @@ class GuestFrameCapture {
     std::filesystem::path output;
     bool drawn{}, saved{}, followupSaved{};
     unsigned framesAfterFirst{};
+    unsigned observations{};
 public:
     GuestFrameCapture() {
         if (const auto* path=std::getenv("DRAKENGARD_FRAME_OUTPUT")) output=path;
@@ -31,6 +32,13 @@ public:
             const unsigned intensity=(std::max)({rgba[at],rgba[at+1],rgba[at+2]});
             low=(std::min)(low,intensity); high=(std::max)(high,intensity);
             visible+=intensity>=32;
+        }
+        if (++observations%16==0) {
+            const auto state=gs.getDebugSnapshot();
+            std::cerr << "[guest-frame-levels] low=" << low << " high=" << high
+                      << " visible=" << visible << " display_fbp=" << state.hostPresentationDisplayFbp
+                      << " source_fbp=" << state.hostPresentationSourceFbp
+                      << " preferred=" << state.hostPresentationUsedPreferred << '\n';
         }
         // Reject dark clears and interlace differences as image candidates.
         // This heuristic is only capture selection; it never changes GS pixels.

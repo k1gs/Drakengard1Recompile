@@ -24,6 +24,10 @@ struct EeProgressDiagnostic {
         }
         std::cerr << "[ee-graphics-progress] cycle=" << cycle << " csr=0x" << std::hex
                   << runtime.memory().gs().csr.load() << " imr=0x" << runtime.memory().gs().imr;
+        const auto& display=runtime.memory().gs();
+        std::cerr << " pmode=0x" << display.pmode << " smode2=0x" << display.smode2
+                  << " dispfb1=0x" << display.dispfb1 << " display1=0x" << display.display1
+                  << " dispfb2=0x" << display.dispfb2 << " display2=0x" << display.display2;
         for (uint32_t base:{0x10009000u,0x1000a000u}) for (uint32_t off:{0u,0x10u,0x20u,0x30u})
             std::cerr << " reg" << base+off << "=0x" << runtime.memory().read32(base+off);
         if (context) {

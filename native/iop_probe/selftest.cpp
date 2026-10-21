@@ -10,6 +10,7 @@
 #include "cooperative_clock.h"
 #include "../runner/gs_interrupt_line.h"
 #include "../runner/empty_gif_chain.h"
+#include "../runner/gs_scanout.h"
 #include <cstring>
 #include <initializer_list>
 
@@ -31,6 +32,22 @@ template<class Action> void rejects(Action action, const std::string& reason) {
 
 int main() {
     try {
+        {
+            // Distinct rows expose accidental reads from the next framebuffer.
+            std::array<uint8_t,512> rows{};
+            rows.fill(0xee);
+            for (unsigned y=0;y<256;++y) rows[y]=static_cast<uint8_t>(y);
+            expandGsFrameScanout(rows,1,511,3);
+            for (unsigned y=0;y<511;++y)
+                if (rows[y]!=y/2) throw std::runtime_error("GS frame scanout read adjacent VRAM");
+            if (rows[511]!=0xee || gsScanoutReadHeight(511,3)!=256 ||
+                gsScanoutReadHeight(512,3)!=256 || gsScanoutReadHeight(511,1)!=511)
+                throw std::runtime_error("GS scanout field height or storage boundary differs");
+            const auto unchanged=rows;
+            expandGsFrameScanout(rows,1,511,1);
+            if (rows!=unchanged) throw std::runtime_error("GS field-mode scanout was expanded");
+            rejects([&] { expandGsFrameScanout(rows,2,511,3); },"storage");
+        }
         CooperativeClock clock;
         if (clock.charge(32767) || clock.charge(32768)!=4096 || clock.charge(32768) ||
             clock.charge(32768*3)!=4096 || clock.charge(32768*3)!=4096 || clock.charge(32768*3))
