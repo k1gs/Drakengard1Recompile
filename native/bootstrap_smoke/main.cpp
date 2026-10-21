@@ -8,6 +8,7 @@
 void checkSif0();
 void checkPioCapture();
 void checkSio2Control();
+void checkVirtualPad();
 void checkRamCode();
 void checkGuestImports();
 
@@ -28,6 +29,7 @@ int main() {
         checkSif0();
         checkPioCapture();
         checkSio2Control();
+        checkVirtualPad();
         checkRamCode();
         checkGuestImports();
         {

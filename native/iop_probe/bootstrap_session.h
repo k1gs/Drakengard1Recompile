@@ -20,6 +20,7 @@ class BootstrapSession {
     Sif0Sender sif0;
     PioWriteCapture pio;
     QuiescentSio2 sio2;
+    Sio2Dma sio2Dma{sio2};
     SpdifSetup spdif;
     SpuVolumeRegisters volumes;
     SpuQuiescentControl spuControl;
@@ -43,6 +44,8 @@ class BootstrapSession {
     }
 public:
     SifRegisters sif;
+    void enableVirtualPad() { sio2.enableVirtualPad(); dma.enableSio2(sio2Dma); }
+    void publishPadInput(const VirtualPadInput& input) { sio2.publishInput(input); }
     void videoEvent(bool start) {
         if (!state.budget.inRuntime()) return;
         interrupts.videoEvent(memory,start);

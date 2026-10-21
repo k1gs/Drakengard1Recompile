@@ -1019,4 +1019,31 @@ The pinned [SIO2 state](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SIO/Sio
 [register definitions](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SIO/SioTypes.h)
 define this restricted quiescent state. No pad replies, FIFO data, DMA completions or
 SIO2 IRQs are invented. The first unsupported operation is a command-descriptor store;
-the experimental run stops before rendering. Controller detection remains unimplemented.
+the earlier experimental run stopped before rendering. The checkpoint below supersedes
+that limitation only when the virtual-pad option is explicitly enabled.
+
+### Virtual DualShock2 checkpoint (2026-10-22)
+
+`--virtual-pad` requires `--iop-video-events` and firmware entry. It enables a bounded
+packet-level DualShock2 device, SIO2 FIFO/START/IRQ handling, and actual DMA11/12
+RAM transfers. PADMAN negotiated digital, configuration and analog modes in a native
+run. A later bounded run reached its instruction budget without an unsupported-device
+stop; first and follow-up captures visibly show “Accessing…”. This is not a menu or
+gameplay result. Physical controller input and reconnection remain unverified.
+
+The host adapter samples keyboard or raylib gamepad 0. Enter is Start, Backspace is
+Select, arrows are the D-pad, WASD/IJKL are the sticks, X/C/Z/V are Cross/Circle/Square/
+Triangle, Q/E are L1/R1, 1/3 are L2/R2, and 2/4 are L3/R3. Losing focus releases inputs.
+Motor requests are recorded without claiming physical rumble. Guest ready flags are
+not patched. Unknown device commands and unsupported DMA modes fail closed.
+
+No memory card is attached. Reviewed absent-card probes return negative serial replies;
+card storage, formatting, saves and successful authentication are not implemented.
+Color tracing records actual GS inputs without modifying pixels. Brightness and the
+later frame composition still need a valid reference comparison. The final-frame
+capture helper is build-checked but has not yet been exercised in a new native run.
+
+Validation: Release native build, bootstrap CTest and 43 Python tests passed. Synthetic
+tests cover pad negotiation, button/axis packets, disconnection, SIO2 PIO/IRQ, DMA data
+and completion boundaries, and unsupported operations. These checks do not establish
+interactive input, game audio, saving or recovery.

@@ -3,6 +3,7 @@
 #include "iop_bridge.h"
 #include "firmware_functions.h"
 #include "guest_frame_capture.h"
+#include "host_pad_input.h"
 #include "runtime/ee_scheduler.h"
 #include <exception>
 #include <iostream>
@@ -41,6 +42,7 @@ int main(int argc, char** argv) {
             [](PS2Runtime&, void*) {},
             [](PS2Runtime& rt, void* data) {
                 auto& state = *static_cast<Diagnostics*>(data);
+                pollVirtualPadInput();
                 state.capture.observe(rt.gs());
                 auto& ticks = state.frames;
                 if (++ticks % 120 != 0) return;
@@ -57,6 +59,7 @@ int main(int argc, char** argv) {
             }, nullptr, &diagnostics);
         runtime->setMissingFunctionPolicy(PS2Runtime::MissingFunctionPolicy::Stop);
         if (!runtime->initialize("Drakengard Europe - diagnostic runtime")) return 3;
+        pollVirtualPadInput();
         diagnostics.capture.enable(runtime->gs());
         if (!runtime->loadELF(argv[1])) return 4;
         if (argc == 12) {
@@ -65,7 +68,13 @@ int main(int argc, char** argv) {
             drakengard::enterGameAfterFirmware();
             std::cerr << "[firmware-game-entry] start loaded ELF after guest BOOTEND; experimental, not full BIOS boot\n";
         }
-        runtime->run();
+        try { runtime->run(); }
+        catch (...) {
+            try { diagnostics.capture.saveFinal(runtime->gs()); }
+            catch (const std::exception& error) { std::cerr << "Final frame diagnostic failed: " << error.what() << '\n'; }
+            throw;
+        }
+        diagnostics.capture.saveFinal(runtime->gs());
         std::cerr << "Diagnostic run ended; this is not a playable-port acceptance result\n";
         return 5;
     } catch (const std::exception& error) {

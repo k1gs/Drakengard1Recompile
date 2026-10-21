@@ -45,6 +45,8 @@ struct IopBoot::Impl {
 IopBoot::IopBoot(const IopBootInputs& inputs) : impl(std::make_unique<Impl>(inputs)) {}
 IopBoot::~IopBoot() = default;
 void IopBoot::videoEvent(bool start) { impl->session->videoEvent(start); }
+void IopBoot::enableVirtualPad() { impl->session->enableVirtualPad(); }
+void IopBoot::publishPadInput(const VirtualPadInput& input) { impl->session->publishPadInput(input); }
 void IopBoot::enableEntryDevices() {
     if (!impl->reviewedRom) throw StrictDeviceError("IOPBOOT execution requires the exact reviewed BIOS SHA-256");
     // PCSX2 tries both companion names. Refuse even empty/unreadable entries:

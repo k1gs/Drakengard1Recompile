@@ -24,8 +24,15 @@ if(graphics_next STREQUAL graphics_source)
     message(FATAL_ERROR "Pinned GS scanout completion changed")
 endif()
 set(graphics_file "${CMAKE_BINARY_DIR}/private_scanout_GsCpuBackend.cpp")
+set(color_anchor "                const TextureCombineResult color = combineTexture(tex, r, g, b, a, tr, tg, tb, ta);")
+string(REPLACE "${color_anchor}"
+    "${color_anchor}\n                if ((x%16)==0 && (y%4)==0) observeGsColor(state,r,g,b,a,texel,color.r,color.g,color.b,color.a);"
+    graphics_diagnostic "${graphics_next}")
+if(graphics_diagnostic STREQUAL graphics_next)
+    message(FATAL_ERROR "Pinned GS sprite color diagnostic point changed")
+endif()
 file(CONFIGURE OUTPUT "${graphics_file}"
-    CONTENT "#include \"gs_scanout.h\"\n${graphics_next}" @ONLY)
+    CONTENT "#include \"gs_scanout.h\"\n#include \"gs_color_diagnostic.h\"\n${graphics_diagnostic}" @ONLY)
 set_source_files_properties("${graphics_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/gs")
 get_target_property(runtime_sources ps2_runtime SOURCES)

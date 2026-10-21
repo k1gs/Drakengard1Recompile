@@ -36,6 +36,9 @@ class NativeLaunchGuards(unittest.TestCase):
             with self.subTest(arguments=arguments):
                 self.refuses_before_intake(arguments)
 
+    def test_virtual_pad_requires_iop_video_events(self):
+        self.refuses_before_intake(["--input-complete", "--iop-bootstrap", "--ee-firmware-entry", "--virtual-pad"])
+
 
 if __name__ == "__main__":
     unittest.main()

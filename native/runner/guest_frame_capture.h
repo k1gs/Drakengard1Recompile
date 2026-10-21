@@ -18,6 +18,19 @@ public:
         if (const auto* path=std::getenv("DRAKENGARD_FRAME_OUTPUT")) output=path;
     }
     void enable(GS& gs) { if (!output.empty()) gs.setDebugHistoryPaused(false); }
+    void saveFinal(GS& gs) {
+        if (output.empty()) return;
+        std::vector<uint8_t> rgba; uint32_t width{},height{};
+        if (!gs.copyLatchedHostPresentationFrame(rgba,width,height) || !width || !height ||
+            uint64_t(width)*height*4!=rgba.size()) return;
+        const auto target=output.parent_path()/"last-guest-frame.ppm";
+        if (std::filesystem::exists(target)) throw std::runtime_error("Final frame output already exists");
+        std::ofstream file(target,std::ios::binary);
+        file << "P6\n" << width << ' ' << height << "\n255\n";
+        for (size_t at=0;at<rgba.size();at+=4) file.write(reinterpret_cast<const char*>(rgba.data()+at),3);
+        if (!file) throw std::runtime_error("Could not save final GS frame");
+        std::cerr << "[guest-frame-final] actual latched GS pixels, visual review required\n";
+    }
     void observe(GS& gs) {
         if (output.empty() || followupSaved) return;
         if (saved && ++framesAfterFirst<120) return;
@@ -50,6 +63,19 @@ public:
         for (size_t at=0;at<rgba.size();at+=4) file.write(reinterpret_cast<const char*>(rgba.data()+at),3);
         file.flush();
         if (!file) throw std::runtime_error("Could not save GS frame candidate");
+        auto historyPath=target; historyPath.replace_extension(".gs.txt");
+        if (std::filesystem::exists(historyPath)) throw std::runtime_error("GS history output already exists");
+        std::ofstream history(historyPath);
+        for (const auto& e:gs.getDebugHistory()) {
+            if (e.kind==GSDebugEventKind::Register && e.reg==1)
+                history << "rgbaq 0x" << std::hex << e.regValue << std::dec << '\n';
+            if (e.kind==GSDebugEventKind::Draw)
+                history << "draw frame=" << e.frame.fbp << " psm=" << unsigned(e.frame.psm)
+                        << " tme=" << unsigned(e.prim.tme) << " abe=" << unsigned(e.prim.abe)
+                        << " tfx=" << unsigned(e.tex0.tfx) << " alpha=0x" << std::hex << e.alpha << std::dec
+                        << " a=" << unsigned(e.aMin) << ',' << unsigned(e.aMax)
+                        << " y=" << e.yMin << ',' << e.yMax << '\n';
+        }
         if (saved) followupSaved=true; else saved=true;
         std::cerr << "[guest-frame-candidate] width=" << width << " height=" << height
                   << " path=" << target.string() << "; actual GS presentation, visual review required\n";

@@ -17,6 +17,7 @@ void advanceFirmwareIop();
 bool advanceFirmwareIopWhileEeIdle();
 void advanceFirmwareIopForEeCycles(uint64_t cycles);
 void firmwareIopVideoEvent(bool start);
+void publishVirtualPadInput(const VirtualPadInput& input);
 bool takeFirmwareDmaCompletion();
 bool takeFirmwareSif0Completion();
 std::optional<uint32_t> firmwareDmaRead(uint32_t address);

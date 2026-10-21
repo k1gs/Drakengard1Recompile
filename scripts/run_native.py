@@ -21,6 +21,7 @@ def main(argv=None):
     firmware.add_argument("--ee-firmware-init", action="store_true", help="Run the isolated reviewed firmware component")
     firmware.add_argument("--ee-firmware-entry", action="store_true", help="Enter the game after guest-owned IOP BOOTEND; experimental")
     parser.add_argument("--iop-video-events", action="store_true", help="Forward shared EE VBlank events to strict IOP; experimental, SIO2 remains incomplete")
+    parser.add_argument("--virtual-pad", action="store_true", help="Emulate DualShock2 port1 from keyboard/gamepad input; requires --iop-video-events")
     parser.add_argument("--disc", type=Path, default=ROOT / "game/Drakengard (Europe) (En,Fr,De,Es,It).iso")
     args = parser.parse_args(argv)
     if not args.input_complete:
@@ -31,6 +32,8 @@ def main(argv=None):
         parser.error("run must be 1..999")
     if args.iop_video_events and not args.ee_firmware_entry:
         parser.error("IOP video events require --ee-firmware-entry")
+    if args.virtual_pad and not args.iop_video_events:
+        parser.error("Virtual pad requires --iop-video-events")
     try:
         elf = ROOT / "work/extracted-001/SLES_523.22"
         if fingerprint(elf)["sha256"] != ELF_SHA256:
@@ -68,6 +71,11 @@ def main(argv=None):
         environment.pop("DRAKENGARD_FRAME_OUTPUT", None)
         environment.pop("DRAKENGARD_EE_RAM_OUTPUT", None)
         environment.pop("DRAKENGARD_IOP_VIDEO_EVENTS", None)
+        environment.pop("DRAKENGARD_VIRTUAL_PAD", None)
+        environment.pop("DRAKENGARD_GS_COLOR_OUTPUT", None)
+        result["virtual_pad_experiment"] = args.virtual_pad
+        if args.virtual_pad:
+            environment["DRAKENGARD_VIRTUAL_PAD"] = "1"
         result["iop_video_events_experiment"] = args.iop_video_events
         if args.iop_video_events:
             environment["DRAKENGARD_IOP_VIDEO_EVENTS"] = "1"
@@ -75,6 +83,7 @@ def main(argv=None):
         if args.ee_firmware_entry:
             environment["DRAKENGARD_FRAME_OUTPUT"] = str(frame)
             environment["DRAKENGARD_EE_RAM_OUTPUT"] = str(run / "ee-progress-ram.bin")
+            environment["DRAKENGARD_GS_COLOR_OUTPUT"] = str(run / "gs-colors.txt")
         with (run / "runtime.log").open("x", encoding="utf-8") as log:
             try:
                 child = subprocess.run(command, cwd=elf.parent,
@@ -86,6 +95,8 @@ def main(argv=None):
         result["guest_frame_candidate"] = frame.name if frame.is_file() else None
         followup = run / "review-guest-frame.ppm"
         result["guest_frame_followup"] = followup.name if followup.is_file() else None
+        final_frame = run / "last-guest-frame.ppm"
+        result["guest_frame_final"] = final_frame.name if final_frame.is_file() else None
         (run / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
         print(json.dumps(result, indent=2))
         return 124 if result["timed_out"] else result["exit_code"]

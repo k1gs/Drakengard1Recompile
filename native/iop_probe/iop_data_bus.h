@@ -144,8 +144,9 @@ public:
             if (cache && cache->rebootWrite(address, opcode, cpu.gpr[(instruction >> 16) & 31]))
                 cpuControl = cache->stageControl(memory, address, opcode, cpu.gpr[(instruction >> 16) & 31], cpu.pc);
             if (pioAccess) pioWrite = PioWrite{opcode, cpu.gpr[(instruction >> 16) & 31], cpu.pc};
-            sio2Write = sio2Access && opcode == 0x2b ? target : 0;
+            sio2Write = sio2Access && (opcode == 0x2b || opcode==0x28) ? target : 0;
             if (sio2Access && opcode==0x23) memory.write32(address,sio2->read(target));
+            if (sio2Access && (opcode==0x20 || opcode==0x24)) memory.write8(address,sio2->fifoRead());
             if (spdifAccess) {
                 if (opcode==0x29) spdifWrite = std::pair{target, cpu.gpr[(instruction >> 16) & 31]};
                 else memory.write16(address,spdif->read(target));
@@ -205,10 +206,12 @@ public:
         if (!cpu.exception && sif0Start) sif0->start(memory);
         if (!cpu.exception && pioWrite) pio->afterWrite(memory, pioWrite->opcode, pioWrite->value, pioWrite->pc);
         if (!cpu.exception && sio2Write) sio2->afterWrite(memory,sio2Write);
+        if (sio2 && sio2->takeInterruptEdge()) memory.setInterruptStatus(memory.interruptStatus()|(1u<<17));
         if (cdvdDma && cdvd) cdvdDma->pump(memory, *cdvd);
         if (cdvd && cdvd->takeInterruptEdge()) memory.setInterruptStatus(memory.interruptStatus() | 4u);
         if (timers) memory.setInterruptStatus(memory.interruptStatus() | timers->advance(1));
         if (dma) dma->pumpSpu(memory);
+        if (dma) dma->pumpSio2(memory);
         if (voices && timers) voices->advanceTo(timers->cycles());
         if (reverb && voices) reverb->advanceSilentInputs(voices->sampleCount());
     }

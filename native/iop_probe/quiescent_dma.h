@@ -2,6 +2,7 @@
 #include "core/iop_memory.h"
 #include "cdvd_dma.h"
 #include "spu_dma_write.h"
+#include "sio2_dma.h"
 #include <cstdint>
 #include <stdexcept>
 
@@ -12,7 +13,10 @@ class QuiescentDma {
     bool m_sif0Sender{};
     bool m_cdvdReceiver{};
     SpuDmaWrite* spuWriter{};
+    Sio2Dma* sio2Engine{};
 public:
+    void enableSio2(Sio2Dma& engine) { sio2Engine=&engine; }
+    void pumpSio2(ps2x::iop::detail::IopMemory& memory) { if (sio2Engine) sio2Engine->pump(memory); }
     void enableSpuWriter(SpuDmaWrite& writer) { spuWriter=&writer; }
     void pumpSpu(ps2x::iop::detail::IopMemory& memory) { if (spuWriter) spuWriter->pump(memory); }
     void enableCdvdReceiver() { m_cdvdReceiver = true; }
@@ -45,6 +49,10 @@ public:
         if (opcode != 0x23 && opcode != 0x2b) return false;
         if (interruptRegister(address) || priorityRegister(address)) return true;
         if (!channelRegister(address)) return false;
+        if (opcode==0x2b && Sio2Dma::channel(address) && (value&0x01000000) && sio2Engine) {
+            if (!memory) throw std::runtime_error("SIO2 DMA requires backing RAM");
+            sio2Engine->validateStart(*memory,address,value); return true;
+        }
         if (opcode==0x2b && SpuDmaWrite::channel(address) && (value&0x01000000) && spuWriter) {
             if (!memory) throw std::runtime_error("SPU DMA requires backing memory");
             spuWriter->validateStart(*memory,address,value); return true;

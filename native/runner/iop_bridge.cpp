@@ -52,6 +52,9 @@ public:
     void videoEvent(bool start) {
         if (videoEvents && phase==Phase::FirmwareEntry) boot->videoEvent(start);
     }
+    void publishPadInput(const VirtualPadInput& input) {
+        if (boot) boot->publishPadInput(input);
+    }
     void advanceFirmwareIopForEeCycles(uint64_t cycles) {
         if (phase!=Phase::FirmwareEntry) return;
         if (const auto quantum=executionClock.charge(cycles)) {
@@ -95,6 +98,12 @@ public:
         }
         firmwareDma.enableSif1();
         boot->enableEntryDevices();
+        if (const auto* enabled=std::getenv("DRAKENGARD_VIRTUAL_PAD")) {
+            if (std::string_view(enabled)!="1" || !videoEvents)
+                throw StrictDeviceError("Virtual pad requires shared IOP video events");
+            boot->enableVirtualPad();
+            std::cerr << "[virtual-pad] emulated DualShock2 port1; real SIO2 packets, host input snapshots\n";
+        }
         boot->bindSif0([this](std::span<const uint8_t> quantum) {
             drainSif0();
             if (!sif0Fifo.push(quantum)) return false;
@@ -249,6 +258,10 @@ void advanceFirmwareIopForEeCycles(uint64_t cycles) {
 void firmwareIopVideoEvent(bool start) {
     std::lock_guard lock(bridgeMutex);
     bridge.videoEvent(start);
+}
+void publishVirtualPadInput(const VirtualPadInput& input) {
+    std::lock_guard lock(bridgeMutex);
+    bridge.publishPadInput(input);
 }
 bool takeFirmwareDmaCompletion() {
     std::lock_guard lock(bridgeMutex);

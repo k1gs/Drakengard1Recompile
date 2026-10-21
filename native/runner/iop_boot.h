@@ -4,6 +4,7 @@
 #include <span>
 #include <string>
 #include <functional>
+#include "../iop_probe/dualshock2.h"
 
 namespace drakengard {
 struct IopBootInputs {
@@ -15,6 +16,8 @@ public:
     ~IopBoot();
     void advance(uint32_t instructions);
     void videoEvent(bool start);
+    void enableVirtualPad();
+    void publishPadInput(const VirtualPadInput& input);
     void enableSif1Receiver();
     void feedSif1(std::span<const uint8_t> quantum);
     void bindSif0(std::function<bool(std::span<const uint8_t>)> sink);

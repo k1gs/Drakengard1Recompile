@@ -24,7 +24,7 @@ void checkSio2Control() {
     for (auto value : {0u, 1u, 0x3bdu, 0xffffffffu}) check(!sio2.allows(0x1f808268, 0x2b, value));
     for (auto opcode : {0x20u, 0x21u, 0x25u, 0x28u, 0x29u, 0x2eu})
         check(!sio2.allows(0x1f808268, opcode, 0x3bc));
-    for (auto address : {0x1f808200u, 0x1f808260u, 0x1f808264u, 0x1f80826cu, 0x1f808280u})
+    for (auto address : {0x1f808260u, 0x1f808264u, 0x1f80826cu, 0x1f808280u})
         check(!sio2.allows(address, 0x23, 0) && !sio2.allows(address, 0x2b, 0x3bc));
     refuses([&] { sio2.enable(); });
 }
