@@ -30,6 +30,12 @@ class NativeLaunchGuards(unittest.TestCase):
     def test_entry_requires_completed_input(self):
         self.refuses_before_intake(["--iop-bootstrap", "--ee-firmware-entry"])
 
+    def test_video_events_require_firmware_game_entry(self):
+        for arguments in (["--input-complete", "--iop-video-events"],
+                          ["--input-complete", "--iop-bootstrap", "--ee-firmware-init", "--iop-video-events"]):
+            with self.subTest(arguments=arguments):
+                self.refuses_before_intake(arguments)
+
 
 if __name__ == "__main__":
     unittest.main()

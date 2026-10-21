@@ -16,6 +16,7 @@ void bindFirmwareEeRam(std::span<uint8_t> ram, uint32_t initialEnableWord, std::
 void advanceFirmwareIop();
 bool advanceFirmwareIopWhileEeIdle();
 void advanceFirmwareIopForEeCycles(uint64_t cycles);
+void firmwareIopVideoEvent(bool start);
 bool takeFirmwareDmaCompletion();
 bool takeFirmwareSif0Completion();
 std::optional<uint32_t> firmwareDmaRead(uint32_t address);

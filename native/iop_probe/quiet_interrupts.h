@@ -2,10 +2,15 @@
 #include "core/iop_memory.h"
 #include <stdexcept>
 
-// Reset/quiescent interrupt controller. No copied snapshot IRQs or fabricated
-// device events; an actual pending interrupt requires a delivery implementation.
+// Interrupt latch/access model. Actual device/video event owners set pending
+// bits; the CPU exception path owns masked delivery. No snapshot IRQ injection.
 class QuietInterrupts {
 public:
+    // The EE video event is the shared source; do not synthesize a second clock.
+    // Pinned PCSX2 IopCounters.cpp: psxVBlankStart IRQ0, psxVBlankEnd IRQ11.
+    void videoEvent(ps2x::iop::detail::IopMemory& memory,bool start) {
+        memory.setInterruptStatus(memory.interruptStatus() | (start ? 1u : 1u<<11));
+    }
     void reset(ps2x::iop::detail::IopMemory& memory) {
         memory.setInterruptStatus(0); memory.setInterruptMask(0); memory.setInterruptControl(0);
     }

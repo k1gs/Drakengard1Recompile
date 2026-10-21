@@ -20,6 +20,7 @@ def main(argv=None):
     firmware = parser.add_mutually_exclusive_group()
     firmware.add_argument("--ee-firmware-init", action="store_true", help="Run the isolated reviewed firmware component")
     firmware.add_argument("--ee-firmware-entry", action="store_true", help="Enter the game after guest-owned IOP BOOTEND; experimental")
+    parser.add_argument("--iop-video-events", action="store_true", help="Forward shared EE VBlank events to strict IOP; experimental, SIO2 remains incomplete")
     parser.add_argument("--disc", type=Path, default=ROOT / "game/Drakengard (Europe) (En,Fr,De,Es,It).iso")
     args = parser.parse_args(argv)
     if not args.input_complete:
@@ -28,6 +29,8 @@ def main(argv=None):
         parser.error("Firmware modes require --iop-bootstrap")
     if not 1 <= args.run <= 999:
         parser.error("run must be 1..999")
+    if args.iop_video_events and not args.ee_firmware_entry:
+        parser.error("IOP video events require --ee-firmware-entry")
     try:
         elf = ROOT / "work/extracted-001/SLES_523.22"
         if fingerprint(elf)["sha256"] != ELF_SHA256:
@@ -64,6 +67,10 @@ def main(argv=None):
         environment = os.environ.copy()
         environment.pop("DRAKENGARD_FRAME_OUTPUT", None)
         environment.pop("DRAKENGARD_EE_RAM_OUTPUT", None)
+        environment.pop("DRAKENGARD_IOP_VIDEO_EVENTS", None)
+        result["iop_video_events_experiment"] = args.iop_video_events
+        if args.iop_video_events:
+            environment["DRAKENGARD_IOP_VIDEO_EVENTS"] = "1"
         frame = run / "first-guest-frame.ppm"
         if args.ee_firmware_entry:
             environment["DRAKENGARD_FRAME_OUTPUT"] = str(frame)

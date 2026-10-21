@@ -65,7 +65,7 @@ public:
         bool sif0Start{};
         std::optional<PioWrite> pioWrite;
         std::optional<CoherentCache::ControlWrite> cpuControl;
-        bool sio2Write{};
+        uint32_t sio2Write{};
         bool bootEndRise{};
         std::optional<std::pair<uint32_t, uint32_t>> spdifWrite;
         std::optional<SpuVolumeRegisters::Access> volumeAccess;
@@ -144,7 +144,8 @@ public:
             if (cache && cache->rebootWrite(address, opcode, cpu.gpr[(instruction >> 16) & 31]))
                 cpuControl = cache->stageControl(memory, address, opcode, cpu.gpr[(instruction >> 16) & 31], cpu.pc);
             if (pioAccess) pioWrite = PioWrite{opcode, cpu.gpr[(instruction >> 16) & 31], cpu.pc};
-            sio2Write = sio2Access && opcode == 0x2b;
+            sio2Write = sio2Access && opcode == 0x2b ? target : 0;
+            if (sio2Access && opcode==0x23) memory.write32(address,sio2->read(target));
             if (spdifAccess) {
                 if (opcode==0x29) spdifWrite = std::pair{target, cpu.gpr[(instruction >> 16) & 31]};
                 else memory.write16(address,spdif->read(target));
@@ -203,7 +204,7 @@ public:
         if (!cpu.exception && dmaWrite) dma->afterWrite(memory, dmaWrite, dmaPrevious, dmaValue);
         if (!cpu.exception && sif0Start) sif0->start(memory);
         if (!cpu.exception && pioWrite) pio->afterWrite(memory, pioWrite->opcode, pioWrite->value, pioWrite->pc);
-        if (!cpu.exception && sio2Write) sio2->afterWrite(memory);
+        if (!cpu.exception && sio2Write) sio2->afterWrite(memory,sio2Write);
         if (cdvdDma && cdvd) cdvdDma->pump(memory, *cdvd);
         if (cdvd && cdvd->takeInterruptEdge()) memory.setInterruptStatus(memory.interruptStatus() | 4u);
         if (timers) memory.setInterruptStatus(memory.interruptStatus() | timers->advance(1));

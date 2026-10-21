@@ -3,6 +3,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <array>
+#include <cstdlib>
 #include "../iop_probe/sif_registers.h"
 #include "../iop_probe/ee_sif_dma.h"
 #include "../iop_probe/sif0_fifo.h"
@@ -28,6 +29,7 @@ class CooperativeIopBridge {
     unsigned idleSlices{};
     CooperativeClock executionClock;
     unsigned runningSlices{};
+    bool videoEvents{};
     std::array<uint32_t, 3> softwareRegisters{};
     uint32_t busRegister(uint32_t number) {
         return SifRegisters::kernelAddress(number);
@@ -47,6 +49,9 @@ class CooperativeIopBridge {
         catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
     }
 public:
+    void videoEvent(bool start) {
+        if (videoEvents && phase==Phase::FirmwareEntry) boot->videoEvent(start);
+    }
     void advanceFirmwareIopForEeCycles(uint64_t cycles) {
         if (phase!=Phase::FirmwareEntry) return;
         if (const auto quantum=executionClock.charge(cycles)) {
@@ -83,6 +88,11 @@ public:
         if (phase != Phase::Firmware || eeRam.empty() || !(boot->readEe(0x1000f230) & 0x40000u))
             throw StrictDeviceError("Game entry requires actual completed firmware IOP startup");
         phase = Phase::FirmwareEntry;
+        if (const auto* enabled=std::getenv("DRAKENGARD_IOP_VIDEO_EVENTS")) {
+            if (std::string_view(enabled)!="1") throw StrictDeviceError("Unsupported IOP video event profile");
+            videoEvents=true;
+            std::cerr << "[iop-video-events] shared EE VBlank start/end enabled; scheduler timing remains approximate\n";
+        }
         firmwareDma.enableSif1();
         boot->enableEntryDevices();
         boot->bindSif0([this](std::span<const uint8_t> quantum) {
@@ -235,6 +245,10 @@ bool advanceFirmwareIopWhileEeIdle() {
 void advanceFirmwareIopForEeCycles(uint64_t cycles) {
     std::lock_guard lock(bridgeMutex);
     bridge.advanceFirmwareIopForEeCycles(cycles);
+}
+void firmwareIopVideoEvent(bool start) {
+    std::lock_guard lock(bridgeMutex);
+    bridge.videoEvent(start);
 }
 bool takeFirmwareDmaCompletion() {
     std::lock_guard lock(bridgeMutex);

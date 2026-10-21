@@ -17,6 +17,10 @@ replace_scheduler("        processPendingEvents();"
     "        devices.advance(*this,m_runtime,m_eeCycle,(m_enabledIntcMask & 1u)!=0,thread(kMainThreadId) ? &thread(kMainThreadId)->context : nullptr);\n        processPendingEvents();")
 replace_scheduler("    handlers.emplace(id,"
     "    logEeIrqRegistration(dmac,cause,handler,argument,gp);\n    handlers.emplace(id,")
+replace_scheduler("    case EeEventType::VBlankStart:\n        ++m_vsyncTick;"
+    "    case EeEventType::VBlankStart:\n        drakengard::firmwareIopVideoEvent(true);\n        ++m_vsyncTick;")
+replace_scheduler("    case EeEventType::VBlankEnd:\n        dispatchIrq(false, 3u);"
+    "    case EeEventType::VBlankEnd:\n        drakengard::firmwareIopVideoEvent(false);\n        dispatchIrq(false, 3u);")
 replace_scheduler("    std::sort(matching.begin(), matching.end(),"
     "    logEeIrqDelivery(dmac,cause,matching.size());\n    std::sort(matching.begin(), matching.end(),")
 set(scheduler_file "${CMAKE_BINARY_DIR}/private_cooperative_Scheduler.cpp")

@@ -43,6 +43,10 @@ class BootstrapSession {
     }
 public:
     SifRegisters sif;
+    void videoEvent(bool start) {
+        if (!state.budget.inRuntime()) return;
+        interrupts.videoEvent(memory,start);
+    }
     void enableSif1Receiver() { dma.enableSif1Receiver(); }
     void feedSif1(std::span<const uint8_t> quantum) { sif1.feed(memory, quantum); }
     void bindSif0(std::function<bool(std::span<const uint8_t>)> sink) {

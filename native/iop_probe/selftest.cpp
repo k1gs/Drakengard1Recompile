@@ -60,6 +60,20 @@ int main() {
         if (runBudget.deadline()!=1000+IopExecutionBudget::RuntimeLimit || !runBudget.inRuntime())
             throw std::runtime_error("Post-boot budget lost its finite monotonic allowance");
         rejects([&] { runBudget.retiredRebootCompletion(2000); },"single completed guest reboot");
+        {
+            ps2x::iop::detail::IopMemory irqMemory;
+            QuietInterrupts videoIrqs; videoIrqs.reset(irqMemory);
+            irqMemory.setInterruptStatus(1u<<3);
+            irqMemory.setInterruptControl(1);
+            videoIrqs.videoEvent(irqMemory,true);
+            if (irqMemory.interruptStatus()!=9 || videoIrqs.pending(irqMemory))
+                throw std::runtime_error("IOP VBlank lost other events or bypassed I_MASK");
+            irqMemory.setInterruptMask(1);
+            if (!videoIrqs.pending(irqMemory)) throw std::runtime_error("IOP VBlank start was not pending");
+            videoIrqs.videoEvent(irqMemory,false);
+            if (irqMemory.interruptStatus()!=(9u|(1u<<11)))
+                throw std::runtime_error("IOP VBlank end did not latch IRQ11");
+        }
         GsInterruptLine line;
         if (line.observe(0,0,true) || line.observe(2,0x7f00,true) ||
             !line.observe(2,0x7d00,true) || line.observe(2,0x7d00,true) || line.observe(0,0x7d00,true))
@@ -230,6 +244,17 @@ int main() {
             if (result.value != 0x3bc || memory.interruptStatus() || memory.read32(0x1f80826c) != 0xdeadbeef)
                 throw std::runtime_error("SIO2 control lost actual CPU state, changed neighbor or invented IRQ");
         }
+        code(memory, {0x8c820000, 0, 0x03e00008, 0});
+        memory.write32(0x1f808270,0xdeadbeef);
+        result=bareCall(memory,0x1000,0,0xbf808270,0x1000,0x1100,{.sio2=&sio2});
+        if (result.value!=15 || memory.interruptStatus())
+            throw std::runtime_error("SIO2 quiescent port status used stale backing RAM or invented IRQ");
+        code(memory,{0x3c02ffc0,0x34420505,0xac820000,0x8c820000,0,0x03e00008,0});
+        result=bareCall(memory,0x1000,0,0xbf808240,0x1000,0x1100,{.sio2=&sio2});
+        if (result.value!=0xffc00505 || sio2.read(0x1f808244) || memory.interruptStatus())
+            throw std::runtime_error("SIO2 raw port setup changed data, neighbor or IRQ");
+        code(memory,{0x8c820000,0,0x03e00008,0});
+        rejects([&] { bareCall(memory,0x1000,0,0xbf80826c,0x1000,0x1100,{.sio2=&sio2}); },"hardware contract");
         code(memory, {0x240203bd, 0xac820000, 0x03e00008, 0});
         rejects([&] { bareCall(memory, 0x1000, 0, 0xbf808268, 0x1000, 0x1100,
             {.sio2 = &sio2}); }, "hardware contract");

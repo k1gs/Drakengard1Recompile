@@ -45,12 +45,12 @@ int main() {
             refuses([&] { budget.retiredRebootCompletion(6032020); });
             refuses([&] { budget.retiredRebootCompletion(14032021); });
             budget.retiredRebootCompletion(12000001);
-            require(budget.deadline() == 20000001 && budget.inRuntime() && !budget.inReboot());
+            require(budget.deadline() == 268000001 && budget.inRuntime() && !budget.inReboot());
             refuses([&] { budget.retiredRebootCompletion(13000000); });
             refuses([&] { budget.retiredRebootEntry(7000000); });
             IopExecutionBudget edge; edge.enableGuestReboot();
             require(edge.retiredRebootEntry(8000000) && edge.deadline() == 15999999);
-            edge.retiredRebootCompletion(15999999); require(edge.deadline() == 23999999);
+            edge.retiredRebootCompletion(15999999); require(edge.deadline() == 271999999);
         }
         refuses([] { ReadOnlyRom wrong(std::vector<uint8_t>(16)); });
         std::vector<uint8_t> bytes(0x400000);

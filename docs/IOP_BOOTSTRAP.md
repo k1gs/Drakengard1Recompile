@@ -989,8 +989,34 @@ The capture helper observes the latched guest GS presentation after actual draw 
 An initial dark two-band clear was visually rejected. After resource loading, two native
 runs produced recognizable game text: the DualShock 2 controller is not detected in port 1.
 Both were visually inspected; a second capture 120 presentation callbacks later retains
-the message. The image is dark and duplicated vertically; menu and gameplay are not proven.
+the message. These initial images were dark and duplicated vertically; menu and gameplay are not proven.
 Brightness/contrast filtering only selects captures and never changes rendered pixels.
 Captures and executor-owned RAM snapshots stay in ignored work/.
 Synthetic checks and successful resource transfers do not establish menu, gameplay,
 audio, save or recovery success.
+
+### Frame scanout and controller experiment (2026-10-22)
+
+Actual video registers select CRT2 only and `SMODE2.INT=FFMD=1`. The CPU backend
+incorrectly read the full display height from VRAM. The build-local overlay now reads
+half-height (rounded up), then expands scanout rows, following the pinned
+[PCRTC rectangle calculation](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/GS/GSState.cpp).
+A new native capture was visually inspected: the warning appears once, centered, with
+the expected vertical scale. The image remains dim; no brightness correction is claimed.
+
+The first-frame profile does not deliver video events to the strict IOP and cannot
+validate controller polling. The optional `--iop-video-events` launcher flag forwards
+the existing EE VBlank start/end events after the real post-reboot BOOTEND. IOP pending
+bits are IRQ0/IRQ11, respectively, as in the pinned
+[IOP counter implementation](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IopCounters.cpp).
+Masking and CPU exception delivery remain guest-controlled. This is functional event
+routing; the upstream fixed-period scheduler does not establish PAL-accurate timing.
+
+The experiment reaches real SIO2 accesses previously absent: PortStat read, raw port
+setup stores, then a command-queue write. PortStat's reset value is `0xF`; it does not
+report a connected controller. Port control words are retained from actual CPU stores.
+The pinned [SIO2 state](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SIO/Sio2.cpp) and
+[register definitions](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SIO/SioTypes.h)
+define this restricted quiescent state. No pad replies, FIFO data, DMA completions or
+SIO2 IRQs are invented. The first unsupported operation is a command-descriptor store;
+the experimental run stops before rendering. Controller detection remains unimplemented.
