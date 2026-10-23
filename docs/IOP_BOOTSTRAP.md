@@ -1047,3 +1047,30 @@ Validation: Release native build, bootstrap CTest and 43 Python tests passed. Sy
 tests cover pad negotiation, button/axis packets, disconnection, SIO2 PIO/IRQ, DMA data
 and completion boundaries, and unsupported operations. These checks do not establish
 interactive input, game audio, saving or recovery.
+
+### Final-frame and zero-sample stream checkpoint (2026-10-24)
+
+The final-frame helper was exercised in native186. Its actual GS capture shows the
+no-memory-card Yes/No dialog, beyond the earlier “Accessing…” image. The run ended
+at the finite IOP budget without a supervisor timeout. A separate isolated PCSX2
+software-renderer reference with a DualShock2 and no cards reached the same dialog.
+Its raw framebuffer dumps are not final presented/deinterlaced screen captures.
+
+Real foreground host keyboard input (Left, then X/Cross) exposed a strict SPU
+blocker: core 1 voice 23 key-on at SSA `0x2808`. The first ADPCM block was entirely
+zero with an ordinary header, not the exact looping `0x0700` header previously
+accepted by the bounded decoder.
+
+The zero-sample model now follows ordinary blocks and actual start/end/repeat
+flags, including guest-written LSA precedence, NAX progression, ENDX and ADSR stop.
+Known predictors and zero sample words keep decoder history and PCM zero;
+nonzero sample data, noise and sweeps remain explicit refusals.
+Synthetic transition/error checks and the native Release build passed.
+
+Native189/190 passed the old key-on refusal and then stopped on nonzero ADPCM data
+at NAX `0x2811`, core 1 voice 23, pitch `0x0759`, active ADSR. General ADPCM voice
+processing and its interaction with the zero-input-only reverb model are the next
+device work; no sample was discarded or completion invented. Main menu, audible
+output, gameplay, saves and recovery remain unverified. The user requested a local
+checkpoint commit without a push. See [the handoff](HANDOFF_2026-10-24.md) for
+commands, evidence boundaries and the next experiment.

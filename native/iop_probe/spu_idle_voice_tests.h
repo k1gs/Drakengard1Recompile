@@ -49,31 +49,160 @@ inline void stoppedSpuVoices() {
 }
 inline void silentSpuVoices() {
     using ps2x::iop::detail::IopMemory;
-    IopMemory memory; SpuRamWritePort ram; ram.enable();
-    SpuIdleVoices voices; voices.enable(0,&ram);
-    const auto store=[&](auto& device,uint32_t address,uint16_t value) {
+    const auto store=[](auto& device,IopMemory& memory,uint32_t address,uint16_t value) {
         auto access=device.stage(memory,address,address,0x29,value);
         device.complete(memory,access,false);
     };
-    store(ram,0x1f9001a8,0); store(ram,0x1f9001aa,0x2800);
-    for (unsigned i=0;i<8;++i) store(ram,0x1f9001ac,i?0:0x0700);
-    store(voices,0x1f900004,0x1000);
-    store(voices,0x1f9001a0,1);
-    if (voices.read(0x1f9001a0)!=1 || voices.read(0x1f90000a))
-        throw std::runtime_error("KON must remain pending until a sample boundary");
-    voices.advanceTo(768);
-    if (voices.read(0x1f9001a0) || voices.read(0x1f90000a)!=14336 ||
-        voices.read(0x1f9001ca)!=0x2802 || (voices.read(0x1f900340)&1))
-        throw std::runtime_error("Silent KON did not attack/decode/clear ENDX");
-    voices.advanceTo(768*32);
-    if (!(voices.read(0x1f900340)&1)) throw std::runtime_error("Silent loop did not mark its end");
-    store(voices,0x1f9001a4,1); voices.advanceTo(768*36);
-    if (voices.read(0x1f90000a)) throw std::runtime_error("Silent KOFF envelope failed to release");
-    store(ram,0x1f9001aa,0x2801); store(ram,0x1f9001ac,1);
-    bool refused=false;
-    try { voices.advanceTo(768*37); } catch (const std::runtime_error&) { refused=true; }
-    if (!refused || voices.allows(0x1f9001a0,0x29,1))
-        throw std::runtime_error("Changed audible ADPCM escaped the silent subset");
+    const auto ramBlock=[&](SpuRamWritePort& ram,IopMemory& memory,unsigned core,
+                            uint32_t base,uint16_t header) {
+        const auto off=core*0x400u;
+        store(ram,memory,0x1f9001a8+off,uint16_t(base>>16));
+        store(ram,memory,0x1f9001aa+off,uint16_t(base));
+        store(ram,memory,0x1f9001ac+off,header);
+        for (unsigned n=1;n<8;++n) store(ram,memory,0x1f9001ac+off,0);
+    };
+    const auto voiceAddress=[](unsigned core,unsigned voice,unsigned field) {
+        return 0x1f900000u+core*0x400u+0x1c0u+voice*12u+field*2u;
+    };
+    const auto coreRegister=[](unsigned core,unsigned reg) {
+        return 0x1f900000u+core*0x400u+reg;
+    };
+
+    // A real core-1/voice-23 stream starts with header 0000.  It advances
+    // through the following block rather than being treated as a fabricated
+    // one-block loop, and an ordinary boundary does not set ENDX.
+    {
+        IopMemory memory; SpuRamWritePort ram; ram.enable();
+        SpuIdleVoices voices; voices.enable(0,&ram);
+        ramBlock(ram,memory,1,0x2808,0);
+        const auto pitch=0x1f900000u+0x400u+23u*16u+4u;
+        store(voices,memory,voiceAddress(1,23,1),0x2808);
+        store(voices,memory,pitch,0x1000);
+        const auto prekeyNax=voices.read(voiceAddress(1,23,5));
+        store(voices,memory,coreRegister(1,0x1a2),0x0080);
+        if (!voices.read(coreRegister(1,0x1a2)) || voices.read(voiceAddress(1,23,5))!=prekeyNax)
+            throw std::runtime_error("Core-1 voice-23 zero stream retired key-on early");
+        voices.advanceTo(768);
+        if (voices.read(coreRegister(1,0x1a2)) || voices.read(voiceAddress(1,23,5))!=0x280a ||
+            (voices.read(coreRegister(1,0x342))&0x80))
+            throw std::runtime_error("Header-0000 zero stream did not advance normally");
+        voices.advanceTo(768*12);
+        if (voices.read(voiceAddress(1,23,5))!=0x280f ||
+            (voices.read(coreRegister(1,0x342))&0x80))
+            throw std::runtime_error("Ordinary zero stream advanced its block incorrectly");
+        voices.advanceTo(768*13);
+        if (voices.read(voiceAddress(1,23,5))!=0x2811 ||
+            (voices.read(coreRegister(1,0x342))&0x80))
+            throw std::runtime_error("Ordinary zero block fabricated a loop or ENDX");
+        voices.advanceTo(768*17);
+        if (voices.read(voiceAddress(1,23,5))!=0x2812)
+            throw std::runtime_error("Ordinary zero stream stopped advancing");
+    }
+
+    // LOOP/START records LSA, LOOP/END|REPEAT returns to it, and an explicit
+    // LSA write after KON wins over the automatic loop-start address.
+    {
+        IopMemory memory; SpuRamWritePort ram; ram.enable();
+        SpuIdleVoices voices; voices.enable(0,&ram);
+        ramBlock(ram,memory,0,0x2800,0x0400);
+        ramBlock(ram,memory,0,0x2808,0x0300);
+        ramBlock(ram,memory,0,0x2900,0);
+        const auto pitch=0x1f900000u+23u*16u+4u;
+        store(voices,memory,pitch,0x1000);
+        store(voices,memory,0x1f9001a2,0x0080);
+        voices.advanceTo(768);
+        if (voices.read(voiceAddress(0,23,3))!=0x2800)
+            throw std::runtime_error("Zero stream did not record automatic loop start");
+        store(voices,memory,voiceAddress(0,23,3),0x2900);
+        voices.advanceTo(768*40);
+        if (voices.read(0x1f900342)&0x80)
+            throw std::runtime_error("Zero stream loop ended too early");
+        voices.advanceTo(768*41);
+        if (!(voices.read(0x1f900342)&0x80) ||
+            voices.read(voiceAddress(0,23,5))!=0x2901 ||
+            voices.read(voiceAddress(0,23,3))!=0x2900)
+            throw std::runtime_error("Zero stream loop/repeat or manual LSA override failed");
+        voices.advanceTo(768*45);
+        if (voices.read(voiceAddress(0,23,5))!=0x2902)
+            throw std::runtime_error("Repeated zero stream stopped traversing");
+    }
+
+    // LOOP/END without LOOP/REPEAT sets ENDX and stops ADSR at the same
+    // boundary; it must not be silently converted into a looping fixture.
+    {
+        IopMemory memory; SpuRamWritePort ram; ram.enable();
+        SpuIdleVoices voices; voices.enable(0,&ram);
+        ramBlock(ram,memory,0,0x2800,0x0400);
+        ramBlock(ram,memory,0,0x2808,0x0100);
+        store(voices,memory,0x1f900004,0x1000);
+        store(voices,memory,0x1f9001a0,1);
+        voices.advanceTo(768);
+        if (!voices.read(0x1f90000a))
+            throw std::runtime_error("Non-repeating zero endpoint stopped ADSR early");
+        voices.advanceTo(768*40);
+        if ((voices.read(0x1f900340)&1) || voices.read(0x1f90000a)==0)
+            throw std::runtime_error("Non-repeating zero endpoint stopped before its boundary");
+        voices.advanceTo(768*41);
+        if (!(voices.read(0x1f900340)&1) || voices.read(0x1f90000a))
+            throw std::runtime_error("Non-repeating zero endpoint did not stop ADSR");
+    }
+
+    // Preserve the original all-flags zero block fixture as a real loop.
+    {
+        IopMemory memory; SpuRamWritePort ram; ram.enable();
+        SpuIdleVoices voices; voices.enable(0,&ram);
+        ramBlock(ram,memory,0,0x2800,0x0700);
+        store(voices,memory,0x1f900004,0x1000);
+        store(voices,memory,0x1f9001a0,1);
+        voices.advanceTo(768*13);
+        if (!(voices.read(0x1f900340)&1) || voices.read(0x1f9001ca)!=0x2801)
+            throw std::runtime_error("Legacy zero loop fixture changed behavior");
+        store(voices,memory,0x1f9001a4,1);
+        voices.advanceTo(768*17);
+        if (voices.read(0x1f90000a))
+            throw std::runtime_error("Zero-loop key-off failed to release its envelope");
+    }
+    // The bounded domain remains fail-closed for changed RAM and noise.
+    {
+        IopMemory memory; SpuRamWritePort ram; ram.enable();
+        SpuIdleVoices voices; voices.enable(0,&ram);
+        ramBlock(ram,memory,0,0x2800,0);
+        store(voices,memory,0x1f900004,0x1000);
+        store(voices,memory,0x1f9001a0,1);
+        voices.advanceTo(768);
+        store(ram,memory,0x1f9001a8,0);
+        store(ram,memory,0x1f9001aa,0x2801);
+        store(ram,memory,0x1f9001ac,1);
+        bool refused=false;
+        try { voices.advanceTo(768*2); } catch (const std::runtime_error&) { refused=true; }
+        if (!refused) throw std::runtime_error("Mutated zero stream was not rejected");
+    }
+    {
+        IopMemory memory; SpuRamWritePort ram; ram.enable();
+        SpuIdleVoices voices; voices.enable(0,&ram);
+        ramBlock(ram,memory,0,0x2800,0);
+        ramBlock(ram,memory,0,0x2808,0);
+        store(ram,memory,0x1f9001aa,0x2809);
+        store(ram,memory,0x1f9001ac,1);
+        store(voices,memory,0x1f900004,0x1000);
+        store(voices,memory,0x1f9001a0,1);
+        voices.advanceTo(768*13);
+        bool refused=false;
+        try { voices.advanceTo(768*14); } catch (const std::runtime_error&) { refused=true; }
+        if (!refused) throw std::runtime_error("Nonzero next zero block was not rejected");
+    }
+    {
+        IopMemory memory; SpuRamWritePort ram; ram.enable();
+        SpuIdleVoices voices; voices.enable(0,&ram);
+        ramBlock(ram,memory,1,0x2800,0);
+        bool refused=false;
+        try {
+            store(voices,memory,0x1f900586,0x0080);
+            store(voices,memory,0x1f9005a2,0x0080);
+        } catch (const std::runtime_error&) { refused=true; }
+        if (!refused) throw std::runtime_error("Noise key-on escaped the zero stream domain");
+    }
+
     SpuEnvelope envelope; envelope.attack(); envelope.tick(0,0);
     if (envelope.value!=14336 || envelope.phase!=1) throw std::runtime_error("ADSR attack step differs");
     envelope.release(); envelope.tick(0,0);

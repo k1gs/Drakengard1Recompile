@@ -7,8 +7,8 @@
 #include "spu_envelope.h"
 #include "spu_ram_write_port.h"
 
-// Voice setup plus a deliberately bounded zero-sample ADPCM loop decoder. Other
-// sample data, noise and sweeps fail closed. This produces no host audio claim.
+// Voice setup plus a deliberately bounded zero-sample ADPCM stream traversal.
+// Other sample data, noise and sweeps fail closed. This produces no host audio claim.
 class SpuIdleVoices {
     struct Voice {
         std::array<uint16_t,6> parameters{0,0,0x3fff,0,0,0};
@@ -29,9 +29,14 @@ class SpuIdleVoices {
     uint32_t fraction{}, stores{};
     bool enabled{};
     const SpuRamWritePort* ram{};
-    bool silentBlock(uint32_t address) const {
-        if (!ram || ram->peek(address&0xffff8)!=0x0700) return false;
-        for (unsigned i=1;i<8;++i) if (ram->peek((address&0xffff8)+i)) return false;
+    bool zeroBlock(uint32_t address,uint8_t* flags=nullptr) const {
+        if (!ram) return false;
+        const auto base=address&0xffff8;
+        const auto header=ram->peek(base);
+        const auto blockFlags=uint8_t(header>>8);
+        if ((blockFlags&~uint8_t(7)) || ((header>>4)&15)>4) return false;
+        for (unsigned i=1;i<8;++i) if (ram->peek((base+i)&0xfffff)) return false;
+        if (flags) *flags=blockFlags;
         return true;
     }
     static bool mapped(uint32_t address) {
@@ -65,9 +70,21 @@ public:
         if (reg==0x1a0 || reg==0x1a2) {
             const auto& core=cores[(address>>10)&1];
             const uint32_t mask=uint32_t(uint16_t(value))<<((reg&2)*8);
-            if (mask&core.masks[1]) return false; // Noise needs a real generator.
+            if (mask&core.masks[1]) {
+                std::cerr << "[spu-unsupported-key-on] core=" << ((address>>10)&1)
+                          << " mask=0x" << std::hex << mask << " noise=0x" << core.masks[1] << std::dec << '\n';
+                return false; // Noise needs a real generator.
+            }
             for (unsigned v=0;v<24;++v)
-                if ((mask&(1u<<v)) && !silentBlock(core.voices[v].addresses[0])) return false;
+                if ((mask&(1u<<v)) && !zeroBlock(core.voices[v].addresses[0])) {
+                    const auto start=core.voices[v].addresses[0];
+                    std::cerr << "[spu-unsupported-key-on] core=" << ((address>>10)&1) << " voice=" << v
+                              << " start=0x" << std::hex << start;
+                    if (ram) for (unsigned word=0;word<8;++word)
+                        std::cerr << " word" << word << "=0x" << ram->peek(((start&0xffff8)+word)&0xfffff);
+                    std::cerr << std::dec << '\n';
+                    return false;
+                }
         }
         return true;
     }
@@ -107,22 +124,42 @@ public:
                 auto& voice=core.voices[n]; const auto bit=1u<<n;
                 if (core.keyOff&bit) voice.envelope.release();
                 if (core.keyOn&bit) {
-                    if ((core.masks[1]&bit) || !silentBlock(voice.addresses[0]))
+                    if ((core.masks[1]&bit) || !zeroBlock(voice.addresses[0]))
                         throw std::runtime_error("SPU key-on sample changed before retirement boundary");
                     voice.envelope.attack(); voice.loopMode=false;
                     voice.addresses[2]=voice.addresses[0]|1;
                     voice.pitchFraction=voice.decoded=voice.consumed=0; voice.started=true;
                 }
                 if (!voice.started) continue;
-                if ((core.masks[1]&bit) || !silentBlock(voice.addresses[2]))
-                    throw std::runtime_error("SPU voice left the verified zero-sample loop subset");
-                if (!voice.loopMode) voice.addresses[1]=voice.addresses[2]&0xffff8;
+                uint8_t flags{};
+                if ((core.masks[1]&bit) || !zeroBlock(voice.addresses[2],&flags)) {
+                    std::cerr << "[spu-unsupported-stream] core=" << (&core-cores.data()) << " voice=" << n
+                              << " phase=" << voice.envelope.phase << " env=" << voice.envelope.value
+                              << " pitch=0x" << std::hex << voice.parameters[2]
+                              << " start=0x" << voice.addresses[0] << " loop=0x" << voice.addresses[1]
+                              << " next=0x" << voice.addresses[2];
+                    if (ram) for (unsigned word=0;word<8;++word)
+                        std::cerr << " word" << word << "=0x" << ram->peek(((voice.addresses[2]&0xffff8)+word)&0xfffff);
+                    std::cerr << std::dec << '\n';
+                    throw std::runtime_error("SPU voice left the verified zero-sample stream subset");
+                }
+                const auto block=voice.addresses[2]&0xffff8;
+                if ((flags&4) && !voice.loopMode)
+                    voice.addresses[1]=block;
                 if (int32_t(voice.decoded-voice.consumed)<=12) {
                     voice.decoded+=4;
                     voice.addresses[2]=(voice.addresses[2]+1)&0xfffff;
                     if (!(voice.addresses[2]&7)) {
-                        core.endx|=bit;
-                        voice.addresses[2]=(voice.addresses[1]+1)&0xfffff;
+                        if (flags&1) {
+                            core.endx|=bit;
+                            voice.addresses[2]=(voice.addresses[1]+1)&0xfffff;
+                            if (!(flags&2)) {
+                                voice.envelope.phase=0;
+                                voice.envelope.value=0;
+                            }
+                        } else {
+                            voice.addresses[2]=(block+9)&0xfffff;
+                        }
                     }
                 }
                 voice.envelope.tick(voice.parameters[3],voice.parameters[4]);
