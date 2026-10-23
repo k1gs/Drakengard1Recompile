@@ -25,7 +25,7 @@ For ELF SHA-256 `065a94591d295bb936a8dca92e722c3bd72cd05848c7274b26d572b0f782e91
 
 ## Local preparation
 
-Use the pinned tools and Java/XDG environment from [TOOLCHAIN.md](TOOLCHAIN.md).
+Use the pinned tools and Java/XDG environment configured locally.
 Commands below require fresh outputs; preserve previous experiment directories.
 
 ```powershell

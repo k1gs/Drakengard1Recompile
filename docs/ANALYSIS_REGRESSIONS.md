@@ -1,7 +1,7 @@
 # Original synthetic Ghidra regressions
 
 These checks use invented MIPS instructions and data. No game/BIOS or generated game code
-is required. Use the pinned Ghidra/R5900 plugin and Java environment from TOOLCHAIN.md.
+is required. Use the pinned Ghidra/R5900 plugin and Java environment configured locally.
 All outputs are private in work/; commands require fresh fixture/project/output names.
 
 ## Raw data pointers

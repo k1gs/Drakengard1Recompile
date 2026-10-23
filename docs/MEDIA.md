@@ -1,7 +1,7 @@
 # Read-only ISO and CDVD transport
 
 The native runner accepts only the exact Europe ELF and, when supplied, the exact original ISO
-SHA-256 recorded in INPUT_EUROPE.md. Both are checked before creating the runtime window.
+The accepted input fingerprint is checked before creating the runtime window.
 The image is opened with a read-only stream. No BIOS or game files are bundled or published.
 
 `IsoMedia` supports 2048-byte ISO user sectors, a primary CD001 volume descriptor and terminator,

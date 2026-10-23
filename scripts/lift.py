@@ -66,7 +66,7 @@ def main(argv=None):
             raise ValueError("Run already exists; use a fresh run-id")
         exe = ROOT / "build/ps2recomp-tools/ps2xRecomp/Release/ps2_recomp.exe"
         if not exe.is_file():
-            raise ValueError("Build pinned PS2Recomp first (docs/TOOLCHAIN.md)")
+            raise ValueError("Build the pinned PS2Recomp checkout before running lift")
         run.mkdir(parents=True)
         config = run / "config.toml"
         config.write_text('[general]\n'

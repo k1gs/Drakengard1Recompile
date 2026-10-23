@@ -93,7 +93,7 @@ class IntakeTests(unittest.TestCase):
                 self.assertEqual(intake.main(args[:-1] + [str(self.root / "public.json")]), 2)
 
     def test_public_allowlist(self):
-        for name in ("README.md", "scripts/intake.py", "docs/ROADMAP.md", ".github/workflows/ci.yml"):
+        for name in ("README.md", "scripts/intake.py", "docs/IOP_BOOTSTRAP.md", ".github/workflows/ci.yml"):
             self.assertTrue(allowed_path(name), name)
         for name in ("private/game.iso", "generated/lift.cpp", "docs/game.elf", "work/report.json", ".env"):
             self.assertFalse(allowed_path(name), name)

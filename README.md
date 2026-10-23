@@ -12,7 +12,9 @@ A source-only project working toward a native PC port of **Drakengard**.
 ![Region: Europe PAL](https://img.shields.io/badge/region-Europe_%C2%B7_PAL-6750A4)
 ![Stage: Research](https://img.shields.io/badge/stage-experimental_research-D97706)
 
-[Progress](#progress) · [Getting started](#getting-started) · [Documentation](#documentation) · [Roadmap](docs/ROADMAP.md)
+[Project site](https://dod1.keggs.ru) · [Telegram channel](https://t.me/dodrecomp)
+
+[Progress](#progress) · [Getting started](#getting-started) · [Documentation](#documentation)
 
 </div>
 
@@ -28,7 +30,7 @@ with explicit runtime support for the hardware and services its original code us
 Windows x64 is the initial host target. Linux portability is a later goal.
 
 The observed input is **SLES-52322 · version 1.00 · PAL**. Exact ISO and ELF fingerprints
-are recorded in [input metadata](docs/INPUT_EUROPE.md); the serial alone does not establish
+are recorded in local intake output; the serial alone does not establish
 revision or dump authenticity. Game-specific bindings require the verified ELF hash.
 
 ## Progress
@@ -44,7 +46,7 @@ revision or dump authenticity. Game-specific bindings require the verified ELF h
 
 Passing CI validates preparation tools and synthetic service contracts.
 It does **not** establish a working port. Detailed evidence and the current boundary
-live in [IOP bootstrap notes](docs/IOP_BOOTSTRAP.md) and the [roadmap](docs/ROADMAP.md).
+live in [IOP bootstrap notes](docs/IOP_BOOTSTRAP.md).
 
 ### Native screenshots
 
@@ -77,8 +79,8 @@ Standalone C++ service checks additionally require **CMake 3.21+** and a **C++20
 [CI](.github/workflows/ci.yml) runs synthetic checks on Windows and Linux.
 This does not build or validate the private native game runner on Ubuntu.
 
-To work with your own completed local input, start with the [intake procedure](docs/INTAKE.md),
-then follow the [pinned toolchain and local build guide](docs/TOOLCHAIN.md).
+To work with your own completed local input, follow the local runner instructions and keep
+the original image outside the repository.
 The fingerprint tool inspects inputs; it does not extract an ISO or establish authenticity.
 The native runner is a diagnostic experiment and requires additional local preparation.
 
@@ -86,16 +88,10 @@ The native runner is a diagnostic experiment and requires additional local prepa
 
 | Guide | What it covers |
 | --- | --- |
-| [Roadmap / План работ](docs/ROADMAP.md) | Milestones, next experiment and acceptance gates · Russian |
-| [Architecture](docs/ARCHITECTURE.md) | Runtime structure and design decisions |
-| [Input metadata](docs/INPUT_EUROPE.md) | Verified fingerprints and initial ELF findings |
-| [Toolchain](docs/TOOLCHAIN.md) | Pinned revisions, lift results and build commands |
 | [IOP bootstrap](docs/IOP_BOOTSTRAP.md) | Guest execution evidence, strict device models and blockers |
 | [SIF protocol](docs/SIF_PROTOCOL.md) | Packet, RPC and DMA coverage |
 | [Media](docs/MEDIA.md) | Read-only ISO/CDVD services and checks |
 | [Kernel patch](docs/KERNEL_PATCH.md) | Translation evidence and validation limits |
-| [Research](docs/RESEARCH.md) | Primary sources and candidate tools |
-| [Publication policy](docs/PUBLICATION.md) | Source-only boundary and release checks |
 
 ## Contributing
 
@@ -104,8 +100,7 @@ For runtime reports, include the tool revision, input fingerprint, first blocker
 procedure. Keep game data, BIOS, generated guest code, saves and raw traces out of issues and patches.
 
 Unsupported behavior stops explicitly. Changes should demonstrate the real operation and its
-failure cases before extending coverage. See [project rules](AGENTS.md) and the
-[publication policy](docs/PUBLICATION.md).
+failure cases before extending coverage. See the [project rules](AGENTS.md).
 
 ## Source-only & licensing
 
