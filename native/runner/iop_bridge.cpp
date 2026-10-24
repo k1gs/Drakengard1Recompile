@@ -9,6 +9,9 @@
 #include "../iop_probe/sif0_fifo.h"
 #include "strict_device_error.h"
 #include "../iop_probe/cooperative_clock.h"
+#include "ee_write_watch.h"
+#include "ee_intc_status.h"
+#include "ee_ipu_dma.h"
 
 namespace drakengard {
 namespace {
@@ -21,9 +24,16 @@ class CooperativeIopBridge {
     bool active() const { return phase != Phase::Prepared; }
     bool firmwareExperiment() const { return phase == Phase::Firmware || phase == Phase::FirmwareEntry; }
     EeSifDma firmwareDma;
+    EeIntcStatus intcStatus;
+    EeIpu ipu;
+    EeIpuDma ipuDma;
+    uint64_t ipuCommands{};
+    uint64_t ipuOutputTransfers{};
+    uint32_t ipuFromStart{},ipuFromQwc{};
     Sif0Fifo sif0Fifo;
     unsigned deferredQuanta{};
     std::span<uint8_t> eeRam;
+    std::span<uint8_t> eeScratchpad;
     std::function<uint32_t()> dmaControl;
     unsigned reads{};
     unsigned idleSlices{};
@@ -39,6 +49,16 @@ class CooperativeIopBridge {
         sif0Fifo.drain([&](auto quantum) {
             const auto control = dmaControl();
             if (!firmwareDma.canReceiveSif0(control)) return false;
+            if (eeWriteWatchSlot!=0xffffffffu && quantum.size()==16 && firmwareDma.read(0x1000c020)) {
+                const auto destination=firmwareDma.read(0x1000c010);
+                if (uint64_t(destination)<uint64_t(eeWriteWatchSlot)+8u &&
+                    uint64_t(destination)+16u>eeWriteWatchSlot) {
+                    uint64_t low{},high{};
+                    std::memcpy(&low,quantum.data(),8);
+                    std::memcpy(&high,quantum.data()+8,8);
+                    traceEeWatchedWrite(eeRam.data(),destination,16u,low,high,"SIF0_DMA",nullptr);
+                }
+            }
             firmwareDma.feedSif0(eeRam, quantum, control);
             return true;
         });
@@ -48,7 +68,70 @@ class CooperativeIopBridge {
         try { drainSif0(); boot->pumpSif0(); drainSif0(); }
         catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
     }
+    void pumpIpu() {
+        const bool enabled=dmaControl && (dmaControl()&1u) && !(firmwareDma.read(0x1000f520u)&0x10000u);
+        ipuDma.pump(ipu,eeRam,eeScratchpad,enabled);
+    }
 public:
+    uint32_t readIntcStatus() const { return intcStatus.read(); }
+    void acknowledgeIntcStatus(uint32_t value) { intcStatus.acknowledge(value); }
+    void latchIntcCause(uint32_t cause) { intcStatus.raise(cause); }
+    uint32_t readIpu(uint32_t address) {
+        pumpIpu();
+        return EeIpuDma::owns(address)?ipuDma.read(address):ipu.read(address);
+    }
+    uint64_t readIpu64(uint32_t address) { pumpIpu(); return ipu.read64(address); }
+    void writeIpu(uint32_t address,uint32_t value) {
+        pumpIpu();
+        if (EeIpuDma::owns(address)) {
+            ipuDma.write(address,value);
+            if (address==0x1000b000u && (value&0x100u)) {
+                ipuFromStart=ipuDma.read(0x1000b010u); ipuFromQwc=ipuDma.read(0x1000b020u);
+            }
+        }
+        else ipu.write(address,value);
+        pumpIpu();
+        if (address==EeIpu::Command) {
+            const auto count=++ipuCommands;
+            if (count<=16 || (count&(count-1))==0)
+                std::cerr << "[ee-ipu-command] value=0x" << std::hex << value
+                          << " result=0x" << ipu.diagnosticCommand()
+                          << " bp=0x" << ipu.read(EeIpu::Position) << std::dec << " count=" << count << '\n';
+        }
+    }
+    void writeIpuInput(std::span<const uint8_t,16> bytes) {
+        pumpIpu();
+        if (!ipu.push(bytes)) throw StrictDeviceError("CPU IPU input FIFO write would overflow");
+        pumpIpu();
+    }
+    void readIpuOutput(std::span<uint8_t,16> bytes) {
+        pumpIpu();
+        if (!ipu.pop(bytes)) throw StrictDeviceError("CPU IPU output FIFO is empty");
+        pumpIpu();
+    }
+    bool takeIpuInterrupt() { pumpIpu(); return ipu.takeInterrupt(); }
+    uint32_t takeIpuDmaCompletions() {
+        pumpIpu(); const auto causes=ipuDma.takeCompletions();
+        if (causes&8u) {
+            const auto count=++ipuOutputTransfers;
+            if (count<=16 || (count&(count-1))==0) {
+                std::cerr << "[ee-ipu-from-complete] start=0x" << std::hex << ipuFromStart
+                          << " end=0x" << ipuDma.read(0x1000b010u) << " qwc=0x" << ipuFromQwc;
+                if ((ipuFromStart&0x80000000u) && (ipuFromStart&0x7fffffffu)<eeScratchpad.size()) {
+                    const auto offset=ipuFromStart&0x7fffffffu;
+                    const uint64_t size=uint64_t(ipuFromQwc)*16;
+                    if (size<=eeScratchpad.size()-offset) {
+                        uint64_t hash=14695981039346656037ull;
+                        for (uint64_t i=0;i<size;++i) hash=(hash^eeScratchpad[offset+i])*1099511628211ull;
+                        std::cerr << " scratch_fnv1a64=0x" << hash;
+                    }
+                }
+                std::cerr << " ctrl=0x" << ipu.read(EeIpu::Control) << " top=0x" << ipu.read(EeIpu::Top)
+                          << std::dec << " count=" << count << '\n';
+            }
+        }
+        return causes;
+    }
     void videoEvent(bool start) {
         if (videoEvents && phase==Phase::FirmwareEntry) boot->videoEvent(start);
     }
@@ -66,11 +149,13 @@ public:
         }
     }
     bool firmwareGameEntryActive() const { return phase == Phase::FirmwareEntry; }
-    void bindFirmwareEeRam(std::span<uint8_t> ram, uint32_t initialEnableWord, std::function<uint32_t()> control) {
-        if (phase != Phase::Prepared || !eeRam.empty() || ram.size() != 32 * 1024 * 1024)
-            throw StrictDeviceError("Firmware EE memory binding requires one fresh 32-MiB runtime");
+    void bindFirmwareEeRam(std::span<uint8_t> ram, std::span<uint8_t> scratchpad,
+                           uint32_t initialEnableWord, std::function<uint32_t()> control) {
+        if (phase != Phase::Prepared || !eeRam.empty() || ram.size() != 32 * 1024 * 1024 ||
+            scratchpad.size() != 0x4000u)
+            throw StrictDeviceError("Firmware EE memory binding requires fresh 32-MiB RDRAM and 16-KiB scratchpad");
         if (!control) throw StrictDeviceError("EE DMA control reader is required");
-        eeRam = ram; dmaControl = std::move(control);
+        eeRam = ram; eeScratchpad = scratchpad; dmaControl = std::move(control);
         firmwareDma.seedEnableWord(initialEnableWord);
     }
     bool takeFirmwareDmaCompletion() { return firmwareDma.takeCompletion(); }
@@ -211,6 +296,66 @@ std::recursive_mutex bridgeMutex;
 CooperativeIopBridge bridge;
 }
 
+std::optional<uint32_t> eeIntcRead(uint32_t address) {
+    if (address != EeIntcStatus::Address) return std::nullopt;
+    std::lock_guard lock(bridgeMutex);
+    return bridge.readIntcStatus();
+}
+bool eeIntcWrite(uint32_t address, uint32_t value) {
+    if (address != EeIntcStatus::Address) return false;
+    std::lock_guard lock(bridgeMutex);
+    bridge.acknowledgeIntcStatus(value);
+    return true;
+}
+void latchEeIntcCause(uint32_t cause) {
+    std::lock_guard lock(bridgeMutex);
+    bridge.latchIntcCause(cause);
+}
+
+std::optional<uint32_t> eeIpuRead(uint32_t address) {
+    if (!EeIpu::ownsRegisters(address) && !EeIpuDma::owns(address)) return std::nullopt;
+    std::lock_guard lock(bridgeMutex);
+    try { return bridge.readIpu(address); }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+}
+std::optional<uint64_t> eeIpuRead64(uint32_t address) {
+    if (!EeIpu::ownsRegisters(address)) return std::nullopt;
+    std::lock_guard lock(bridgeMutex);
+    try { return bridge.readIpu64(address); }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+}
+bool eeIpuWrite(uint32_t address,uint32_t value) {
+    if (!EeIpu::ownsRegisters(address) && !EeIpuDma::owns(address)) return false;
+    std::lock_guard lock(bridgeMutex);
+    try { bridge.writeIpu(address,value); return true; }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+}
+bool eeIpuWrite64(uint32_t address,uint64_t value) {
+    if (!EeIpu::ownsRegisters(address)) return false;
+    if (address!=EeIpu::Command) throw StrictDeviceError("Unsupported IPU 64-bit register write");
+    return eeIpuWrite(address,static_cast<uint32_t>(value));
+}
+void writeEeIpuInput(std::span<const uint8_t,16> bytes) {
+    std::lock_guard lock(bridgeMutex);
+    try { bridge.writeIpuInput(bytes); }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+}
+void readEeIpuOutput(std::span<uint8_t,16> bytes) {
+    std::lock_guard lock(bridgeMutex);
+    try { bridge.readIpuOutput(bytes); }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+}
+bool takeEeIpuInterrupt() {
+    std::lock_guard lock(bridgeMutex);
+    try { return bridge.takeIpuInterrupt(); }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+}
+uint32_t takeEeIpuDmaCompletions() {
+    std::lock_guard lock(bridgeMutex);
+    try { return bridge.takeIpuDmaCompletions(); }
+    catch (const std::exception& error) { throw StrictDeviceError(error.what()); }
+}
+
 void prepareCooperativeIop(const IopBootInputs& inputs) {
     std::lock_guard lock(bridgeMutex);
     return bridge.prepareCooperativeIop(inputs);
@@ -239,9 +384,10 @@ bool firmwareGameEntryActive() {
     std::lock_guard lock(bridgeMutex);
     return bridge.firmwareGameEntryActive();
 }
-void bindFirmwareEeRam(std::span<uint8_t> ram, uint32_t initialEnableWord, std::function<uint32_t()> dmaControl) {
+void bindFirmwareEeRam(std::span<uint8_t> ram, std::span<uint8_t> scratchpad,
+                       uint32_t initialEnableWord, std::function<uint32_t()> dmaControl) {
     std::lock_guard lock(bridgeMutex);
-    return bridge.bindFirmwareEeRam(ram, initialEnableWord, std::move(dmaControl));
+    return bridge.bindFirmwareEeRam(ram, scratchpad, initialEnableWord, std::move(dmaControl));
 }
 void advanceFirmwareIop() {
     std::lock_guard lock(bridgeMutex);

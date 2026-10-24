@@ -1114,3 +1114,116 @@ The launcher now offers `--iop-runtime-millions 256|512|1024`; the default remai
 256. Larger diagnostic presets require firmware entry, are selected once before
 guest reboot, and cannot be renewed by device polling or a second BOOTEND. Initial
 boot and reboot allowances stay unchanged; the supervisor timeout is separate.
+
+### EE VSync acknowledgement and IPU boundary (2026-10-24, resumed work)
+
+The EE write-watch required a PCH fix before it actually observed CPU stores.
+It now retains the last 128 changed overlapping stores and dumps them on invalid
+transfer or executor exit; scheduler scalar writes and SIF0 payloads are covered
+as well. Native204's final CPU store saved the correct RA, so preceding ordinary
+stack reuse was not itself a demonstrated corruption of that live frame.
+
+The EE `INTC_STAT` fallback incorrectly stored acknowledgements as pending events.
+Writing `4` therefore made the guest VSync wrapper see a manufactured VBlank and
+return with `SetVSyncFlag` still pointing into its stack. The EE-facing bridge now
+owns write-one-to-clear pending status; scheduler events latch causes before the
+handler mask is checked. This does not claim complete raw INTC_MASK support.
+An isolated smoke executing unchanged translated VSync/DI/EI/syscall code reproduced
+the early return and later saved-RA overwrite with the old semantics, and the
+proper wait/tick/stack lifetime with the new model. Permanent synthetic checks cover
+acknowledgement without an event, selective clearing and a later event.
+
+Native207 and native208 delivered real Left/Cross guest reports and ran for the
+300-second bound without an invalid transfer; native208 disabled write-watch.
+Both timed out in the IPU search path (`0x3076A0` / `0x3072B8`), not at a menu.
+The remaining path searches for an IPU start-code prefix while the current passive
+IPU register fallback mirrors command `0x40000008` instead of decoding a bitstream.
+No movie skip, fabricated prefix, saved-RA patch or new success stub was added.
+See the [resumed handoff](HANDOFF_2026-10-24_CONTINUATION.md) for evidence and the
+next command; audible output, gameplay, saves and recovery remain unverified.
+
+### Bounded IPU bitstream transport (2026-10-24, local continuation)
+
+The local IPU draft is now connected to actual 32/64-bit register accesses,
+128-bit CPU input writes, normal to-IPU DMA and scheduler interrupt delivery.
+The supported command subset is BCLR, FDEC, SETIQ, SETVQ and SETTH. FDEC skips
+the requested bits once, waits for real input, then exposes the MSB-first 32-bit
+peek without consuming those result bits. TOP is latched by FDEC rather than
+recomputed by a register read. Tables consume their actual input bytes.
+
+The eight-quadword input FIFO and two-quadword internal buffer retain state across
+partial input. DMA advances MADR/QWC only for accepted quadwords, respects master
+enable/suspend, and signals completion only after its real count is transferred.
+Normal-mode zero QWC represents 65536 quadwords, not an empty completion. An empty
+from-IPU output FIFO stalls; no supported command currently produces decoded output.
+MPEG/VLC decoding, color conversion, packing, source chains and scratchpad DMA
+remain unsupported and must not be replaced by fabricated data or completion.
+
+Original synthetic regressions cover independently calculated bit vectors,
+quadword boundaries, starvation/retry, latched results, tables, reset, FIFO
+backpressure, DMA payload/progress and negative cases. Behavioral details were
+checked against pinned [PCSX2 v2.8.2 IPU state](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IPU/IPU.h),
+[command processing](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IPU/IPU.cpp)
+and [worker semantics](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IPU/IPU_MultiISA.cpp).
+This is a bounded functional device model, not a cycle-accurate MPEG decoder.
+
+Native210/211 exercised the actual input path and passed the old endless FDEC
+search. The next real command was `0x30000000` (VDEC table0). Added an original
+macroblock-address-increment decoder, checked with all33 codewords plus escape,
+MPEG1 stuffing, malformed codes/ECD and partial TOP refill. Native212 passed that
+path and reached `0x34000000`, table1 with PCT=I. The two I-picture macroblock-type
+codes now return their modes masks; P/B types and motion/DMVector remain unsupported.
+Native213 passed I-MBT and stopped at the next real BDEC command `0x2C010000`
+(intra, DC reset, quantizer1). It exited6 without timeout. The guest had armed
+48-quadword from-IPU DMA into scratchpad0x1800. Actual block decoding, output FIFO
+and scratchpad destination transport are the next coupled work; none is bypassed.
+See the latest handoff for exact CTRL settings and evidence.
+
+The user requested no Computer Use. Explicit `--pad-control` selects a bounded
+host-side digital-controller source, with CLI commands from `scripts/native_pad.py`.
+It does not inject Windows events or write guest RAM. Native212 verified the
+normal SIO2 FF7F/BFFF reports and releases from this channel. See the
+[research workflow](RESEARCH_WORKFLOW.md) for limits and evidence distinctions.
+
+The long-term renderer direction is Vulkan. Device/bitstream correctness is
+independent of that migration; RenderDoc can inspect a future Vulkan backend as
+well as the present OpenGL host presentation path.
+
+### Intra BDEC and scratchpad output (2026-10-24)
+
+The local implementation now accepts MPEG2 intra BDEC with IVF1 and ordinary
+scan, including DC predictor reset/persistence, all DC size prefixes, Table B.15
+AC prefixes, escape levels, nonlinear/linear quantizer scales, scan placement,
+inverse quantization and an original mathematical inverse DCT. Frame/field DCT
+places the four Y blocks and Cb/Cr into the real384-sample macroblock layout.
+Samples are clipped to0..255 then widened to little-endian16-bit output values.
+The transform uses a separable Q20 cosine basis; PS2 bit-exact IDCT rounding has
+not been established. MPEG1, IVF0, alternate scan and non-intra BDEC still refuse.
+
+The decoder stages48 real quadwords through an eight-QW output FIFO. From-IPU
+DMA drains actual output with backpressure, writes the bound runtime scratchpad
+for SPR MADR destinations (including the confirmed0x80001800 path), and never
+masks these into main RAM. Partial transfers retain STR/QWC; completion is a
+one-shot actual transfer edge. CPU128 output reads share the same FIFO. BDEC
+waits for output drain and actual trailing stream bits before TOP/SCD/ECD,
+BUSY clearing and its IPU interrupt. Unsupported malformed coefficient streams
+fail closed instead of imitating the reference's permissive implicit block end.
+
+Numeric code assignments were independently expressed from
+[H.262 tables B.12/B.13/B.15/B.16](https://www.itu.int/rec/T-REC-H.262-200002-S/en).
+The pinned IPU reference additionally accepts ten redundant long encodings;
+these numeric aliases are covered too. A private exhaustive comparison against
+PCSX2v2.8.2 matched all65536 prefixes (65520 valid,16 invalid, zero mismatches).
+No emulator decoder implementation or optimized lookup layout was copied into
+the public source. Synthetic checks include DC/AC pixels, starvation, FB-once,
+field DCT, predictor continuity, output pressure, reset, partial DMA, exact768
+scratch bytes, unchanged main RAM, and invalid SPR aliases. Bootstrap CTest8/8
+and Python55 tests passed. Runtime evidence is tracked in the latest handoff.
+
+Native216 passed the original intra BDEC blocker with at least512 logged real
+48-QW scratchpad transfers and no timeout. It stopped at table1 VDEC0x34000000
+for a non-I picture; exact PCT still needs logging. Its final640x508 direct GS
+image is black. This exercises the actual intra path and transport, not a full
+MPEG acceptance test, nonblack movie, menu or gameplay. The explicit startup
+helper passed the no-card warning via ordinary buttons, confirmed by direct GS
+warning/logo images, then stopped input at the first IPU command.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ps2_runtime.h"
+#include "ee_write_watch.h"
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
@@ -18,6 +19,7 @@ inline void diagnoseEeTransfer(const char* phase,uint32_t sourceEntry,uint32_t e
     if (!eeDiagnosticInvalidPc(context.pc)) return;
     static std::atomic<unsigned> reports{};
     if (reports.fetch_add(1,std::memory_order_relaxed)>=16) return;
+    dumpEeWatchedWrites();
     std::cerr << "[ee-transfer-invalid] phase=" << phase << " source=0x" << std::hex << sourceEntry
               << " entryPc=0x" << entryPc << " entryRa=0x" << entryRa << " entrySp=0x" << entrySp
               << " currentPc=0x" << context.pc << " currentRa=0x" << eeDiagnosticReg(context,31)

@@ -5,6 +5,8 @@
 #include <fstream>
 #include <iostream>
 #include <algorithm>
+#include <charconv>
+#include <string_view>
 
 // Observe the GS presentation buffer, excluding host UI. A nonuniform capture
 // after a real GS draw is only a candidate until visually inspected.
@@ -13,9 +15,30 @@ class GuestFrameCapture {
     bool drawn{}, saved{}, followupSaved{};
     unsigned framesAfterFirst{};
     unsigned observations{};
+    unsigned interval{},frameObservations{},periodicSaved{};
+    void savePeriodic(GS& gs) {
+        std::vector<uint8_t> rgba; uint32_t width{},height{};
+        if (!gs.copyLatchedHostPresentationFrame(rgba,width,height) || !width || !height ||
+            width>4096 || height>4096 || uint64_t(width)*height*4!=rgba.size()) return;
+        const auto target=output.parent_path()/("periodic-guest-frame-"+std::to_string(frameObservations)+".ppm");
+        if (std::filesystem::exists(target)) throw std::runtime_error("Periodic GS output already exists");
+        std::ofstream file(target,std::ios::binary);
+        file << "P6\n" << width << ' ' << height << "\n255\n";
+        for (size_t at=0;at<rgba.size();at+=4) file.write(reinterpret_cast<const char*>(rgba.data()+at),3);
+        if (!file) throw std::runtime_error("Could not save periodic GS frame");
+        ++periodicSaved;
+        std::cerr << "[guest-frame-periodic] observations=" << frameObservations << " path=" << target.string()
+                  << "; actual GS pixels, not independent host-window inspection\n";
+    }
 public:
     GuestFrameCapture() {
         if (const auto* path=std::getenv("DRAKENGARD_FRAME_OUTPUT")) output=path;
+        if (const auto* value=std::getenv("DRAKENGARD_FRAME_INTERVAL")) {
+            const std::string_view text(value);
+            const auto parsed=std::from_chars(text.data(),text.data()+text.size(),interval);
+            if (parsed.ec!=std::errc{} || parsed.ptr!=text.data()+text.size() || interval<60 || interval>3600)
+                throw std::runtime_error("GS capture interval must be 60..3600 observations");
+        }
     }
     void enable(GS& gs) { if (!output.empty()) gs.setDebugHistoryPaused(false); }
     void saveFinal(GS& gs) {
@@ -32,7 +55,9 @@ public:
         std::cerr << "[guest-frame-final] actual latched GS pixels, visual review required\n";
     }
     void observe(GS& gs) {
-        if (output.empty() || followupSaved) return;
+        if (output.empty()) return;
+        if (interval && ++frameObservations%interval==0 && periodicSaved<32) savePeriodic(gs);
+        if (followupSaved) return;
         if (saved && ++framesAfterFirst<120) return;
         if (!drawn) for (const auto& event:gs.getDebugHistory())
             if (event.kind==GSDebugEventKind::Draw && event.vertexCount) drawn=true;

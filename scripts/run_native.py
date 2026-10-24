@@ -29,6 +29,7 @@ def main(argv=None):
     firmware.add_argument("--ee-firmware-entry", action="store_true", help="Enter the game after guest-owned IOP BOOTEND; experimental")
     parser.add_argument("--iop-video-events", action="store_true", help="Forward shared EE VBlank events to strict IOP; experimental, SIO2 remains incomplete")
     parser.add_argument("--virtual-pad", action="store_true", help="Emulate DualShock2 port1 from keyboard/gamepad input; requires --iop-video-events")
+    parser.add_argument("--pad-control", action="store_true", help="Use an explicit bounded host controller command file instead of window/keyboard input")
     parser.add_argument("--ee-write-watch", type=parse_int0, default=None,
                         help="Watch one aligned 8-byte EE RAM slot; requires --ee-firmware-entry")
     parser.add_argument("--ee-write-watch-arm-value", type=parse_int0, default=None,
@@ -47,6 +48,8 @@ def main(argv=None):
         parser.error("IOP video events require --ee-firmware-entry")
     if args.virtual_pad and not args.iop_video_events:
         parser.error("Virtual pad requires --iop-video-events")
+    if args.pad_control and not args.virtual_pad:
+        parser.error("Pad control requires --virtual-pad")
     if args.iop_runtime_millions != 256 and not args.ee_firmware_entry:
         parser.error("Nondefault IOP runtime budgets require --ee-firmware-entry")
     if args.ee_write_watch is not None:
@@ -101,9 +104,16 @@ def main(argv=None):
         environment.pop("DRAKENGARD_EE_WRITE_WATCH_ARM_VALUE", None)
         environment.pop("DRAKENGARD_IOP_VIDEO_EVENTS", None)
         environment.pop("DRAKENGARD_VIRTUAL_PAD", None)
+        environment.pop("DRAKENGARD_PAD_CONTROL", None)
         environment.pop("DRAKENGARD_GS_COLOR_OUTPUT", None)
         environment.pop("DRAKENGARD_IOP_RUNTIME_BUDGET", None)
         result["virtual_pad_experiment"] = args.virtual_pad
+        result["pad_control_experiment"] = args.pad_control
+        if args.pad_control:
+            control = run / "pad-control.txt"
+            with control.open("x", encoding="ascii", newline="\n") as initial:
+                initial.write("D1PAD1 0 FFFF 0\n")
+            environment["DRAKENGARD_PAD_CONTROL"] = str(control)
         result["ee_write_watch"] = (f"0x{args.ee_write_watch:x}"
                                      if args.ee_write_watch is not None else None)
         result["ee_write_watch_arm_value"] = (f"0x{args.ee_write_watch_arm_value:08x}"

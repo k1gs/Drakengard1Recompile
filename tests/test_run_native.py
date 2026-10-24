@@ -39,6 +39,9 @@ class NativeLaunchGuards(unittest.TestCase):
     def test_virtual_pad_requires_iop_video_events(self):
         self.refuses_before_intake(["--input-complete", "--iop-bootstrap", "--ee-firmware-entry", "--virtual-pad"])
 
+    def test_pad_control_requires_opt_in_virtual_pad(self):
+        self.refuses_before_intake(["--input-complete", "--pad-control"])
+
     def test_nondefault_runtime_budget_requires_entry(self):
         for preset in ("512", "1024"):
             with self.subTest(preset=preset):

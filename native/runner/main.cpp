@@ -5,6 +5,7 @@
 #include "guest_frame_capture.h"
 #include "host_pad_input.h"
 #include "runtime/ee_scheduler.h"
+#include "ee_write_watch.h"
 #include <exception>
 #include <iostream>
 #include <memory>
@@ -70,10 +71,12 @@ int main(int argc, char** argv) {
         }
         try { runtime->run(); }
         catch (...) {
+            drakengard::dumpEeWatchedWrites();
             try { diagnostics.capture.saveFinal(runtime->gs()); }
             catch (const std::exception& error) { std::cerr << "Final frame diagnostic failed: " << error.what() << '\n'; }
             throw;
         }
+        drakengard::dumpEeWatchedWrites();
         diagnostics.capture.saveFinal(runtime->gs());
         std::cerr << "Diagnostic run ended; this is not a playable-port acceptance result\n";
         return 5;

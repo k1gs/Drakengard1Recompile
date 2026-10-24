@@ -25,6 +25,10 @@ replace_scheduler("    case EeEventType::VBlankEnd:\n        dispatchIrq(false, 
     "    case EeEventType::VBlankEnd:\n        drakengard::firmwareIopVideoEvent(false);\n        dispatchIrq(false, 3u);")
 replace_scheduler("    std::sort(matching.begin(), matching.end(),"
     "    logEeIrqDelivery(dmac,cause,matching.size());\n    std::sort(matching.begin(), matching.end(),")
+replace_scheduler("void EeScheduler::dispatchIrq(bool dmac, uint32_t cause)\n{\n    assertExecutor();"
+    "void EeScheduler::dispatchIrq(bool dmac, uint32_t cause)\n{\n    assertExecutor();\n    if (!dmac) drakengard::latchEeIntcCause(cause);")
+replace_scheduler("    std::memcpy(m_rdram + physical, &value, sizeof(value));"
+    "    auto* writer = currentThread();\n    drakengard::traceEeWatchedWrite(m_rdram, physical, sizeof(value), value, 0u, \"SCHEDULER32\", writer ? &writer->activeContext() : nullptr);\n    std::memcpy(m_rdram + physical, &value, sizeof(value));")
 set(scheduler_file "${CMAKE_BINARY_DIR}/private_cooperative_Scheduler.cpp")
 file(CONFIGURE OUTPUT "${scheduler_file}"
     CONTENT "#include \"ee_device_safe_point.h\"\n#include \"ee_transfer_diagnostic.h\"\n${scheduler_source}" @ONLY)

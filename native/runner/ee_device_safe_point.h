@@ -19,6 +19,7 @@ public:
             diagnoseEeDeviceFailure(mainContext,runtime.memory().getRDRAM());
             throw;
         }
+        if (drakengard::takeEeIpuInterrupt()) scheduler.dispatchIrq(false,8u);
         for (uint32_t cause:runtime.memory().consumeCompletedDmacCauses()) scheduler.dispatchIrq(true,cause);
         auto& gs=runtime.memory().gs();
         if (gsInterrupt.observe(gs.csr.load(),gs.imr,gsCauseEnabled)) {

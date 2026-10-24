@@ -13,6 +13,7 @@
 #include "../runner/gs_interrupt_line.h"
 #include "../runner/empty_gif_chain.h"
 #include "../runner/gs_scanout.h"
+#include "../runner/ee_intc_status.h"
 #include <cstring>
 #include <initializer_list>
 
@@ -93,6 +94,20 @@ int main() {
             videoIrqs.videoEvent(irqMemory,false);
             if (irqMemory.interruptStatus()!=(9u|(1u<<11)))
                 throw std::runtime_error("IOP VBlank end did not latch IRQ11");
+        }
+        {
+            drakengard::EeIntcStatus status;
+            status.acknowledge(4);
+            if (status.read()!=0) throw std::runtime_error("EE INTC ack manufactured VBlank");
+            status.raise(2); status.raise(3);
+            status.acknowledge(4);
+            if (status.read()!=8) throw std::runtime_error("EE INTC ack cleared another pending cause");
+            status.acknowledge(0);
+            if (status.read()!=8) throw std::runtime_error("EE INTC zero write changed pending causes");
+            status.acknowledge(8);
+            status.raise(2);
+            if (status.read()!=4) throw std::runtime_error("EE INTC lost a later VBlank event");
+            rejects([&] { status.raise(15); },"Unsupported EE INTC cause");
         }
         GsInterruptLine line;
         if (line.observe(0,0,true) || line.observe(2,0x7f00,true) ||

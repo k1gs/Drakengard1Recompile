@@ -14,7 +14,9 @@ function(drakengard_configure_runner)
     list(TRANSFORM runner_sources REPLACE ".*register_functions[.]cpp$"
         "${REPO_ROOT}/native/runner/verify_input.cpp")
     set_property(TARGET ps2EntryRunner PROPERTY SOURCES "${runner_sources}")
+    include("${REPO_ROOT}/native/runner/cmake/signed_branches.cmake")
     file(GLOB guest_sources CONFIGURE_DEPENDS "${GENERATED_DIR}/*.cpp")
+    drakengard_correct_signed_branches(guest_sources "${CMAKE_BINARY_DIR}/guest_branches")
     target_sources(ps2EntryRunner PRIVATE
         "${REPO_ROOT}/native/runner/main.cpp"
         "${REPO_ROOT}/native/runner/host_pad_input.cpp"
@@ -35,6 +37,7 @@ function(drakengard_configure_runner)
         message(FATAL_ERROR "Prepare verified kernel image and lift first")
     endif()
     file(GLOB kernel_sources CONFIGURE_DEPENDS "${kernel_units}/*.cpp")
+    drakengard_correct_signed_branches(kernel_sources "${CMAKE_BINARY_DIR}/kernel_branches")
     target_sources(ps2EntryRunner PRIVATE ${kernel_sources}
         "${REPO_ROOT}/native/runner/kernel_functions.cpp"
         "${REPO_ROOT}/native/runner/sif_channel.cpp"
@@ -64,6 +67,7 @@ function(drakengard_configure_runner)
             message(FATAL_ERROR "Verified firmware preparation failed")
         endif()
         file(GLOB firmware_sources CONFIGURE_DEPENDS "${firmware_units}/*.cpp")
+        drakengard_correct_signed_branches(firmware_sources "${CMAKE_BINARY_DIR}/firmware_branches")
         target_sources(ps2EntryRunner PRIVATE ${firmware_sources})
         set_source_files_properties(${firmware_sources} "${firmware_host}"
             TARGET_DIRECTORY ps2EntryRunner PROPERTIES INCLUDE_DIRECTORIES "${firmware_units}")

@@ -22,3 +22,16 @@ file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/private_headers")
 file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/private_headers/ps2_runtime_macros.h"
     CONTENT "${write_watch_header}${write_watch_source}" @ONLY)
 target_include_directories(ps2EntryRunner BEFORE PRIVATE "${CMAKE_BINARY_DIR}/private_headers")
+# Quoted includes in generated code cannot override the absolute macro header
+# already loaded by the pinned runner's PCH. Shadow that same PCH entry too.
+get_target_property(write_watch_pch ps2EntryRunner PRECOMPILE_HEADERS)
+if(write_watch_pch)
+    list(FIND write_watch_pch "${CMAKE_SOURCE_DIR}/ps2xRuntime/include/ps2_runtime_macros.h" write_watch_pch_index)
+    if(write_watch_pch_index LESS 0)
+        message(FATAL_ERROR "Pinned runner macro PCH contract changed")
+    endif()
+    list(REMOVE_AT write_watch_pch ${write_watch_pch_index})
+    list(INSERT write_watch_pch ${write_watch_pch_index}
+        "${CMAKE_BINARY_DIR}/private_headers/ps2_runtime_macros.h")
+    set_property(TARGET ps2EntryRunner PROPERTY PRECOMPILE_HEADERS "${write_watch_pch}")
+endif()

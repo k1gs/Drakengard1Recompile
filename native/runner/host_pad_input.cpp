@@ -6,11 +6,36 @@
 #include <cstdlib>
 #include <array>
 #include <iostream>
+#include <chrono>
+#include <fstream>
+#include "pad_control.h"
 
 // UI thread samples raylib; bridge serializes immutable snapshots to the IOP owner.
 // Keyboard is an explicit virtual device, even without a physical gamepad.
 void pollVirtualPadInput() {
     if (!std::getenv("DRAKENGARD_VIRTUAL_PAD")) return;
+    if (const char* commandPath=std::getenv("DRAKENGARD_PAD_CONTROL")) {
+        // Explicit diagnostic controller source. This feeds the existing host
+        // snapshot/SIO2 path, never guest memory or a Windows input API.
+        std::ifstream file(commandPath,std::ios::binary);
+        std::array<char,129> bytes{};
+        file.read(bytes.data(),bytes.size());
+        if (!file.eof() || file.bad()) throw std::runtime_error("Cannot read bounded pad control command");
+        static drakengard::PadControl controller;
+        const auto now=std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+        VirtualPadInput input; input.connected=true;
+        input.buttons=controller.sample({bytes.data(),static_cast<size_t>(file.gcount())},now);
+        constexpr unsigned pressureBits[]{5,7,4,6,12,13,14,15,10,11,8,9};
+        for (unsigned i=0;i<12;++i) input.pressure[i]=(input.buttons&(1u<<pressureBits[i]))?0:255;
+        static uint16_t previous=0xffff;
+        if (input.buttons!=previous) {
+            std::cerr << "[host-pad-control] buttons=0x" << std::hex << input.buttons << std::dec << '\n';
+            previous=input.buttons;
+        }
+        drakengard::publishVirtualPadInput(input);
+        return;
+    }
     const bool focused=IsWindowFocused();
     VirtualPadInput input; input.connected=true; input.cancelPending=!focused;
     input.buttons&=uint16_t(~pollHostArrowInput(focused));
