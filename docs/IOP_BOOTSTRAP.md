@@ -1445,3 +1445,16 @@ No gameplay/audio/saves/recovery acceptance. Input run contains an acknowledged
 extra Start after interrupted observer; it is control-flow evidence, not a clean
 minimal-input recipe. Next246 must verify297878 real epilogue before recovery,
 and reapply both prior read-only recoveries on full export. Details in top handoff.
+
+## Third leaf return and rendered narrative prologue (2026-10-25)
+
+Owner297878 recovered through real JR297E3C/SP+0x60 delay297E40, exclusive297E44.
+Map011 retains prior297E44/29322C recoveries; lift010 has all36 resume cases
+registered. Fresh Ghidra behavioral regression and full Release/PCH build PASS.
+Native246/247/248 pass prior297BB0, with real source11004860→SPR completion.
+No new explicit scheduler/device refusal before300s watchdog. Native246 and248
+render the first textual story-prologue page after New Game, privately reviewed.
+One real Cross on248 page has SIO2 press/release, but semantic page advance is
+unproven. No gameplay/audio/saves/recovery acceptance. Next249 observes ordinary
+page continuation and actual callback/timer/input behavior; no invented timer or
+ready fix. See top handoff for exact input-oracle calibration and evidence limits.

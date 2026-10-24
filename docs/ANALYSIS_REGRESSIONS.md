@@ -172,3 +172,32 @@ checked in a read-only fixture project: actual PASS for immediate return, two
 busy iterations, pause/resume and once-only delay effects. It is Ghidra-emulator
 behavioral evidence; full native scheduler evidence is reported separately in
 the current continuation handoff. No arbitrary alias or padded return was added.
+
+## Third verified leaf and cumulative read-only recovery
+
+Native245's owner0x297878 had the same alternate-delay-slot exit at0x297BB0.
+Verified ELF instructions end with JR RA0x297E3C and SP+0x60 at0x297E40, giving
+exclusive bound0x297E44. Its old824/32/240-byte fragments become one1484-byte
+leaf, adding388 actual instruction bytes. Map011 retains both earlier verified
+recoveries and changes no unrelated row. All36 resume switch cases across the
+three recovered owners are present in fresh lift010's registration table.
+
+Reproduce the cumulative recovery only with fresh artifact names:
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21'
+& .\tools\ghidra_12.1.4_PUBLIC\support\analyzeHeadless.bat `
+  "$PWD\work\ghidra-projects" drakengard-eu-001 `
+  -process SLES_523.22 -readOnly -noanalysis -scriptPath "$PWD\scripts\ghidra" `
+  -postScript RecoverLeafFunctionFlow.java 0x297e44 0x2983e8 `
+  -postScript RecoverLeafFunctionFlow.java 0x29322c 0x2937d0 `
+  -postScript RecoverLeafFunctionFlow.java 0x297878 0x297e44 `
+  -postScript ExportRecompMap.java "$PWD\work\functions-ghidra-011.csv"
+python scripts/lift.py --input-complete --map work/functions-ghidra-011.csv --run-id lift-010
+```
+
+The named map/lift are completed local artifacts, not overwrite targets. The
+existing synthetic fixture was freshly prepared/recovered/checked with actual
+pause/resume and delay-effect PASS in a read-only project. Native evidence and
+its limitations are recorded separately in the latest handoff. No arbitrary
+resume alias, fabricated epilogue or edits to earlier generated units are used.

@@ -105,3 +105,10 @@ emulator runs sequential, preserve baseline and instrumented runs separately,
 and record the binary/tool versions, guest state and resource/event identities.
 RDC files and texture exports may contain game assets and belong in ignored
 `work/` or `private/`, alongside screenshots. They are not public source artifacts.
+
+Pixel state oracles are checkpoint-specific. Record exact ROIs, reference frames,
+thresholds and any matching-only normalization, and inspect the raw frame itself.
+SIO2 press/release proves serial input delivery, not that a fading UI accepted an
+action. Native247's valid dialog differed from the old RGB oracle before a later
+match; keep helper deadline/recognition failures separate from guest device faults.
+Use one controller at a time and review its JSONL/ACKs before manual intervention.

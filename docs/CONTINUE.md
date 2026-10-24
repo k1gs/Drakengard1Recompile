@@ -23,42 +23,45 @@
 
 ## Актуальный checkpoint: 2026-10-25
 
-- Entry e1214d3 содержит проверенный normal VU0-data→SPR DMA9. Текущий HEAD
-  определяй по Git; unrelated .vscode/Splash сохраняй.
-- Восстановлен следующий leaf29322C: настоящий JR2937C8 и SP+60 delay2937CC,
-  exclusive bound2937D0,1444 actual bytes. Три фрагмента объединены,+388 bytes.
-  Prior297E44 recovery и все unrelated map rows сохранены. Никаких aliases.
-- Fresh map010/lift009,8580 compiled/0stubs/skips/decodefailures. Все12 resume
-  labels29322C в switch и dispatch. Runner overlay использует lift009; old008
-  не редактировался. Fresh Ghidra pause/resume/delay regression и Release/PCH PASS.
-- Native245 реально проходит29353C/owner29322C и продолжает до НОВОГО missing
-  scheduler target **0x297BB0, RA0x2984B4**, owner0x297878. Exit5/no timeout.
-  Последний GS640x511 flatRGB128 gray, gameplay/audio/saves/recovery не доказаны.
-- У owner297878 карта заканчивается297BB0 после alternate-entry jump-delay.
-  Adjacent fragments297D20..297D40/297D54..297E44. Это гипотеза ещё одного
-  обрезанного leaf; реальный epilogue и bound сначала подтвердить по инструкциям.
-- Input245 не минимальный baseline: observer подал Start11/Cross12/Left13 с
-  SIO2 ACK, затем был прерван, extraStart14 ACK. Cross15 не подтверждён SIO2.
-  Не делай причинных выводов по stale image/задержке вывода. Оставляй одного
-  observer; сначала проверяй его JSONL и события/ACK, потом вмешивайся.
-- Exact hashes/evidence/границы проверки — верхний handoff и CURRENT_STATE.md.
+- Все три подтверждённых truncated leaves восстановлены:297E44..2983E8,
+  29322C..2937D0,297878..297E44. Последний имеет реальный JR297E3C/SP+60
+  delay297E40,1484 actual bytes,+388 coverage. Нет aliases/пустых returns.
+- Fresh map011/lift010 сохраняет старые исправления и unrelated rows. Все36
+  resume labels зарегистрированы.8578compiled/0stubs/skips/decodefailures.
+  Fresh Ghidra behavioral regression и full real Release/PCH build PASS.
+- Native246/247/248 на одном binary проходят прежний297BB0 и выполняют хвост
+  с реальным VU0-data4860→SPR transfer. Явных новых scheduler/device отказов нет.
+- Новый визуальный milestone: после New Game появилась ПЕРВАЯ ТЕКСТОВАЯ СТРАНИЦА
+  ПРЕДЫСТОРИИ, GS640x511,246frame15600/248frames14400,15000, приватно просмотрены.
+  Это ещё не gameplay/host audio/saves/recovery. Все прогоны300s watchdog,
+  timed_out=true/exit=null, IOP/SIF/callback processing активны. Нет final-on-exit GS.
+- Чистый ввод246: Start11/Cross12/Left13/Cross14, все SIO2 press/release.248 так же,
+  затем один Cross15 на подтверждённом прологе (SIO2 ACK). После него текст страницы
+  тот же; пиксели отличаются. Семантический переход страницы НЕ подтверждён.
+- Старый ROI oracle в247 поздно признал корректный диалог; это не отказ игры.
+  Private248 oracle проверяет menu MAE2, dialog text/buttons15/8 и prologue
+  normalizedROI15. Это checkpoint-specific detection; raw evidence не изменено.
+- Точные hashes/ограничения/evidence — верхний handoff. Source input/upstream/
+  old generated/maps не менялись. .vscode/Splash сохрани; сплешскрин отложен.
 
 ## Следующий эксперимент
 
-Следующий246 (проверь unused): original instructions/real epilogue owner297878,
-проверенный bounded recovery и свежий map/lift, resume audit, behavioral tests,
-real Release/PCH и bounded native246. Соседний map fragment не доказывает bound.
+Следующий249 (проверь unused). Текущая граница проверки — первая страница пролога,
+а НЕ missing scheduler297BB0. Установи ожидаемое поведение страницы: ordinary
+Start/Cross после проверки готовности; реальный callback/input handler и, при
+необходимости, read-only Timer1 COUNT/MODE/софт-прогресс. Повторяющийся PC27F1B8
+и getter1215F4(10000800) не доказывают timer bug. При необходимости сравни
+эквивалентное состояние owned reference, последовательно с native.
 
-Ghidra project read-only: перед новым полным экспортом нужно повторно применить
-ОБА сохранённых recovery297E44..2983E8 и29322C..2937D0, плюс новое подтверждённое.
-Не регрессируй старую coverage. Workflow — docs/ANALYSIS_REGRESSIONS.md; предполагаемые
-fresh map011/lift010 сначала проверь на отсутствие. Old maps/lifts не перезаписывай.
+Не форсируй ready/time/PC/RAM. Пройди следующую реальную сцену и проверь движение/
+бой прежде, чем заявлять gameplay. Каждый native/reference run максимум300s.
+Private248 menu script accepts run ID; prologue script hardcodes248/output/seq14,
+поэтому используй новую копию с проверенными именами/sequence, не overwrite.
+Один controller за раз, actual GS state и SIO2 press/release; ACK не равен UI action.
 
-Ordinary menus: наблюдай actual GS title/menu/NORMAL/highlighted Yes, подавай
-Start/Cross/Left/Cross700ms с actual SIO2 press/release. Private observer
-work/spr-vu0-menu-244.py принимает новый run ID; reference ROIs checkpoint-specific.
-Первый capture600 может отсутствовать. Переиспользуй код с новым output, а не
-старый JSONL. Промпт продолжения — docs/NEXT_MODEL_PROMPT.md.
+Для будущего полного Ghidra export из read-only проекта повтори ВСЕ ТРИ verified
+recoveries выше, чтобы не регрессировать coverage. Workflow в ANALYSIS_REGRESSIONS.
+Old maps/lifts сохраняй; сначала проверь новые имена. Промпт — NEXT_MODEL_PROMPT.
 
 ## Инструменты и границы
 
@@ -89,8 +92,8 @@ work/spr-vu0-menu-244.py принимает новый run ID; reference ROIs ch
 
 ## Следующий ограниченный прогон
 
-На момент checkpoint следующий номер —246. Сначала проверь, что каталог
-`work/native-run-246` свободен и другой native/reference процесс не работает.
+На момент checkpoint следующий номер —249. Сначала проверь, что каталог
+`work/native-run-249` свободен и другой native/reference процесс не работает.
 Если номер уже занят, выбери следующий свободный, сохрани прежние результаты.
 
 Настоящий executable: `build/native/ps2xRuntime/Release/ps2EntryRunner.exe`.
@@ -99,13 +102,13 @@ runner, проверь exit code сборки и запиши SHA-256 прове
 
 ```powershell
 cmake --build build/native --config Release --target ps2EntryRunner --parallel 4
-python scripts/run_native.py --input-complete --run 246 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 1024
+python scripts/run_native.py --input-complete --run 249 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 1024
 ```
 
 Пока launcher работает, отдельным процессом запусти:
 
 ```powershell
-python scripts/native_start.py --run 246 --timeout 300
+python scripts/native_start.py --run 249 --timeout 300
 ```
 
 Не жди завершения launcher перед запуском controller helper. Он проходит

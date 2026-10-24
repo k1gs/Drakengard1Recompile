@@ -1,6 +1,88 @@
 # Drakengard Europe continuation handoff
 
-## Latest: second leaf recovered; native245 passes0x29353C
+## Latest: all three recovered leaves pass; textual prologue reached
+
+Entry7e548a0 fixed owner29322C. Native245 then exposed truncated owner297878 at
+297BB0. Verified original ELF SHA065a94591d295bb936a8dca92e722c3bd72cd05848c7274b26d572b0f782e918:
+real JR RA297E3C, SP+0x60 delay297E40, exclusive bound297E44. Existing bounded
+RecoverLeafFunctionFlow restored1484 actual bytes, merging824/32/240-byte map
+fragments and adding388 covered bytes. No aliases, padded returns, PC/RA changes,
+stubs or manual edits to generated units. Input and upstream remain read-only.
+
+Read-only export reapplied ALL THREE verified recoveries:297E44..2983E8,
+29322C..2937D0,297878..297E44. Map0118579vs8581 rows; both previous recoveries
+and all unrelated records are identical. Map SHA256:
+fb9e51aa556ae25caf877fc83031d3634ad50ebe195c3ec4a8d02556bdbf40f9.
+Fresh lift-0108578 recompiled,0stubs/skips/decode failures. All36 resume switch
+cases across the three owners match registration. Runner now selects010;
+old009/maps/lifts remain untouched. Existing indirect-JR warnings remain.
+
+Fresh Ghidra read-only synthetic preparation/recovery/emulation PASS: immediate
+exit, two busy iterations, pause/resume, once-only delay effects. This is not a
+full native C++ scheduler test. Full actual Release/PCH build PASS. Toolchain
+Ghidra12.1.4/EE Reloaded2.1.38/JDK21 and pinned PS2Recomp unchanged. Reproduction
+of cumulative recovery is in docs/ANALYSIS_REGRESSIONS.md.
+
+All native246/247/248 used the SAME executable SHA256:
+263cce6f2ee5718f400a7a5e5f01756fd9064771255fa5a7c589ad0f17dca38d,
+1024M/300s/frame600. All ended watchdog timed_out=true/exit_code=null, with active
+IOP/SIF/callback processing and no new missing-target or explicit device refusal.
+Native246 ordinary inputs11Start/12Cross/13Left/14Cross all had SIO2 press/release;
+no parent intervention. GS title9600/menu10200/NORMAL10800/Yes11400. Restored
+297878 tail executes VU0-data source11004860/QWC78→MADR11004FE0/SADR780, equal
+source/destination FNVb386a16d4f6d3525 (completion32). Old297BB0 is passed.
+
+**New rendered milestone:** native246 last periodic15600 is the first textual
+story-prologue page at640x511. Privately converted and visually inspected. The
+preceding black image was transitional, not proof of a hang. No final-on-exit
+capture from a watchdog stop, no OS-window verification, no gameplay/audio/saves/
+recovery acceptance. Callback loop27F118 calls1215F4 (EE Timer1 COUNT10000800)
+and a vtable callback; repeated PC alone is not evidence of a timer defect.
+
+Native247 also passed the three leaves; the old observer delayed its valid
+NORMAL/Yes matches to13200/13800 because an earlier correct-looking dialog had
+raw ROI errors12.111/6.400 against4/4 bounds. It still sent all four inputs with
+ACK. Last15600 black; prologue helper expired without a match. That helper error
+is not a guest/device fault and does not establish application input rejection.
+
+Native248 changed ONLY private image-oracle/controller scripts. Stable-menu MAE
+bound2 instead of8; dialog text/button bounds15/8 instead of4/4. Known No versus
+Yes and other-state negatives were checked. Menus completed cleanly, with one
+observer and SIO2 ACKs. A sequential prologue helper waited for menu observer to
+finish, recognized actual first page14400 using an explicitly recorded normalized
+grayscale ROI (85,175,540,310), MAE9.8005/bound15 vs native24615600. Autocontrast
+is for matching only; captured evidence is unchanged. Checked negatives include
+title74/menu33/dialog61/black54 MAE, reference positive0. This is a calibrated
+checkpoint-specific oracle, not universal state recognition or rendering proof.
+
+At20:33:06.040928UTC Cross15/700ms was accepted/released by actual SIO2 on the
+prologue page. Images14400 and15000 differ (RGB MAE6.946/6.366/5.683), but visual
+review shows the SAME first-page text; no semantic page advance established.
+Native248 last15000 is prologue640x511, watchdog300s. No manual/competing input,
+no ready flag, timer or movie skip patch. One acknowledged Cross does not prove
+the application consumed it as page advance. Old crashes/grouping key unresolved.
+
+**Current verification boundary:** first story-prologue page after New Game;
+there is NO newly established missing scheduler target or unsupported-device
+contract. Next249 (verify unused) should establish the expected prologue behavior:
+use ordinary Start/Cross at a verified ready state, observe actual callback/input
+selection and Timer1 COUNT/MODE plus software progress if the page does not
+advance; compare an equivalent owned reference state sequentially if needed.
+Do not assume timer failure, frozen rendering or a ready flag to force. Keep each
+run300s maximum; game-native input can advance scenes, not PC/RAM/timer patches.
+Target next real scene and eventually actual movement/combat before gameplay claim.
+
+Private evidence: work/leaf297878-contract-246.json (includes246/247/248),
+work/leaf297878-epilogue-246.txt, export/synthetic/native-build246 logs,
+work/native-run-{246,247,248}/, work/leaf297878-runN-{launcher,startup,observer}.log,
+work/spr-vu0-runN-menu.jsonl. Original menu script work/spr-vu0-menu-244.py is
+unchanged. Updated private248 scripts: work/leaf297878-menu-248.py and
+work/leaf297878-prologue-248.py; prologue script hardcodes248 and outputs, so
+adapt a NEW copy and verify run/sequence/output before reuse. Its normalized
+ROI metrics are in work/leaf297878-run248-prologue.jsonl. Do not overwrite artifacts.
+All frames/exports/generated/game data stay private; Splash/.vscode untouched.
+
+## Historical: second leaf recovered; native245 passes0x29353C
 
 This supersedes the checkpoints below. Entry e1214d3 already contains the normal
 VU0-data→SPR fix. The next owning leaf0x29322C was truncated at0x29353C after
