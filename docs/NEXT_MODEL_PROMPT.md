@@ -1,29 +1,35 @@
 # Промпт для следующей модели
 
 Продолжи Drakengard 1 Recompile, PS2 Europe, в `D:\proj\drakengard 1 recompile`.
-Сначала прочитай AGENTS.md, docs/CONTINUE.md, последние записи CURRENT_STATE.md
-(локальный ignored журнал) и верхний актуальный раздел
-docs/HANDOFF_2026-10-24_CONTINUATION.md. Проверь Git HEAD/status и реальные процессы.
+Прочитай AGENTS.md, docs/CONTINUE.md, последние CURRENT_STATE.md и верхний
+актуальный docs/HANDOFF_2026-10-24_CONTINUATION.md. Проверь HEAD/status/процессы.
+Опубликованный входной checkpoint58c9520 уже пройден; текущий hash смотри в Git.
 
-Checkpoint: реализованы IPU I/P/B MBT/motion, toSPR chains, RGB32 CSC, ADMA/FX,
-двухэтапный ADMA stop (STR-clear, затем ADMAS0) без ложного completion/IRQ/RAM clear.
-Native237 реально отрисовал главное меню New Game / Load Game / Options и диалог
-NORMAL. Обычные Start/Cross/Left/Cross приняты SIO2. После New Game Yes последний
-GS чёрный; прогон завершён watchdog300s при продолжающемся IOP/SIF. Новый device
-отказ не установлен. Gameplay, host audio, saves/recovery пока не доказаны.
+Native238/239 установили post-Yes дефект scalar FPU compare: max sentinel
+0x7FFFFFFF превращался в host NaN, grouping reference оставался0, consumer
+0x13764C получал count0 и уходил из scratchpad; поздний IPU read0x1000200C —
+следствие, не новый контракт регистра. Исправлен C.EQ/C.LT/C.LE в существующем
+macro shadow с pinned reference normalization. Bootstrap11/11, strict IOP1/1,
+Python55 и полный Release runner build прошли.
 
-Следующий эксперимент238 — сначала проверь, что номер свободен. Повтори с1024M
-IOP budget и прежним лимитом300s. Пройди уже проверенные GS-состояния обычным host
-pad protocol быстрее, оставив больше времени после New Game. Затем установи и
-исправь первую подтверждённую post-Yes границу; не угадывай причину чёрного кадра.
-Команды launcher/helper/input и evidence pointers находятся в docs/CONTINUE.md
-и handoff. Не ограничивайся планом: реализуй установленный контракт, добавь
-поведенческие проверки, собери настоящий runner и проверь bounded native run.
+Native240 реально подтвердил grouping reference0x3B05F0/count2 и два вызова
+consumer, затем остановился на **missing EE scheduler target0x298154**,
+RA0x2984FC/SP0x11D9D0. Exit5/timed_out=false — не успех игры. Финальный GS
+чёрный640x511. Меню/диалог отрисованы; gameplay/host audio/saves/recovery и
+корректность всей геометрии/FPU arithmetic не доказаны. Второй key0xCD277739
+не объяснён. Evidence/hashes/обычные меню-кнопки — в handoff и CONTINUE.
 
-Не используй Computer Use/OS input, готовые guest flags, skip-патчи, фиктивный
-успех или прямые изменения RAM. Inputs read-only; upstream/generated не редактируй.
-Сохрани .vscode/ и native/Splash.png — сплешскрин отложен. Кадры/дампы/game/BIOS
-и generated не публикуй. Субагенты необязательны; если нужны, разрешена только
-GPT-5.6 Luna. Разрешены focused validated commits и обычный push после проверки
-staged diff и scripts/check_public_tree.py. По завершении обнови журнал, верхний
-handoff и CONTINUE, сообщи фактический результат и дай новый промпт продолжения.
+Следующий эксперимент241 (проверь свободный номер): установи owning function,
+emitted checkpoint/resumable labels и registered dispatch contract для0x298154.
+Не считай заранее, что это просто пропущенный alias. Исправь подтверждённый
+генератор/overlay, добавь поведенческий yield/resume regression, собери настоящий
+runner и проверь bounded native1024M/300s. Не ограничивайся планом.
+
+Никаких Computer Use/OS input, готовых guest flags, skip-патчей, выдуманного
+успеха или прямого изменения RAM. Inputs read-only; upstream/generated не
+редактируй. Сохрани .vscode/ и native/Splash.png: сплешскрин отложен.
+Кадры/дампы/BIOS/игровые данные/generated остаются private/ignored. Субагенты
+необязательны; если нужны, разрешена только GPT-5.6 Luna. Разрешены focused
+validated commits и обычный push после staged review/check_public_tree.py.
+По завершении обнови журнал, верхний handoff, CONTINUE и этот промпт; сообщи
+фактический результат, оставшуюся границу и один следующий эксперимент.

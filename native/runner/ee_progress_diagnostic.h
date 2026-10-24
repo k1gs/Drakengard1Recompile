@@ -32,7 +32,7 @@ struct EeProgressDiagnostic {
             std::cerr << " reg" << base+off << "=0x" << runtime.memory().read32(base+off);
         if (context) {
             std::cerr << " pc=0x" << context->pc;
-            for (unsigned r:{2u,3u,4u,17u,31u}) std::cerr << " r" << std::dec << r << "=0x" << std::hex << getRegU32(context,r);
+            for (unsigned r:{2u,3u,4u,5u,6u,7u,8u,9u,10u,17u,18u,19u,31u}) std::cerr << " r" << std::dec << r << "=0x" << std::hex << getRegU32(context,r);
             auto* ram=runtime.memory().getRDRAM();
             for (unsigned r:{4u,17u}) {
                 const auto base=getRegU32(context,r)&0x1fffffff;

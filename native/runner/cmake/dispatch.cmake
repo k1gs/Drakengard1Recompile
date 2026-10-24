@@ -34,7 +34,7 @@ if(runtime_fatal_devices STREQUAL runtime_reset)
 endif()
 include("${REPO_ROOT}/native/runner/cmake/thread_failure.cmake")
 string(REPLACE "    const uint32_t entryPc = ctx->pc;\n    targetFn(rdram, ctx, this);"
-    "    const uint32_t entryPc = ctx->pc;\n    const uint32_t entryRa = getRegU32(ctx, 31);\n    const uint32_t entrySp = getRegU32(ctx, 29);\n    targetFn(rdram, ctx, this);\n    drakengard::diagnoseEeTransfer(\"dispatch\", sourcePc, entryPc, entryRa, entrySp, rdram, *ctx);"
+    "    const uint32_t entryPc = ctx->pc;\n    const uint32_t entryRa = getRegU32(ctx, 31);\n    const uint32_t entrySp = getRegU32(ctx, 29);\n    drakengard::diagnoseEeListEntry(entryPc, rdram, *ctx);\n    targetFn(rdram, ctx, this);\n    drakengard::diagnoseEeTransfer(\"dispatch\", sourcePc, entryPc, entryRa, entrySp, rdram, *ctx);"
     runtime_diagnostic "${runtime_fatal_devices}")
 if(runtime_diagnostic STREQUAL runtime_fatal_devices)
     message(FATAL_ERROR "Pinned guest dispatch target invocation changed")

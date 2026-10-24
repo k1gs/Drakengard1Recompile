@@ -318,7 +318,7 @@ public:
         case Position: return (bitPosition&0x7fu)|(fifoCount<<8)|(buffered<<16);
         case Top: return top;
         case Top+4: return topBusy?0x80000000u:0u;
-        default: throw std::runtime_error("Unsupported IPU register read");
+        default: throw std::runtime_error("Unsupported IPU register read: address="+std::to_string(address));
         }
     }
     uint64_t read64(uint32_t address) {

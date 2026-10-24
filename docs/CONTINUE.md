@@ -23,46 +23,52 @@
 
 ## Актуальный checkpoint: 2026-10-24
 
-- Опубликован0859793 в origin/main, CI40106657373 PASS. Последующие коммиты
-  определяй по Git HEAD; актуальное разрешение пользователя включает push
-  проверенных исходников и продолжение работы.
-- Реализованы I/P/B MBT, motion VDEC, RAM→SPR source chains, RGB32 CSC,
-  настоящий sample-paced ADMA transport и scalar nonzero FX. Unsupported
-  MPEG1/IVF0/alternate scan/non-intra BDEC и другие режимы остаются закрыты.
-- Старый active ADMA stop уже реализован как два отдельных события:
-  CHCR01000201→00000201 снимает DMAC STR, сохраняя producer и подавляя IRQ;
-  ADMAS0 после disarm останавливает producer без completion/IRQ/RAM clear.
-  MADR/BCR/STATX, настоящая SPU RAM и consumer/write cursors сохраняются.
-  Новое включение/передача проверены тестами обоих ядер. Нулевые samples
-  не подставляются; inaccurate emulator RAM-zero workaround не переносился.
-- Native236 подтвердил настоящий stop и дошёл до **титульного экрана
-  Drakengard / PRESS START BUTTON**, прямые GS8400/9000,640x511,
-  приватно визуально проверены. Это не OS-window screenshot и не меню.
-- Start236 sequence11 FFF7/700ms принят SIO2 с отпусканием; финальный кадр
-  показывает переход титула. Exit6/no timeout из-за diagnostic512M budget.
-- Native237 использует тот же binary и существующий1024M budget при прежнем
-  лимите300s; его результат и следующий эксперимент смотри в верхнем handoff.
-- Strict IOP1/1 с disarm/drain/no-IRQ/stop/rearm/faulted-SH tests PASS005,
-  native Release build002 PASS. Bootstrap10/10 и Python55 из предыдущего
-  checkpoint остаются PASS. Hardware rounding/timing, host audio, gameplay,
-  saves/recovery не подтверждены. Crash219/226 не объявлен исправленным.
-- `.vscode/` и пользовательский `native/Splash.png` сохраняй. Сплешскрин ещё
-  не интегрирован: задача отложена, его нельзя выдавать за кадр игры.
+- Входной опубликованный checkpoint —58c9520. Текущий опубликованный hash
+  определяй по Git HEAD/origin/main; focused validated commits/push разрешены.
+- Реализованы I/P/B MBT/motion, toSPR chains, RGB32 CSC, sample-paced ADMA/FX,
+  двухэтапный ADMA stop без фиктивного IRQ/completion/RAM clear.
+- Native237 реально отрисовал главное меню и NORMAL/Yes/No. Native238 прошёл
+  эти состояния раньше обычными кнопками и получил явный отказ IPU read.
+- Native239 установил, что этот отказ вторичен: consumer0x13764C получает
+  count0, его unsigned loop выходит из scratchpad и позже читает0x1000200C.
+  Producer0x137D30 видит два объекта, grouping reference0/key0x7FFFFFFF.
+- Причина первого установленного дефекта — scalar `C.LT` через host IEEE `<`:
+  PS2 max sentinel0x7FFFFFFF становится host NaN. `ee_fpu_compare.h` и прежний
+  build-local macro shadow теперь нормализуют операнды C.EQ/C.LT/C.LE по pinned
+  PCSX2v2.8.2: exponent0→zero, exponent255→signed finite host max. Исходные FPR
+  не переписываются; весь FPU arithmetic/rounding и hardware equivalence не заявлены.
+- Native240 подтвердил исправленный путь: grouping reference0x3B05F0 и consumer
+  count2 вместо0, два вызова. Новый реальный stop: **missing EE scheduler target
+  0x298154**, RA0x2984FC, SP0x11D9D0. Exit5/timed_out=false — не успех игры.
+- Проверенный настоящий runner SHA256:
+  `26fab6b8e49ae69029683a14acd99950ae9a99ca48038a01bfd44d4ea45746a4`.
+  Bootstrap11/11 (новые numeric boundary/consumer tests), strict IOP1/1,
+  Python55 PASS. Native Release/MSBuild17.11.9 PASS.
+- Финальный GS240 чёрный640x511. Gameplay/host audio/saves/recovery не доказаны.
+  Во втором наблюдении grouping key0xCD277739 не объяснён; это не доказательство
+  корректной геометрии. Crash219/226 также не объявлен исправленным.
+- `.vscode/` и `native/Splash.png` сохраняй; сплешскрин отложен.
 
-## Результат237 и следующий эксперимент
+## Следующий эксперимент
 
-Главное меню NEW GAME / LOAD GAME / OPTIONS реально отрисовано в GS10800.
-После обычного Cross появился диалог NORMAL/Yes/No (GS13200), затем Left/Cross
-подтвердили Yes. Все нажатия/отпускания подтверждены SIO2. Native237 использовал
-тот же executable,1024M/300s; завершился watchdog timed_out=true, exit=null.
-Последний GS16200 чёрный640x511, IOP/SIF продолжали работу; нового явного device
-отказа не было. Это не gameplay и не доказанное зависание. Кадры только в work/.
+Следующий241 (проверь, что свободен): установить контракт resume/dispatch для
+реального scheduler PC0x298154. Найти owning lifted function и resumable labels,
+сверить emitted checkpoints, генератор и registered-function table. Исправить
+оригинальный генератор/overlay, если подтверждён пропущенный resume entry, затем
+поведенческий yield/resume regression, настоящий runner и bounded native.
+Не добавлять произвольный alias/stub, не исправлять RA/PC или guest flags.
+Указатель может быть следствием предыдущей ошибки: не объявлять причину до сверки.
 
-Следующий238 (проверь, что номер свободен): повторить неизменённый код с1024M/300s,
-раньше подать обычные Start/Cross/Left/Cross после проверки соответствующих GS
-состояний и оставить больше времени после New Game. Установить первую реальную
-post-Yes границу, затем диагностировать/реализовать её. Не объявлять заранее
-BDEC/movie/loading причиной чёрного кадра. Готовый промпт: docs/NEXT_MODEL_PROMPT.md.
+Повторить обычные меню с1024M/300s. В239 fully-lit titleGS9000 → Start,
+menuGS10200 → Cross, dialogGS11400 → Left, highlighted YesGS12000 → Cross.
+В240 title ещё fading на9000 и готов на9600; состояния проверяй, а не нажимай
+вслепую по номеру кадра. Ранний Start238 во время fade был принят SIO2, но меню
+не открыл; повтор на готовом титуле сработал. Startup helper unchanged.
+
+Private evidence: `work/native-run-{238,239,240}/`, соответствующие
+`work/post-menu-runN-launcher.log`, `work/fpu-compare-contract-240.json`,
+`work/fpu-compare-reference-001/`. Подробности — верхний handoff.
+Промпт продолжения — docs/NEXT_MODEL_PROMPT.md.
 
 ## Инструменты и границы
 
@@ -93,8 +99,8 @@ BDEC/movie/loading причиной чёрного кадра. Готовый п
 
 ## Следующий ограниченный прогон
 
-На момент checkpoint следующий номер —238. Сначала проверь, что каталог
-`work/native-run-238` свободен и другой native/reference процесс не работает.
+На момент checkpoint следующий номер —241. Сначала проверь, что каталог
+`work/native-run-241` свободен и другой native/reference процесс не работает.
 Если номер уже занят, выбери следующий свободный, сохрани прежние результаты.
 
 Настоящий executable: `build/native/ps2xRuntime/Release/ps2EntryRunner.exe`.
@@ -103,13 +109,13 @@ runner, проверь exit code сборки и запиши SHA-256 прове
 
 ```powershell
 cmake --build build/native --config Release --target ps2EntryRunner --parallel 4
-python scripts/run_native.py --input-complete --run 238 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 1024
+python scripts/run_native.py --input-complete --run 241 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 1024
 ```
 
 Пока launcher работает, отдельным процессом запусти:
 
 ```powershell
-python scripts/native_start.py --run 238 --timeout 300
+python scripts/native_start.py --run 241 --timeout 300
 ```
 
 Не жди завершения launcher перед запуском controller helper. Он проходит

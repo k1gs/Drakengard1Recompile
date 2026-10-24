@@ -1,7 +1,21 @@
-# Build-local macro shadow for the opt-in EE write watch. The pinned macro
-# source is copied and only the existing trace calls are instrumented.
+# Shared build-local runtime macro shadow. Keep the pinned source read-only;
+# instrument existing write traces and correct the reviewed COP1 compare domain.
 file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/include/ps2_runtime_macros.h" write_watch_source)
-set(write_watch_header "#pragma once\n#include \"${REPO_ROOT}/native/runner/ee_write_watch.h\"\n")
+set(write_watch_header "#pragma once\n#include \"${REPO_ROOT}/native/runner/ee_write_watch.h\"\n#include \"${REPO_ROOT}/native/runner/ee_fpu_compare.h\"\n")
+foreach(compare_pair IN ITEMS
+    "#define FPU_C_EQ_S(a, b) ((float)(a) == (float)(b))@@#define FPU_C_EQ_S(a, b) drakengard::eeFpuEqual((a), (b))"
+    "#define FPU_C_OLT_S(a, b) ((float)(a) < (float)(b))@@#define FPU_C_OLT_S(a, b) drakengard::eeFpuLess((a), (b))"
+    "#define FPU_C_OLE_S(a, b) ((float)(a) <= (float)(b))@@#define FPU_C_OLE_S(a, b) drakengard::eeFpuLessEqual((a), (b))")
+    string(FIND "${compare_pair}" "@@" compare_separator)
+    string(SUBSTRING "${compare_pair}" 0 ${compare_separator} compare_old)
+    math(EXPR compare_new_start "${compare_separator}+2")
+    string(SUBSTRING "${compare_pair}" ${compare_new_start} -1 compare_new)
+    string(FIND "${write_watch_source}" "${compare_old}" compare_at)
+    if(compare_at LESS 0)
+        message(FATAL_ERROR "Pinned scalar FPU comparison macro changed")
+    endif()
+    string(REPLACE "${compare_old}" "${compare_new}" write_watch_source "${write_watch_source}")
+endforeach()
 foreach(write_watch_pair IN ITEMS
     "ps2TraceGuestWrite(rdram, _addr, 1u, (uint8_t)(val), 0u, \"WRITE8\", ctx);@@drakengard::traceEeWatchedWrite(rdram, _addr, 1u, (uint8_t)(val), 0u, \"WRITE8\", ctx); ps2TraceGuestWrite(rdram, _addr, 1u, (uint8_t)(val), 0u, \"WRITE8\", ctx);"
     "ps2TraceGuestWrite(rdram, _addr, 2u, (uint16_t)(val), 0u, \"WRITE16\", ctx);@@drakengard::traceEeWatchedWrite(rdram, _addr, 2u, (uint16_t)(val), 0u, \"WRITE16\", ctx); ps2TraceGuestWrite(rdram, _addr, 2u, (uint16_t)(val), 0u, \"WRITE16\", ctx);"

@@ -1,7 +1,84 @@
 # Drakengard Europe continuation handoff
 
+## Latest: post-Yes scalar compare fixed; next missing EE scheduler target
 
-## Latest: ADMA disarm/stop passed; rendered main menu and New Game dialog
+This supersedes every checkpoint below. Entry HEAD was published58c9520; use Git
+HEAD/origin/main for subsequent validated publication. Preserve `.vscode/` and
+`native/Splash.png`. No Computer Use, OS input, guest flags/RA/PC patches, game
+skips, input/upstream/generated edits or fabricated completion.
+
+Native238 repeated237's actual menu with1024M/300s/frame interval600, unchanged
+binary SHA256 `8ce4e1004eaaa91f3c9b577fcb69a655347d0cebbaaa1b09c557f1dad55f517b`.
+Ordinary Start/Cross/Left/Cross passed verified GS states earlier. First Start
+at fading titleGS8400 was delivered by SIO2 but did not open the menu; repeat
+at fully-lit9600 worked. GS10800 main menu,12000 NORMAL dialog,12600 highlighted
+Yes, final black640x511. Exit6/timed_out=false: Unsupported IPU register read.
+
+Do NOT implement a successful read at the terminal IPU offset. Diagnostics239
+showed this was downstream of an invalid consumer loop, not a new movie command.
+Actual producer entry0x137D30: list0x11FE30, count2, filter0x3B05F0. Objects
+0x3B05F0 and0x3B0F30 had grouping reference0 and key0x7FFFFFFF. The diagnostic's
+`type` label denotes this grouping-reference field, not an established object type.
+Actual consumer0x13764C received a0=0x70000000/a1=0; n-gap underflows and its
+unsigned loop runs outside scratchpad. Later LWC1 at0x137698 eventually aliases
+IPU physical0x1000200C, which correctly refuses. Native239 exit6/no timeout,
+binary SHA256 `0acd0c70ce5c287b05775067ab66827c433f4076590741b267669f6d6a76c1ae`.
+
+Dataflow: real grouping producer0x1373E8 loads the max sentinel from0x56F100,
+uses C.LT at0x1374A4 to update nearest grouping reference/key. Upstream scalar
+comparison macro used host IEEE `<`, for which0x7FFFFFFF is NaN/unordered.
+Implemented original `native/runner/ee_fpu_compare.h`: exponent-zero operands
+compare as zero; exponent255 clamps to signed host-finite max; bit-derived
+ordering keys implement EQ/LT/LE independent of host NaN/DAZ/FTZ. FPR source
+bits and generated FCR31 update semantics are unchanged. Existing shared macro
+shadow/PCH redirects emitted FPU_C_EQ_S/OLT_S/OLE_S; no game-specific workaround.
+
+Contract pinned to [PCSX2v2.8.2 FPU.cpp](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/FPU.cpp)
+C_cond_S/fpuDouble and
+[iFPU.cpp](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/x86/iFPU.cpp)
+fpuFloat3/recC_EQ/LE/LT. Private refs `work/fpu-compare-reference-001/`:
+FPU.cpp SHA256 `204dcb290f9f56e9112622ab313ef12d2192eda5b43d24efcf2dbc8ca3fa7344`;
+iFPU.cpp SHA256 `e8cd2ca18455fffce292ab65f011552e9eddb0c4f7d9cecdac724e41502e1c10`.
+This is a functional reference convention, not hardware FPU arithmetic/rounding
+equivalence. No emulator implementation copied into public source.
+
+Behavioral tests `native/bootstrap_smoke/fpu_compare_tests.cpp`:17 boundary
+vectors for EQ/LT/LE and reverse ordering, zeros/denormals/first normal, signed
+max/clamp limits, ordinary precision and synthetic nearest-candidate selection
+with PS2 sentinel. Bootstrap11/11 PASS; strict IOP1/1 and Python55 PASS.
+Real full Release runner/PCH rebuild passed MSBuild17.11.9; checked binary240 SHA256
+`26fab6b8e49ae69029683a14acd99950ae9a99ca48038a01bfd44d4ea45746a4`.
+
+**Native240 after-fix proof:** same actual two objects now have grouping reference
+0x3B05F0, first observed key0; consumer count2, twice. It passes the old runaway
+loop rather than patching its count. Second observed key0xCD277739 is unexplained;
+do not claim correct geometry or full FPU arithmetic. All ordinary menu input
+remains SIO2-observable. Final direct GS black640x511, privately visually checked.
+
+**First remaining boundary:** `[guest-branch:missing-target] kind=DirectJump
+op=EE scheduler source=target=0x298154`, RA0x2984FC, SP0x11D9D0, GP0x572C70.
+Trace ends in game code; runtime stops with Game thread returned at that PC.
+Native240 exit5/timed_out=false, not game success. No gameplay/host audio/saves/
+recovery proof; old crash219/226 remains unresolved. No debugger was attached
+in238..240. Existing unsupported IPU/device guards remain intact.
+
+Next241 (verify unused/processes): map0x298154 to owning lifted function and its
+resumable labels; compare emitted checkpoint, scheduler dispatch and registered
+function table. Establish whether this is a missing resume entry before changing
+the original generator/overlay. Add behavioral yield/resume coverage, build the
+real runner and run1024M/300s. No arbitrary alias/stub, PC/RA fix or guest patch.
+Menu recipe239: verified full title9000→Start, main menu10200→Cross, NORMAL11400
+→Left, highlighted Yes12000→Cross, each700ms. In240 title only settled at9600;
+observe actual states. Startup helper remains `native_start.py --timeout 300`.
+
+Private evidence: `work/native-run-{238,239,240}/`, corresponding
+`work/post-menu-runN-launcher.log`, `work/fpu-compare-contract-240.json`,
+`work/native-run-240/final-review.png`. Validation commands/results are recorded
+in `work/fpu-compare-validation-240.json`; these are local exercised checks, not CI.
+Entry point docs/CONTINUE.md; next-model prompt docs/NEXT_MODEL_PROMPT.md.
+
+
+## Historical: ADMA disarm/stop passed; rendered main menu and New Game dialog
 
 Published accumulated checkpoint0859793 to origin/main; CI40106657373 succeeded.
 The user authorized further validated source commits/pushes and a final next-model

@@ -1370,3 +1370,26 @@ Ordinary Start/Cross/Left/Cross were accepted and released via SIO2.237 uses the
 existing1024M option, still300s max; timed out after New Game Yes with black last
 GS and active IOP/SIF. No new device fault or gameplay/audio/saves proof. See top
 handoff and private work/adma-stop-menu-evidence-237.json for the next experiment.
+
+## Post-New-Game scalar FPU comparison boundary (2026-10-24)
+
+Native238 reached an explicit IPU read refusal after verified ordinary New Game
+input. Native239 showed the earlier producer/consumer error: PS2 max sentinel
+0x7FFFFFFF was treated as host IEEE NaN in scalar C.LT, so two objects retained
+grouping reference0 and the scratchpad consumer received count0. Its unsigned
+loop ran outside scratchpad and eventually read physical IPU0x1000200C.
+That IPU refusal is not fixed with a fake register value.
+
+Original `ee_fpu_compare.h` and the existing macro shadow normalize comparison
+operands according to pinned PCSX2v2.8.2 COP1 EQ/LT/LE: exponent0→zero,
+exponent255→signed host-finite max. Integer keys avoid host NaN/DAZ/FTZ effects.
+No source FPR rewriting, game-specific count adjustment, or arithmetic extension.
+Reference links/hashes are in the top handoff; hardware equivalence is unproven.
+
+Bootstrap11/11 includes numeric boundaries and a max-sentinel selection consumer;
+strict IOP1/1/Python55 and real Release runner build PASS. Native240 confirms
+grouping reference0x3B05F0/count2 instead of0, twice, then stops at missing EE
+scheduler target0x298154 (RA0x2984FC), exit5/no timeout. Final GS remains black.
+This proves the changed compare path, not gameplay, geometry accuracy or audio.
+Next experiment241 establishes the owning function/resume-registration contract;
+see docs/CONTINUE.md and the current handoff. Private evidence remains in work/.
