@@ -85,3 +85,58 @@ python scripts/make_analysis_fixture.py long-nop
 Expected coverage: exactly `[0x1000,0x110c)`, 268 bytes including 64 original NOPs and the real
 return/delay slot. This fixture passed locally. Selected and full pointer exports produced the
 expected one/two records, and both shared-epilogue modes retained the eight-byte hole.
+
+## Exit into a backward jump's delay slot
+
+An EE conditional branch may target the delay instruction of a different jump.
+On that incoming path, the instruction executes once and falls through normally;
+the other jump must not take effect. Automatic analysis can retain the slot but
+leave its ordinary fallthrough undefined, producing an incomplete leaf map.
+
+```powershell
+python scripts/make_analysis_fixture.py delay-slot-exit
+& tools/ghidra_12.1.4_PUBLIC/support/analyzeHeadless.bat `
+  work/ghidra-projects delay-slot-regression-001 `
+  -import work/analysis-delay-slot-exit-001/delay-slot-exit.elf `
+  -processor r5900:LE:32:default -noanalysis -scriptPath scripts/ghidra `
+  -postScript PrepareAnalysisFixture.java `
+  -postScript RecoverLeafFunctionFlow.java 0x1000 0x1024 `
+  -postScript CheckLeafFlowFixture.java `
+  -postScript ExportRecompMap.java "$PWD/work/analysis-delay-slot-exit-001/functions.csv" 0x1000
+```
+
+Use the pinned JDK21/Ghidra environment and fresh project/output names. The
+preparation script deliberately omits `[0x1018,0x1024)` from the function.
+Without recovery, the behavioral check reports `Missing reachable epilogue`.
+Headless can return exit0 after a script exception: inspect the actual PASS/error
+markers and export, not just the process exit code.
+
+After bounded recovery, the map is exactly `[0x1000,0x1024)`,36 instruction bytes.
+`CheckLeafFlowFixture` executes the synthetic instructions with the pinned Ghidra
+emulator: immediate exit and two busy iterations both return43, preserving branch
+and return delay effects. It pauses at the loop edge with a0=1/v1=1/v0=7, then
+continues the same architectural state to a0=-1/v1=3/v0=43. An extra or omitted
+execution of the alternate-entry delay instruction changes those results.
+This is analysis/control-flow evidence, not a full native scheduler test.
+
+The observed Europe leaf at0x297E44 used this recovery with exclusive bound
+0x2983E8. Its old map stopped at0x298154 and also held two separate reachable
+fragments. The recovered map owns the real complete leaf through its return and
+stack-restoring delay instruction; unrelated functions are unchanged. The current
+runner consumes fresh `lift-008`, generated from `functions-ghidra-009.csv`.
+Inputs, generated units, Ghidra projects and instruction exports remain private.
+
+For the already verified local Europe project, the read-only recovery/export
+and fresh lift used for this checkpoint were:
+
+```powershell
+& tools/ghidra_12.1.4_PUBLIC/support/analyzeHeadless.bat `
+  work/ghidra-projects drakengard-eu-001 -process SLES_523.22 -readOnly -noanalysis `
+  -scriptPath scripts/ghidra -postScript RecoverLeafFunctionFlow.java 0x297E44 0x2983E8 `
+  -postScript ExportRecompMap.java "$PWD/work/functions-ghidra-009.csv"
+python scripts/lift.py --input-complete --map work/functions-ghidra-009.csv --run-id lift-008
+```
+
+These paths must be fresh when regenerating; never overwrite old evidence or
+modify original input/upstream/generated files. This is a full map export, not
+the optional selected-entry export used by the synthetic check.

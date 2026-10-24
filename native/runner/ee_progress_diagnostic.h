@@ -30,6 +30,10 @@ struct EeProgressDiagnostic {
                   << " dispfb2=0x" << display.dispfb2 << " display2=0x" << display.display2;
         for (uint32_t base:{0x10009000u,0x1000a000u}) for (uint32_t off:{0u,0x10u,0x20u,0x30u})
             std::cerr << " reg" << base+off << "=0x" << runtime.memory().read32(base+off);
+        for (uint32_t off:{0u,0x10u,0x20u,0x80u})
+            std::cerr << " reg" << 0x1000d400u+off << "=0x" << runtime.memory().read32(0x1000d400u+off);
+        for (uint32_t address:{0x1000e000u,0x1000f520u})
+            std::cerr << " reg" << address << "=0x" << runtime.memory().read32(address);
         if (context) {
             std::cerr << " pc=0x" << context->pc;
             for (unsigned r:{2u,3u,4u,5u,6u,7u,8u,9u,10u,17u,18u,19u,31u}) std::cerr << " r" << std::dec << r << "=0x" << std::hex << getRegU32(context,r);

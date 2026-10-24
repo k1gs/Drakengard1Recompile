@@ -1,6 +1,85 @@
 # Drakengard Europe continuation handoff
 
-## Latest: post-Yes scalar compare fixed; next missing EE scheduler target
+## Latest: truncated leaf recovered; next measured VU0-data toSPR wait
+
+This supersedes all checkpoints below. Entry HEAD231fa5e includes the approved
+README main-menu illustration; use Git HEAD/origin/main for subsequent publication.
+Preserve `.vscode/` and `native/Splash.png`. No Computer Use, OS input, ready/PC/RA
+patches, game skips, input/upstream edits or false device completions.
+
+Native240's0x298154 was not established as a missing resume alias. Actual owner
+begins0x297E44; old map ended0x298154, after a conditional exit into the delay
+instruction of another jump. Ghidra showed that slot's ordinary fallthrough but
+no decoded instruction there. Existing `RecoverLeafFunctionFlow.java` recovered
+the real bounded leaf to exclusive0x2983E8, including JR0x2983E0 and stack-restoring
+delay0x2983E4. No padding span or invented instruction was inserted.
+
+Used existing project drakengard-eu-001/SLES_523.22 with `-readOnly -noanalysis`;
+temporary disassembly/body changes were discarded after export. New private
+`work/functions-ghidra-009.csv` SHA256:
+`b71cae632f228fc1e7a04b6214763f485ff74c437e88cfcc0398c29a5d9728a2`.
+8585→8583 records: the old leaf plus reachable0x2982C4..0x2982E4 and
+0x2982F8..0x2983E8 fragments become one1444-byte leaf. +388 newly covered bytes;
+unrelated rows unchanged. Fresh lift-008 generated with verified ELF and pinned
+PS2Recomp eb8688b2fd191129f103a39543002c005b33409c:8582 functions,0 stubs/skips/
+decode failures. Original lift-007 remains untouched. Runner overlay selects008.
+Old fragment destinations are now real intra-function control flow, not shims.
+
+New original `delay-slot-exit` fixture and `CheckLeafFlowFixture.java` reproduce
+the missing epilogue before recovery and execute real synthetic instructions
+afterward. Immediate exit and two busy iterations return43; loop-edge pause sees
+a0=1/v1=1/v0=7 and continuation ends a0=-1/v1=3/v0=43. Delay effects must occur
+once, including the alternate-entry slot and return delay. Exact exported range
+0x1000..0x1024/36 bytes. Ghidra may exit0 despite script errors: negative log has
+the expected exception; after log has actual PASS/export. This is a pinned local
+Ghidra emulation regression, not a complete C++ scheduler test.
+Toolchain Ghidra12.1.4/EE Reloaded2.1.38/JDK21.0.9. Reproduction is documented
+in docs/ANALYSIS_REGRESSIONS.md. Python55/bootstrap11/11/strict IOP1/1 PASS.
+
+Real full Release runner build passed MSBuild17.11.9. Initial241/242 binary:
+`de6a0908b1ddf88b547ad8eda1caf6bee9861d8006788c814c326d92255951d0`.
+Native241 timed out300s at title: startup helper succeeded, but a throwaway
+observer incorrectly waited for capture600, which was not created before GS
+was ready. It did not exercise post-Yes. Failed observer/logs retained; not a
+device refusal or proof of the recovered tail.
+
+Native242 fixed only the throwaway observer, skipping absent early captures.
+Actual GS title9000/menu9600/NORMAL10200/highlighted Yes10800 were matched to
+reviewed private GS regions and subsequently visually checked. Ordinary
+Start/Cross/Left/Cross700ms each had actual SIO2 press/release. Yes at197.86s;
+no further input. The old missing target passed: actual PC repeatedly0x2981E4
+inside restored code, waiting on toSPR CHCR STR. It did not complete the leaf.
+
+Added bounded nonmutating channel9/global-control fields to existing progress
+observations, rebuilt real runner; native243 SHA256:
+`2052fa9845d1996478187657580203c590b2caf29cd785495164e76432c010bf`.
+Same1024M/300s/frame600 profile; helper0, Yes at196.515s, roughly100s remaining.
+Measured at PC0x2981E4/RA0x2984FC: CHCR0x101, MADR0x110049E0, QWC0x60,
+SADR0, D_CTRL0x1, D_ENABLER0x1201. Pinned runtime maps11004000..11005000 to
+the existing4-KiB VU0 data RAM/getVU0Data. Do not substitute a new RAM buffer.
+
+Native242/243 timed_out=true/exit=null (launcher124). IOP/SIF continued; STR and
+the transfer registers remained pending through watchdog. Last periodic16800
+is black640x511, privately visually checked; no final-on-exit capture. No new
+explicit device refusal, VCALLMS execution, gameplay/host-audio/saves/recovery
+proof. Scalar key0xCD277739 and old C0000409 remain unexplained/not fixed.
+
+Next244 (verify unused/processes): research normal toSPR admission and transfer
+for the measured VU0-data source, not another chain tag or missing entry. Reuse
+actual shared VU0 data/SPR ownership; establish register progression and real
+completion/DMAC cause9, implement confirmed behavior with boundaries/IRQ tests,
+build and run bounded native. Never clear STR on read or fake transfer/IRQ.
+Menu states above are observations, not universal frame-based readiness rules.
+Startup helper unchanged; no first-capture600 assumption.
+
+Private evidence: work/leaf-flow-contract-243.json; work/functions-ghidra-009.csv;
+work/flow-boundary-{inspect,recovery,full-export}-241*.log; work/lift-008/;
+work/delay-slot-fixture-{before,after}-241.log; work/analysis-delay-slot-exit-001/;
+work/native-run-{241,242,243}/ and work/flow-runN-{launcher,startup}.log/menu.jsonl.
+All captures/projects/generated/exports stay ignored. Public README image from240
+is unchanged. Entry point CONTINUE.md; next prompt NEXT_MODEL_PROMPT.md.
+
+## Historical: post-Yes scalar compare fixed; next missing EE scheduler target
 
 This supersedes every checkpoint below. Entry HEAD was published58c9520; use Git
 HEAD/origin/main for subsequent validated publication. Preserve `.vscode/` and

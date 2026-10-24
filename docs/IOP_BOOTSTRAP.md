@@ -1393,3 +1393,26 @@ scheduler target0x298154 (RA0x2984FC), exit5/no timeout. Final GS remains black.
 This proves the changed compare path, not gameplay, geometry accuracy or audio.
 Next experiment241 establishes the owning function/resume-registration contract;
 see docs/CONTINUE.md and the current handoff. Private evidence remains in work/.
+
+## Recovered leaf continuation and normal toSPR wait (2026-10-24)
+
+The missing scheduler target0x298154 was an incomplete analysis map for the leaf
+at0x297E44. Existing bounded flow recovery decoded the real continuation to its
+return at0x2983E0/stack-restoring delay0x2983E4, exclusive bound0x2983E8.
+Fresh functions-ghidra-009.csv/lift-008 replaces the old incomplete lift007
+selection; old generated files and original inputs remain untouched. No resume
+alias, guest PC/RA patch or synthetic epilogue.
+
+An original delay-slot-exit regression fails before recovery, then executes
+immediate exit, busy-loop pause/resume and correct branch/jump/return delay
+effects in the pinned Ghidra emulator. Portable bootstrap11/11, strict IOP1/1,
+Python55 and real Release runner builds pass. Local Ghidra tests are not CI.
+
+Native242 passed the old target and reached PC0x2981E4. Native243 measured the
+next pending normal toSPR DMA9: CHCR0x101, MADR0x110049E0 in the existing VU0
+data memory, QWC0x60, SADR0, D_CTRL1/D_ENABLER0x1201. No STR-clear-on-read
+workaround was added. Both runs remain at this wait until300s watchdog; actual
+ordinary menu input completes before200s, leaving roughly100s after Yes.
+Last periodic GS16800 black640x511; no final-on-exit capture or gameplay/audio/
+saves/recovery proof. Next244 establishes the real VU0-data-to-SPR transfer,
+admission and completion contract. Exact evidence/hashes are in top handoff.
