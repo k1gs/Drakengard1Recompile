@@ -140,3 +140,35 @@ python scripts/lift.py --input-complete --map work/functions-ghidra-009.csv --ru
 These paths must be fresh when regenerating; never overwrite old evidence or
 modify original input/upstream/generated files. This is a full map export, not
 the optional selected-entry export used by the synthetic check.
+
+## Repeated alternate-delay-slot exit at a second verified leaf
+
+Native244 exposed another instance at0x29353C, owned by0x29322C. The original
+SHA-gated ELF has the real JR at0x2937C8 and SP+0x60 delay at0x2937CC; exclusive
+bound0x2937D0 is therefore verified independently of the adjacent map records.
+The three old784/32/240-byte fragments merge into one1444-byte leaf, adding388
+actual instruction bytes. All unrelated map rows, including recovered0x297E44,
+remain identical. All12 resume switch cases in fresh lift-009 are registered.
+
+Because the owned Ghidra project is opened read-only, earlier temporary recoveries
+are not saved. Reapply the previous verified recovery in the same session before
+exporting the new full map, or that export would silently regress its coverage:
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21'
+& .\tools\ghidra_12.1.4_PUBLIC\support\analyzeHeadless.bat `
+  "$PWD\work\ghidra-projects" drakengard-eu-001 `
+  -process SLES_523.22 -readOnly -noanalysis -scriptPath "$PWD\scripts\ghidra" `
+  -postScript RecoverLeafFunctionFlow.java 0x297e44 0x2983e8 `
+  -postScript RecoverLeafFunctionFlow.java 0x29322c 0x2937d0 `
+  -postScript ExportRecompMap.java "$PWD\work\functions-ghidra-010.csv"
+python scripts/lift.py --input-complete --map work/functions-ghidra-010.csv --run-id lift-009
+```
+
+These names identify completed local artifacts; choose fresh names for a rerun.
+Map010/lift009 were created without editing earlier maps/lifts or original input.
+The existing synthetic delayed-exit fixture was freshly prepared, recovered and
+checked in a read-only fixture project: actual PASS for immediate return, two
+busy iterations, pause/resume and once-only delay effects. It is Ghidra-emulator
+behavioral evidence; full native scheduler evidence is reported separately in
+the current continuation handoff. No arbitrary alias or padded return was added.

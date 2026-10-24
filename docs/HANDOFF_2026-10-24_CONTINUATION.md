@@ -1,6 +1,71 @@
 # Drakengard Europe continuation handoff
 
-## Latest: resume fix independently verified; VU0-data toSPR passed in native244
+## Latest: second leaf recovered; native245 passes0x29353C
+
+This supersedes the checkpoints below. Entry e1214d3 already contains the normal
+VU0-data→SPR fix. The next owning leaf0x29322C was truncated at0x29353C after
+an alternate-entry jump delay. Verified original SHA-gated ELF instructions have
+JR RA at0x2937C8 and SP+0x60 in its delay at0x2937CC, exclusive bound0x2937D0.
+Read-only Ghidra recovery covers1444 actual instruction bytes; no invented alias,
+PC/RA patch, padding or manual generated-code change.
+
+The original project does not save temporary recoveries. Reapplied BOTH previous
+0x297E44..0x2983E8 and new0x29322C..0x2937D0 recovery before full export.
+Map010 has8581 records vs8583: only784/32/240-byte fragments at29322C/2936AC/
+2936E0 merged, +388 covered bytes. All unrelated rows and prior297E44 recovery
+remain identical. Map SHA256:
+87f79278554d403e3979ffe6be9911c25393c2fd3cef0e697e24e38b6d1a8690.
+Fresh lift-009:8580 recompiled,0 stubs/skips/decode failures; existing unresolved
+indirect-JR warnings remain. All12 emitted resume switch cases for29322C are
+registered to that owner, dispatch occurs before its SP-0x60 prologue.
+Old lift-008, input and upstream remain untouched; overlay now selects009.
+
+Fresh synthetic Prepare→Recover→CheckLeafFlowFixture PASS: actual immediate
+return, two busy iterations, pause/resume and once-only delay effects in the
+pinned Ghidra emulator; read-only fixture changes discarded. This is not a full
+native C++ scheduler test. Real full Release/PCH/MSBuild build PASS.
+Ghidra12.1.4/EE Reloaded2.1.38/JDK21 and pinned PS2Recomp revision unchanged.
+Reproduction with both recoveries is in docs/ANALYSIS_REGRESSIONS.md.
+
+Native245 executable SHA256:
+2b198344b7029aefb4e9a0e91e57777cfa1abc7da6127d88300ae5b46bcc5508.
+1024M/300s/frame600, exit5/timed_out=false. Actual trace passes old missing
+0x29353C, returns from owner29322C, continues through2991B4/29E21C, then invokes
+another leaf297878. New exact refusal: **EE scheduler target0x297BB0,
+RA0x2984B4**, SP0x11D9D0. Map owner297878 ends297BB0 (824B), with additional
+fragments297D20..297D40 and297D54..297E44. Its generated branch297B98→297BAC
+again enters another jump's delay instruction then falls through at map end.
+This suggests the same analysis gap, but verify its real epilogue before recovery.
+
+Input validation limit: observer matched title10200/menu10800/NORMAL12000 and
+sent ordinary Start11/Cross12/Left13, all SIO2 press/releases seen. Observer was
+interrupted after13 based on misread delayed output; manual extraStart14 was
+accepted/released. Late Cross15 was written to host control file but no SIO2
+press is observed before stop; do not call it delivered. Intermediate menu image
+was stale, so no claim about which input caused which transition. This is valid
+control-flow progress evidence, not a clean minimal-input baseline. Next run
+should leave one observer in charge and inspect its actual JSONL/events/ACKs
+before intervening. No OS input/Computer Use or guest RAM patches were used.
+Final GS640x511 is flatRGB128 gray, privately converted/visually inspected.
+No gameplay/host-audio/saves/recovery proof. Prior crash/grouping key unresolved.
+
+**Next246 (verify unused):** establish original instructions/real epilogue for
+owner0x297878, then bounded recovery/export/fresh lift and resume audit with the
+existing behavioral regression; actual Release build and bounded native246.
+When exporting from the read-only project, reapply BOTH already verified leaf
+recoveries above as well as the new one, preserving all prior map coverage.
+Do not choose a bound merely from neighboring records or add arbitrary aliases.
+Retain old maps/lifts; fresh map011/lift010 names must first be checked unused.
+
+Private evidence: work/leaf29322c-contract-245.json, epilogue/map-delta/resume-audit
+files with the same245 suffix; work/leaf29322c-recovery-export-245.log,
+work/leaf29322c-synthetic-245.log, work/leaf29322c-native-build-245.log,
+work/native-run-245/, work/leaf29322c-run245-{launcher,startup,observer}.log,
+work/spr-vu0-run245-menu.jsonl and native pad-control-events.jsonl. Observer source
+work/spr-vu0-menu-244.py accepts a new run number; its existing245 output must not
+be overwritten. All project/maps/frames/generated/input evidence stays private.
+
+## Historical: resume fix independently verified; VU0-data toSPR passed in native244
 
 Entry checkpoint cf3692d already fixed native240 target0x298154. This continuation
 independently compared the actual lift-008 switch and dispatch registrations:

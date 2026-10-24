@@ -1,31 +1,33 @@
 # Промпт продолжения
 
-Продолжи Drakengard 1 Recompile, PS2 Europe, в D:\proj\drakengard 1 recompile.
-Прочитай AGENTS.md, docs/CONTINUE.md, последние CURRENT_STATE.md и верхний handoff.
-Проверь Git HEAD/status/процессы. Без субагентов; сохраняй .vscode/ и native/Splash.png.
+Продолжи Drakengard1 Recompile, PS2 Europe, D:\proj\drakengard 1 recompile.
+Сначала AGENTS.md, docs/CONTINUE.md, последние CURRENT_STATE и верхний handoff;
+Git HEAD/status и реальные процессы. Без субагентов, сохраняй .vscode/Splash.
 
-Старый missing scheduler target298154 уже исправлен cf3692d и повторно проверен:
-owner297E44 восстановлен, все12 resume labels зарегистрированы. Следующий normal
-VU0-data→SPR DMA9 контракт реализован и прошёл native244 (минимум16 реальных
-completion с совпадающими ненулевыми source/destination hashes). Tests12/12 и
-native Release/PCH build PASS. Никакого read-side STR clear/фиктивного IRQ/нуля.
+Leaf29322C уже восстановлен до реального JR2937C8/SP+60 delay2937CC, bound2937D0.
+Map010/lift009 сохраняет prior297E44 recovery, все12 resume labels зарегистрированы.
+Fresh Ghidra behavioral regression и actual Release/PCH PASS. Native245 прошёл
+старый target29353C и вернулся из owner, затем exit5/no timeout на НОВОМ
+scheduler missing target297BB0, RA2984B4, owning leaf297878. FinalGS gray640x511;
+gameplay/host audio/saves/recovery не подтверждены.
 
-Текущий blocker: native244 exit5/no timeout, missing EE scheduler target29353C,
-RA2984EC, owning leaf29322C, map ends29353C. Generated branch293524→293538 входит
-в delay instruction другого jump, затем выходит за обрезанный конец. Это
-подтверждённая новая граница, ещё не исправленный leaf. FinalGS серый640x511,
-реальное gameplay/audio/saves/recovery не доказаны. Меню и NORMAL dialog работают.
+Следующий246 (проверь unused): проверь original instructions/real epilogue297878,
+затем bounded flow recovery, fresh map/lift, resume registrations, regression,
+real runner build и native246 (300s/1024M). Карта заканчивается297BB0 после
+alternate-entry jump delay; соседние fragments сами по себе не доказывают bound.
 
-Следующий245 (сначала проверь unused): исследуй реальные инструкции/epilogue
-этого owner, восстанови только подтверждённый bounded flow через существующие
-read-only Ghidra scripts (docs/ANALYSIS_REGRESSIONS.md), экспортируй новую карту
-и fresh lift, не меняя old lift008. Сверь все resume labels с registration table,
-проверь delay-slot/yield/resume и настоящий native245 максимум300s/1024M.
-Ordinary menu observer/GS refs и evidence paths указаны в handoff/CONTINUE.
-Не добавляй произвольные aliases, RA/PC patches, padding, ready flags или skips.
+Read-only Ghidra project не сохраняет временные recoveries. Для полного экспорта
+повторно примени ОБА297E44..2983E8 и29322C..2937D0 плюс новое verified recovery.
+Сохрани все старые coverage, input/maps/lifts; не правь upstream/generated.
+Workflow в docs/ANALYSIS_REGRESSIONS.md, fresh names011/010 сначала проверь.
 
-Реализуй и проверь установленную причину, не ограничивайся планом. Inputs read-only;
-upstream/generated вручную не редактируй. Private captures/BIOS/maps/lifts не
-публикуй. Обнови CURRENT_STATE, верхний handoff и CONTINUE. Focused validated
-commits/normal push разрешены по AGENTS; перед публикацией staged review и
-scripts/check_public_tree.py. Сплешскрин остаётся отложенной задачей.
+Для меню используй один обычный host-pad observer и проверяй его JSONL/events/
+SIO2 press+release. В245 observer был ошибочно прерван после Left13 и послан
+extraStart14; Cross15 не ACK. Этот run доказывает control flow, но не минимальный
+рецепт ввода. Не вмешивайся только из-за задержки вывода; проверяй actual GS.
+Нет Computer Use/OS input, PC/RA/ready patches, skips, aliases или success stubs.
+
+Реализуй и проверь подтверждённую причину, не только план. Обнови журнал/top handoff/
+CONTINUE. Focused validated commits/normal push разрешены по AGENTS после staged
+review/check_public_tree.py. Private game/BIOS/maps/generated/captures не публикуй.
+Сплешскрин остаётся отложенным. Точные evidence/hashes — текущий handoff.

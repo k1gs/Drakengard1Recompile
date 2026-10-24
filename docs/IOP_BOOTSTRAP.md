@@ -1433,3 +1433,15 @@ at that address after another alternate delay-slot exit. Next245 verifies the
 actual epilogue and bounded analysis recovery before fresh export/lift/build/run.
 Final directGS flat gray640x511, not gameplay/audio proof. Exact private evidence
 and supported/unsupported subset boundaries are in the top continuation handoff.
+
+## Second truncated leaf verified through native return (2026-10-25)
+
+Owner29322C recovered through its real JR2937C8/SP+0x60 delay2937CC. Full map010
+retains the prior297E44 recovery; fresh lift009 has all12 switch resumes registered.
+Ghidra synthetic immediate/busy/pause-resume/delay checks and real Release/PCH PASS.
+Native245 passes old29353C, returns and continues to a NEW missing scheduler target
+297BB0/RA2984B4, owner297878. Exit5/no timeout, final directGS flat gray640x511.
+No gameplay/audio/saves/recovery acceptance. Input run contains an acknowledged
+extra Start after interrupted observer; it is control-flow evidence, not a clean
+minimal-input recipe. Next246 must verify297878 real epilogue before recovery,
+and reapply both prior read-only recoveries on full export. Details in top handoff.
