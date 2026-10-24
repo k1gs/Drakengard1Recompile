@@ -2,6 +2,19 @@
 # Route reviewed EE register accesses through the strict IOP/firmware devices.
 # Keep diagnostics and the original fallback for accesses those devices do not own.
 file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/ps2_memory.cpp" memory_original)
+include("${REPO_ROOT}/native/runner/cmake/spr.cmake")
+set(spr_write_entry "bool PS2Memory::writeIORegister(uint32_t address, uint32_t value)\n{")
+set(spr_read_entry "uint32_t PS2Memory::readIORegister(uint32_t address)\n{")
+string(REPLACE "${spr_write_entry}"
+    "${spr_write_entry}\n    diagnoseEeSprDma(address,value,true,m_ioRegisters);"
+    memory_spr_write "${memory_original}")
+string(REPLACE "${spr_read_entry}"
+    "${spr_read_entry}\n    diagnoseEeSprDma(address,0,false,m_ioRegisters);"
+    memory_spr_read "${memory_spr_write}")
+if(memory_spr_write STREQUAL memory_original OR memory_spr_read STREQUAL memory_spr_write)
+    message(FATAL_ERROR "Pinned scratchpad DMA observation entry changed")
+endif()
+set(memory_original "#include \"ee_spr_diagnostic.h\"\n${memory_spr_read}")
 set(empty_gif_anchor "            if (tryProcessScratchpadDma(channelBase, value))")
 string(REPLACE "${empty_gif_anchor}"
     "            if (channelBase==0x1000a000u) {\n                if (auto empty=inspectEmptyGifChain({m_rdram,PS2_RAM_SIZE},value,m_ioRegisters[channelBase+0x30])) {\n                    m_ioRegisters[channelBase]=(value&0xffffu)|(empty->tag&0xffff0000u);\n                    m_ioRegisters[channelBase+0x10]=empty->madr;\n                    m_ioRegisters[channelBase+0x20]=0;\n                    m_ioRegisters[channelBase+0x30]=empty->tadr;\n                    completeDmacChannel(channelBase,2u);\n                    std::cerr << \"[empty-gif-chain-complete] tags=\" << empty->retired << \" tadr=0x\" << std::hex << empty->tadr << std::dec << '\\n';\n                    return true;\n                }\n            }\n${empty_gif_anchor}"

@@ -1227,3 +1227,128 @@ image is black. This exercises the actual intra path and transport, not a full
 MPEG acceptance test, nonblack movie, menu or gameplay. The explicit startup
 helper passed the no-card warning via ordinary buttons, confirmed by direct GS
 warning/logo images, then stopped input at the first IPU command.
+
+### Motion VDEC and the next scratchpad-DMA wait (2026-10-24)
+
+Native217 measured PCT2 and the local P-MBT implementation passed native218.
+Motion table2 now implements0/±1..16, exact prefix/sign consumption, reference
+DATA packing, ECD invalid-prefix handling and staged TOP retry. Negative DATA
+packing is pinned-reference behavior, not hardware-verified equivalence.
+Native221 directly logged two zero-motion commands with DATA0x10000 and advancing
+BP0x6B/0x6C under CTRL0x02623F08. All33 valid codes have synthetic DATA/BP/TOP
+coverage; bootstrap8/8 and Python55 passed.
+
+The next observed wait is EE303E48 polling STR at toSPR CHCR0x1000D400, not an
+observed unsupported non-intra BDEC command. Native220 reached the fixed IOP
+budget (exit6/no timeout);221 timed out at300s with no final capture. Last final
+direct GS220 is black. Native219 separately crashed0xC0000409 before movie IPU;
+cause unresolved, not repeated under ProcDump220. See the current top handoff
+for exact hashes, evidence and the next channel9 transfer/completion experiment.
+
+### toSPR source-chain transport (2026-10-24)
+
+Native222 established CHCR0x105/QWC0/TADR0x006ACE80/SADR0x70000000,
+DMAE enabled and unsuspended. The old pinned scratchpad handler rejected chain
+mode; no transfer occurred and CHCR reads correctly retained STR. Added original
+RAM-to-SPR source-chain transfer for REFE/CNT/NEXT/REF/END, TTE/TIE, ring wrap,
+real register updates and cause9 completion. Unsupported tags/addresses/modes
+remain explicit errors. No STR-on-read clearing or instruction-budget increase.
+Native223 logged at least512 actual two-tag/96-QW transfers and passed the old
+wait. Its first remaining refusal is CSC0x700003E8/opcode7, exit6/no timeout.
+Bootstrap9/9 and Python55 passed. Final direct GS223 is black640x508; no full
+movie/menu/gameplay claim. Current top handoff records hashes and next CSC work.
+
+### RGB32 CSC and the next IOP MMIO boundary (2026-10-24)
+
+Original RGB32 CSC now consumes planar384-byte Y/Cb/Cr macroblocks and produces
+1024-byte RGBA blocks using fixed-point IPU arithmetic, SETTH and real FIFO/DMA
+backpressure. Completion is after final output enqueue, not full FIFO drain or
+trailing TOP refill. RGB16 remains refused. Behavioral coverage includes color
+and rounding, thresholds, layout, BP/reset, multi-block/partial DMA and IRQ edges.
+Bootstrap10/10 and Python55 passed; real Release runner built.
+
+Native224 passed1000-block CSC0x700003E8 with an actual0xFA00-QW transfer into
+RAM0x01C4BB40..0x01D45B40. FNV1a64 matches the initial all-black alpha128 frame;
+no native colored-movie equivalence or menu/gameplay claim. It exited6 without
+timeout at an IOP SH to0xBF9001B0 (physical0x1F9001B0), value1, PC0x880B8,
+instruction0xA6020000. That exact halfword MMIO contract is the next investigation.
+Current top handoff records runner/reference hashes and private evidence.
+
+### Idle ADMAS configuration and active-stream boundary (2026-10-24)
+
+The0xBF9001B0 halfword write is SPU2 core0 ADMAS. Existing control ownership now
+retains idle low bits0..3, with core-specific enable masks1/2 and proper guest
+retirement/rollback/readback. It does not synthesize sample movement or IRQ.
+Unsupported reserved/PS1 values and busy configuration changes remain closed.
+Plain DMA explicitly rejects ADMA streaming before start retirement/data copying.
+Strict IOP1/1, bootstrap10/10, Python55 and real Release runner builds passed.
+
+Native227 proved actual ADMAS0=1 retirement (ATTR0xC080/STATX0), then refused the
+next real ADMA DMA4 request: PC0x88130, requested CHCR0x01000201,
+MADR0x0018C900/BCR0x00C00010 (12288 bytes). Exit6/no timeout. Native225 timed
+out before the path;226 repeated early0xC0000409. ProcDump227 did not repeat that
+crash or produce a dump, so the native crash remains unresolved. Final GS227 is
+black; ADMA streaming/host audio and gameplay are not established. See the current
+top handoff for next input-buffer/refill/sample-clock/completion experiment228.
+
+### Sample-paced ADMA and nonzero scalar FX (2026-10-24, resumed)
+
+The previous agent's local ADMA draft had progressed beyond that handoff:
+native228 measured normal split-stereo PCM16 input, and229 copied two ring refills
+and delivered nonzero(-2,-2) input before the next FX guard. Shared SPU RAM,
+DMA owner and sample clock are retained; no plain-DMA fallback or dummy IRQ.
+Synthetic CPU/sample-clock tests cover actual source/ring bytes, partial stereo,
+MADR pacing, register preservation and one-shot completion. Active stream stop,
+reconfiguration and alternative input formats remain unsupported.
+
+Native230 independently reproduced the downstream guard without a debugger and
+captured real FX offsets/coefficients (workspace0xFC810..0xFFFFF). Added original
+functional scalar reverb DSP with paired39-tap FIR histories, alternating channels,
+reflection/comb/allpass graph and clipped delay stores in the shared RAM. This
+is an explicit runtime binding; unbound standalone zero-input probes retain their
+old contract. FX-off preserves histories/readback while preventing delay writes.
+PS2 address pairs are raw word offsets; PS1 compatibility scaling is not used.
+Multiplication outside the reviewed signed32 domain refuses. Hardware and SIMD
+rounding equivalence, full output/master/external mixing and host audio sink are
+not established. Unsupported nonzero cross-core wet paths still fail closed.
+
+Contracts were checked against pinned
+[PCSX2 v2.8.2 FX graph](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SPU2/Reverb.cpp)
+and [scalar resampling](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SPU2/ReverbResample.cpp).
+No emulator implementation was copied into public source. Numeric filter facts
+are represented as symmetric tap pairs. Independent goldens include FIR sum32766,
+positive/negative floor rounding, comb/APF500/250, read-before-write aliases,
+workspace wrap, FX-off history, and real CPU ADMA→gain→MMIX→FX RAM mutation plus
+DMA completion. Strict IOP1/1, bootstrap10/10, Python55 and native Release passed.
+
+Native231 passed the old guard: three512-halfword ADMA refills and at least320
+nonzero FX delay stores, then exit6/no timeout at VDEC0x34000000/PCT3/B-picture.
+The full ADMA stream had not finished before that video refusal. Final raw GS is
+black640x508; no audible playback/menu/gameplay claim. See the current handoff
+for hashes, evidence and next B-MBT experiment232. User's `native/Splash.png`
+is retained as a deferred host-startup task, not integrated or published.
+
+## B-picture MBT and diagnostic host loop (2026-10-24)
+
+All11 B-MBT prefixes now return (VLC length<<16)|modes|MC_FRAME, including
+intra B MBT; I/P keep their existing modes-only DATA. Invalid000000 sets ECD
+without consuming a VLC. Tests cover all64 lookaheads, canonical vectors,
+FB-once, partial TOP refill and repeated reads. D-picture remains unsupported.
+Native232/233 passed >=512 actual B-MBT calls, DATA0x40088, advancing BP/TOP.
+Four real ADMA completion logs per run now extend earlier refill-only evidence;
+aggregate DMA counters102..105 must not be misreported as102..105 ADMA streams.
+
+Native232 stalled and timed out300s. A private dump captured after progress
+stopped showed raylib CORE flags0xA04/minimized1/ALWAYS_RUN0/eventWaiting0.
+Offline stack code candidates plus a MAP with identical executable .text support
+the local raylib minimized-window event wait; this was not a formal stack unwind.
+File-controlled diagnostic launches now set/verify ALWAYS_RUN and report minimize
+transitions. Native233 verified the flag and exited6/no timeout at **active SPU
+DMA cancellation/reconfiguration**. No minimized transition occurred in233, so
+actual minimized execution remains unexercised. No guest completions were changed.
+
+Bootstrap10/10, Python55, strict IOP1/1 and native Release PASS. Native233 final
+GS remains all black640x508. No menu/gameplay/host-audio/saves/recovery claim.
+Native234 keeps the cancellation refusal and adds exact CHCR store/active-state
+diagnostics; see the current handoff for its result and next experiment. All
+captures, dumps, linker maps and pinned references stay in ignored work/.

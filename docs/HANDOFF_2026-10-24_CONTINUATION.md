@@ -1,5 +1,483 @@
 # Continuation handoff: nonzero ADPCM, startup logos, EE return failure
 
+
+## Publication and continuation authorization (2026-10-24)
+
+The user authorized publishing the validated accumulated movie-device checkpoint
+and continuing with the measured ADMA stop. The source/tests/docs below are
+reviewed for publication; ignored evidence, `.vscode/`, and `native/Splash.png`
+remain excluded. Statements about no publication in historical entries describe
+those earlier experiments. The current checkpoint is identified by Git HEAD.
+
+## Current continuation: B-picture MBT passed; diagnostic window wait repaired
+
+This supersedes the ADMA/FX checkpoint below. All work remains local; published
+HEAD is still2cf7b2c. Preserve unrelated WIP, `.vscode/` and `native/Splash.png`.
+
+Implemented all11 B-picture macroblock-type prefixes in the original IPU adapter.
+B DATA packs consumed length in bits16+ and modes including MC_FRAME; this also
+applies to intra B MBT. Existing I/P DATA has no length field. Invalid000000
+sets ECD without consuming a VLC. D-picture remains explicitly unsupported.
+FB and partial TOP refill retire each field only once. Tests cover11 canonical
+vectors, all64 lookahead prefixes, invalid/ECD/BP and starvation/retry/IRQ.
+Pinned PCSX2v2.8.2 conventions are reference evidence, not PS2 hardware proof.
+Private provenance/vectors: `work/bmbt-contract-232.json`.
+
+Bootstrap10/10 and Python55 PASS; native Release build PASS. Logs are
+`work/bmbt-bootstrap-{build,test}-001.log`, `work/bmbt-python-test-001.log` and
+`work/bmbt-native-build-001.log`. Native232 SHA256:
+`92c3e6f05c9c64eef88ef037d81d33dff836e9a23335226d6b11f21f8e86d08e`.
+It passed at least512 B-MBT calls with DATA0x40088 and advancing BP/TOP.
+Four actual ADMA completion logs (aggregate transfer counters102..105) now prove
+full transport completion beyond prior refill-only231. Host audio is still unproven.
+
+Native232 timed out300s without a final GS capture. Progress had stalled before
+an instrumented ProcDump snapshot. Offline dump parsing plus a diagnostic relink
+MAP, verified by identical `.text` SHA256, identified a host event wait. Stack
+addresses are code candidates, not a formal unwind. Direct raylib CORE memory
+showed flags0xA04, minimized=true, ALWAYS_RUN=false, eventWaiting=false; local
+raylib PollInputEvents waits while minimized unless ALWAYS_RUN is set. Private
+dump/MAP/parsers and evidence stay in `work/bmbt-hang-232/` and must not be published.
+No claim that older C0000409 failures are fixed.
+
+For file-controlled `--pad-control` diagnostics only, configure ALWAYS_RUN before
+window initialization, verify the flag afterward, and log minimize transitions.
+This fixes host event waiting without changing guest data, device completions,
+input injection or upstream code. Raylib remains isolated in host_pad_input.cpp;
+including it in the PCH runner caused a Win32 name collision, corrected before
+accepting build003/004 PASS. Native233 completed exit6/no timeout, SHA256
+`1a41c0cd5646b07d1de90a788d3c053fd03ae8bdc0a17cb8ff97d48b0b9f6c56`.
+The ALWAYS_RUN flag passed the startup runtime check; no minimize transition was
+observed, so minimized execution itself was not exercised in233. B-MBT>=512 and
+four actual ADMA completions reproduced. The next explicit refusal is **Active SPU
+DMA cancellation/reconfiguration unsupported**. Final GS640x508 is all RGB0,
+converted and visually reviewed privately. No Computer Use was used.
+
+Native234 adds nonmutating diagnostics of the stopping CHCR store (PC, previous,
+requested value) and active transport snapshot (core, mode, CHCR/MADR/BCR, source,
+end, remaining, pending, sample). It retains the refusal; do not invent a cancel
+completion or clear internal busy before establishing the exact observed contract.
+Release build005 PASS. Private runs/logs: `work/native-run-233/234`,
+`work/bmbt-run{233,234}-{launch,startup}.log`. Follow the234 outcome below.
+
+Native234 reproduced exit6/no timeout, SHA256
+`e1fbe572a39e9ef50ccfb9ddab5e3a983dab824b4b0400a495466e1589f3c4f0`.
+Exact stop: IOP PC0x87778 writes CHCR0x00000201 over0x01000201 at0x1F8010C8,
+step375375262. Core0 ADMA active, MADR/source0x18DD00, BCR0x00C00010,
+end0x18F900, remaining3584 halfwords, pending0 bytes, sample481783. The guest
+really clears STR; this is not another B-picture/video refusal. Four ADMA
+completions reproduced before it. Final GS is byte-identical to reviewed233.
+Private exact evidence: `work/bmbt-next-adma-stop-contract-234.json`.
+
+**Next experiment (235, verify unused first):** establish active ADMA STR-clear
+semantics against the pinned DMA/input owner and, if needed, a bounded owned
+reference capture: already copied ring contents, MADR/BCR, remaining producer,
+busy/STATX, consumer cursor, suppressed or pending IRQ and subsequent rearm.
+Implement only the observed stop contract with synthetic stop/rearm assertions,
+then build and run bounded native235. Do not call finish() on cancellation or
+claim hardware timing from the emulator. No movie/menu/gameplay/audio proof.
+
+
+## Current continuation: real ADMA input and nonzero FX passed; next B-picture MBT
+
+This supersedes the ADMAS-only checkpoint below. HEAD remains2cf7b2c; all changes
+are local, including the preceding agent's P/motion/toSPR/CSC/ADMA work. Preserve
+`.vscode/` and the untracked user asset `native/Splash.png`. No Computer Use,
+upstream/generated/input changes, commit or push in this continuation.
+
+The journal had missed completed runs228/229.228 measured core0 ADMA:
+ADMAS1, ATTR0xC080, SPDIF0xC032 (normal/PCM-clone), MMIX0xFF0, input gains32512,
+source6144 halfwords with5741 nonzero, FNV1a64 `1e1c9506188f40a3`.
+The existing unjournaled `SpuDmaWrite` draft implements split-stereo PCM16 ring
+refill in the shared SPU RAM, sample-paced MADR, and one-shot completion through
+the existing DMA owner. Its transport/CPU/sample-clock tests rebuilt successfully.
+Independent reference audit found no demonstrated transfer defect. Active stop,
+cancel/reconfiguration and alternative stream formats remain explicit refusals.
+Run229 actually copied two refills and delivered PCM(-2,-2), then hit the next
+consumer: the zero-input-only FX guard. It was not still blocked on ADMA admission.
+
+New native230 reproduced this without a debugger, exit6/no timeout. A nonmutating
+snapshot established active core0 FX workspace0xFC810..0xFFFFF and all coefficients:
+`6f60,4fa8,bce0,4510,bef0,a680,5680,52c0,8000,8000`. Thus zero substitution is invalid.
+Executable SHA230 `bc19f06b26bf9dff62f543df6d512c32f7947f740a34644488faae03b4fb0997`.
+Private contract/provenance: `work/adma-resume-fx-contract-230.json`.
+
+Added original `spu_reverb_dsp.h`: paired symmetric39-tap FIR, persistent input/
+output histories, alternating L/R reflections, four comb taps, two APF stages,
+clipped writes to the same `SpuRamWritePort`. PS2 raw high/low address pairs are
+word offsets; the reference's separate PS1 multiply-by4 path is not used.
+All delay reads precede stores, including aliases. FX-off advances filters and
+reads delay RAM while suppressing stores. Signed Q15 floor products explicitly
+refuse signed32 overflow; no PS2 hardware or SIMD saturation equivalence claim.
+
+The real bootstrap opts into this DSP at initialization. Standalone zero-domain
+probes retain their original guards. Each core receives every routed sample from
+the existing IOP/SPU clock; missing frames fail closed. Actual FX PCM and nonzero
+delay-store counts are bounded diagnostics. Full dry/master/external output and
+host audio sink remain incomplete; nonzero unsupported cross-core wet paths refuse.
+
+Pinned PCSX2v2.8.2 reference remains ignored in `work/spu-adma-reference-001/`:
+Reverb.cpp SHA `8dbb9d294ea58660f5d69c7bbddb947540f0acdabf7dd92bf74fe494242296ee`;
+ReverbResample.cpp SHA `a10c04edc1f590fe3da1d8d4574d8e89a06b5bcb5fbd356c17886b124d56e872`.
+No emulator implementation copied into public source. The original portable
+implementation was independently audited against scalar phase/address equations.
+FIR sum is32766, not32768: settled16000 ->15999 ->7999 ->3999 at half input/IIR
+gain. Synthetic fixtures were corrected before accepting results; early failures
+were fixture issues, not hidden. Final strict IOP1/1 passed with these goldens,
+seeded comb/APF500/250, negative rounding, alias/wrap and real CPU ADMA→volume→
+MMIX→FX RAM mutations plus DMA completion. Logs `work/adma-resume-fx-strict-*-007.log`.
+Bootstrap10/10 and Python55 passed; final native Release build003 passed.
+
+**Native231 complete:** SHA
+`683e2c65ee47c02ba07279371864a447f67abbcf80b3f960f28868d067fd3757`,
+exit6, timed_out=false. No debugger attached. Three real512-halfword refills,
+actual nonzero routed PCM, at least320 nonzero delay-RAM stores. This passes the
+229/230 guard with real processing. The full6144-halfword stream had not completed
+before the next video blocker; do not claim native full-stream completion/audio.
+First next refusal is **VDEC0x34000000, CTRL56770312 decimal=0x03623F08,
+PCT3/B-picture**. Implement/verify observed B-MBT modes from pinned reference;
+then follow the next actual backward-motion/non-intra contract rather than guessing.
+Next unused232, verify directory/processes before reuse. Both230/231 used300s,
+512M, frame interval600 and `native_start.py --timeout300` with confirmed SIO2.
+Final GS231640x508 is all black and visually reviewed. No nonblack movie/menu/
+gameplay/audio/save/recovery claim; earlier219/226 crash is not proven fixed.
+
+Evidence: `work/native-run-230/`,231/; `work/adma-resume-runN-{launch,startup}.log`;
+`work/adma-resume-fx-contract-230.json`; strict/native build/test logs above.
+Future UI task requested by user: show `native/Splash.png` immediately in the
+host window instead of the reported initial pink background. It is queued,
+not implemented. Keep that host presentation separate from guest frame evidence;
+review asset/public-tree handling before any publication.
+
+## Current continuation: ADMAS configuration retired, next actual ADMA transfer
+
+This section supersedes all checkpoints below. Local changes over HEAD2cf7b2c,
+no commit/push. Earlier source/docs and `.vscode/` preserved; no Computer Use,
+upstream/generated/input edits, guest skips/ready flags or success stubs.
+
+Native224's0xBF9001B0 is **SPU2 core0 ADMAS** (physical0x1F9001B0), core1
+register0x1F9005B0. Existing owner is `SpuQuiescentControl`, reached through
+`IopDataBus` prepare/retire staging; no second register mirror was introduced.
+Idle halfword writes0..3 now retire and read back; other bits/PS1 switch remain
+closed. Own-core ADMA enable is bit0 for core0 and bit1 for core1 (numeric
+masks1 and2). The other bit does not disable that core's plain DMA readiness.
+Enabling configuration alone does not transfer samples, alter STATX or create
+IRQ. Changes during busy plain DMA are refused, while an identical idle-control
+value remains harmless. Faulted guest stores restore backing without committing.
+Plain DMA explicitly refuses active ADMA streaming before retiring the CHCR
+start/copying data; it is never used as a fictitious ADMA transport.
+
+Contract pinned against
+[PCSX2 v2.8.2 regs.h](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SPU2/regs.h),
+[ADMAS write handler](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SPU2/spu2sys.cpp)
+and [DMA selection](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SPU2/Dma.cpp).
+Private reference directory `work/spu-adma-reference-001/`; spu2sys.cpp SHA256
+`f6b3a5d337e9df0e251c4f0da90770e9d7521fc8c3ef364106c0ac8b26b8292f`;
+Dma.cpp SHA256 `322cd94a54e292a883ce378e147631759e19b0ca6011cf3b065d7420cf9472dc`.
+No reference implementation copied or upstream changed. Private contract:
+`work/spu-admas-contract-225.json`.
+
+Behavioral regressions in `spu_control_tests.h`, invoked by strict `selftest.cpp`,
+execute guest SH/LH/LHU for both cores/physical-KSEG aliases, halfword truncation,
+core masks, unchanged backing/STATX/IRQ, exception rollback and ADMA-vs-plain DMA
+refusal before any transfer/IRQ. The existing real plain-DMA test also checks the
+busy ADMAS guard. Strict IOP CTest1/1 passed after final diagnostics, bootstrap10/10,
+Python55 and public-tree PASS. Strict build still emits C4834 from unchanged
+selftest code at151/168; these warnings were not suppressed. Two real Release
+runner builds passed (MSBuild17.11.9). Final executable SHA256:
+`3c5ddd729e714ca0e1eac99e6e3c6896616978254fcde300240447209edf8ec1`.
+First build/run225 SHA256:
+`8cbfd0a5b85626b9c75487d3ac1a288af1fe004d894ce326825822a30295e2a1`.
+The second-build addition is bounded `[spu-admas-store]` retirement observations.
+
+Run225: timed_out=true300s, exitnull, no GS captures; helper exit2 with no startup
+input because it never reached the frame checkpoint. Log shows early EE27F4C4
+and fixed IOP budget diagnostics. It does NOT exercise ADMAS=1.
+Run226: Windows exit0xC0000409, no timeout/final GS, helper exit2 after three
+Left/Cross attempts; only ADMAS0 initialization observed, not the new path.
+This repeats the unresolved219 crash. Do not describe it as fixed.
+Run227: attached reused ProcDump64 `-e -ma -w ps2EntryRunner.exe`, logs under
+`work/spu-admas-crash-227/`. It observed handled C++/dispatcher exceptions, exit6,
+no crash/dump. Debugger attachment changes the experiment; no timing/race fix
+is inferred from the absence of a crash.
+
+**Actual proof in227:** `[spu-admas-store] core=0 value=0x1 attr=0xC080
+status=0x0 count=3; guest SH retired`. Then the first real unsupported request:
+IOP PC0x88130, DMA4 CHCR register0x1F8010C8, attempted value0x01000201,
+MADR0x0018C900, BCR0x00C00010, steps371590635. Size is12288 bytes/6144 halfwords.
+The engine refuses it explicitly: `Unsupported SPU auto-DMA streaming transfer`.
+The CHCR start was not retired and no ADMA completion was fabricated.
+Run227 exit6, timed_out=false, helper succeeded/stopped at actual IPU. All runs
+225..227 use300s/512M/frame interval600/ordinary pad/helper timeout300.
+Final direct GS227640x508 all black, visually reviewed; no host audio, nonblack
+movie/menu/gameplay/saves/recovery proof.
+
+Next228 experiment: establish real ADMA input layout, refill/read cursors,
+sample-clock pacing, MADR progression and completion/IRQ from pinned reference,
+then implement/tests/build/bounded native. Reuse shared `SpuRamWritePort`2-MiB RAM,
+`SpuDmaWrite`/`QuiescentDma` ownership and `SpuIdleVoices`/IOP timers' sample clock;
+do not add another disconnected RAM or fake a plain-DMA copy with immediate IRQ.
+Pinned `Dma.cpp` StartADMAWrite/AutoDMAReadBuffer, `ReadInput.cpp`, `spu2sys.cpp`
+provide the producer/consumption/completion facts. Do not infer a particular PCM
+format/mixer path from ADMAS alone; establish actual guest flags and input data.
+
+Evidence: `work/native-run-225/`,226/,227/ and corresponding
+`work/ipu-vdec-runN-launcher.log`; `work/spu-admas-contract-225.json`,
+`work/spu-admas-validation-227.json`, `work/spu-admas-crash-227/procdump-utf8.log`,
+private final GS227/review PNG. Next unused228, verify directory/processes.
+Entry point: docs/CONTINUE.md; startup helper unchanged, no OS input.
+
+## Current continuation: RGB32 CSC passed, next IOP halfword MMIO
+
+This section supersedes older checkpoints below. Local continuation over HEAD
+`2cf7b2c`, no commit/push. All earlier source/docs edits and `.vscode/` preserved.
+No Computer Use, upstream/generated/input edits, guest flags/RA patches or skips.
+
+Native223's CSC0x700003E8 means MBC1000, OFM0/RGB32, DTE0. Implemented original
+`native/runner/ipu_csc.h` and the CSC state machine in `ee_ipu.h`.
+Each input macroblock is384 bytes (Y16x16/Cb8x8/Cr8x8 byte planes); output is
+256 row-major RGBA8 pixels/1024 bytes. Chroma is replicated over2x2 pixels.
+Integer coefficients149,-104,-50,204,258; clamp Y below16 first, separate signed
+floor shifts by6, final add1/shift1/clipping. SETTH0 strict all-RGB comparison
+zeros RGBA; otherwise SETTH1 strict comparison sets alpha0x40; default alpha0x80.
+No generic floating-point BT.601 approximation, canned pixels or dummy output.
+RGB16 is an explicit refusal; DTE has no effect on the implemented RGB32 path.
+Bit-exact hardware conversion has not been independently measured on a PS2.
+
+CSC buffers one input block and stages RGB into the existing eight-QW output
+FIFO, retaining progress on input starvation/output pressure. Macroblock storage
+is shared with BDEC, expanded to1024 bytes. Conversion is performed once per
+block, not on each retry. Input staging uses current BP with no implicit reset
+or FB. Completion IRQ occurs when the final QW is enqueued (may leave8QW in
+FIFO), without trailing TOP reads; unlike BDEC it need not wait for full drain.
+Reset abandons partial input/output state. MBC0 consumes/produces nothing.
+
+Contract checked against pinned
+[PCSX2 v2.8.2 IPU worker](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IPU/IPU_MultiISA.cpp),
+[command fields](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IPU/IPU.h)
+and [integer arithmetic facts](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IPU/yuv2rgb.cpp).
+Original code uses a chroma-group2x2 traversal, not copied decoder implementation.
+Private `work/ipu-reference-001/yuv2rgb.cpp` SHA256
+`0486fa40bff7256705418788ea6eebf27dd8d69db7896fa7b5cead0ee965bb11`.
+Research record: `work/ipu-csc-contract-224.json`.
+
+`ipu_csc_tests.cpp` verifies independent color/rounding/clipping goldens,
+SETTH equality/precedence/9-bit values, planar/chroma/luma pixel placement,
+nonzero BP and trailing FDEC bits, reset of partial input and staged output,
+completion before final FIFO drain, multi-block DMA, partial output DMA and input
+backpressure, guards/unchanged source bytes, zero count and RGB16 refusal.
+Bootstrap CTest10/10, Python55 and public-tree gate PASS; real Release runner
+build passed (MSBuild17.11.9). Executable SHA256:
+`c4e4dc125cff2a63fa5146d5a81bfc96c5092afe7ae4da3531727cbd33c6fbf8`.
+Bounded diagnostics now log CSC starts and larger from-IPU RAM transfers/hashes,
+without reading CMD or consuming stream bits.
+
+Native224 passed CSC: actual1000-block command, output QWC0xFA00/1024000 bytes
+into RAM0x01C4BB40..0x01D45B40; CTRL0x02623F00, BP0/TOP0 at completion.
+Output FNV1a64 `0x21F997E470CAA325` independently matches1000 all-black RGBA
+blocks with alpha128. This proves this initial black frame/transport, not colored
+native movie correctness. Final direct GS640x508 is black, visually reviewed.
+No nonblack movie/menu/audio/gameplay/saves/recovery claim.
+Run exit6, timed_out=false;300s/512M/frame interval600. Startup helper succeeded
+at real IPU with ordinary pad and timeout300; no OS input.
+
+**First next blocker:** IOP halfword store, not another observed IPU command.
+`[bootstrap-mmio-blocker] steps=368698821 pc=0x880B8 instruction=0xA6020000
+address=0xBF9001B0 rt_value=1 ra=0x880BC a0=0 a1=0xBF9001B0`.
+Physical register0x1F9001B0; establish its identity and side effects before editing.
+Next225: locate existing IOP MMIO owner/mapping, check pinned register contract,
+implement the actual16-bit behavior with regressions, rebuild real runner and
+bounded run. No register-mirror success fallback simply to pass the access.
+Earlier native219's0xC0000409 remains unresolved; no recurrence is not a fix.
+
+Evidence: `work/native-run-224/{runtime.log,result.json,pad-control-events.jsonl}`,
+`work/ipu-vdec-run224-launcher.log`, `work/ipu-csc-contract-224.json`,
+`work/ipu-csc-validation-224.json`, private final/review GS images.
+Next unused225; verify directory/processes. Resume via docs/CONTINUE.md.
+
+## Current continuation: real toSPR chains, next CSC command
+
+This section supersedes all older checkpoints below. Local changes over published
+HEAD `2cf7b2c`; no commit/push. Preserved earlier source/docs work and `.vscode/`.
+No Computer Use, upstream/generated/input edits, guest patches or success stubs.
+
+Native222 measured the actual old wait: toSPR channel9 CHCR0x105, source-chain,
+QWC0, TADR0x006ACE80, SADR0x70000000, D_CTRL1, DENABLER0, SQWC0.
+STR remained set over a billion polls; exit6 at fixed IOP budget, no timeout.
+Upstream `tryProcessScratchpadDma` handles only normal mode and returned false
+for this real source-chain start. Measurement executable SHA256:
+`0d6611dfc0854c0708b654e93cc5564f22c15756414801293aa73b5b4294a974`.
+No interleave or normal-mode defect was inferred from the wait.
+
+Implemented original `native/runner/ee_spr_chain.h` and `cmake/spr.cmake`.
+RAM-only REFE/CNT/NEXT/REF/END: actual tag traversal/payload copying, upper
+CHCR tag bits, correct terminal MADR/TADR, SADR16-KiB wrap, full-tag TTE,
+TIE+IRQ termination after payload. QWC0 fetches a tag, not fictitious64K output.
+Disabled DMA/suspend preserves pending STR; the existing completion-consumer
+services it after enable. Cause9 is queued by existing `completeDmacChannel`
+only after actual transfer completion, never by reading CHCR.
+REFS/CALL/RET, VU/SPR sources, nonzero-QWC restart and chains beyond65536 tags
+are explicit refusals. Normal SPR retains pinned upstream semantics; other
+scratchpad modes/directions fail closed, rather than silently leaving STR.
+`ee_spr_diagnostic.h` adds bounded, nonmutating register snapshots.
+
+Contract checked against pinned
+[PCSX2 v2.8.2 SPR.cpp](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SPR.cpp)
+and [Hw.cpp](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/Hw.cpp).
+Private original downloads under `work/ipu-reference-001/`:
+SPR.cpp SHA256 `722c702202ecaa62aaa8a1181429696821a9fe7e8e17d0d9d31abf5f03c421d3`;
+Hw.cpp SHA256 `215c0707e81519d8d8f590d73abeec5cedaf9b5ea615fe69cc75bed6bf69e918`.
+No upstream implementation was copied into public source or edited in place.
+
+Behavioral `spr_chain_tests.cpp` verifies exact payload bytes, excluded tag bytes,
+unchanged source RAM/guards, pointer updates, one-shot completion, CNT/NEXT/END,
+full-tag TTE+IRQ stop, IRQ without TIE, multiple scratch wrap revolutions,
+disabled/resumed transfer, zero-payload chains, invalid addresses/no partial
+payload, unsupported tags/restarts and cyclic-chain refusal. CTest9/9, Python55
+and public-tree gate PASS. Real Release runner built with MSBuild17.11.9.
+Verification executable SHA256:
+`19a155c03416c70540965a01559bd2008d1fa93692e01582e44a741341987288`.
+
+Native223 passed the old wait: at least512 logged genuine transfers, each two
+tags/96QW, alternating scratch start0 and0x1B00. First completion:
+MADR0x01AE5480, TADR0x006ACEA0, SADR0x600, CHCR0x5, QWC0,
+whole-scratch FNV1a64=0xE8454DE7F1872325. The guest then issued more motion
+commands and progressed to **IPU CSC command0x700003E8/opcode7**. Exit6,
+timed_out=false;300s/512M bound. Both222/223 startup helpers successfully stopped
+at real IPU, using ordinary pad and `--timeout 300`; frame interval600.
+Final direct GS223640x508 is all black and visually reviewed. No nonblack
+movie/menu/gameplay/audio/saves/recovery claim.
+
+Next experiment224: establish CSC parameter/layout/color-matrix/clipping,
+OFM/DTE flags, input/output QW counts, FIFO/DMA backpressure and real completion
+against pinned IPU reference before implementation. Immediately before refusal,
+to-IPU DMA was MADR0x01AE2C00/QWC0x5DC0. Do not substitute color bars/black output
+or force DMA completion. Native223 did not establish non-intra BDEC support.
+Native219's earlier0xC0000409 remains unresolved; no repetition in222/223 is
+not proof of a fix. If it returns, preserve exception/dump evidence separately.
+
+Evidence: `work/native-run-222/` and223/ (runtime/result/controller/GS);
+`work/ipu-vdec-run222-launcher.log`,223 equivalent;
+`work/spr-chain-contract-222.json`, `work/spr-chain-validation-223.json`;
+`work/native-run-223/last-guest-frame-review.png`. Source/tests/docs only public;
+all inputs, reference source, raw captures and evidence remain ignored.
+Next unused224, verify directory and processes; entry point docs/CONTINUE.md.
+
+## Current continuation: motion VDEC exercised, toSPR STR wait
+
+This section supersedes the checkpoints below. Local continuation over HEAD
+`2cf7b2c`, no commit/push. Preserved earlier P-MBT/AGENTS/CONTINUE edits and
+`.vscode/`; no Computer Use, input/generated/upstream edits, skip or success stubs.
+
+Implemented table2 motion VDEC in `ipu_vlc.h`/`ee_ipu.h`, all33 codes0/±1..16.
+The H.262 magnitude VLC is followed by one sign bit for nonzero values; residual
+bits are left to the guest. DATA follows pinned
+[PCSX2 v2.8.2 ipuVDEC](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IPU/IPU_MultiISA.cpp):
+zero=0x10000; positive=(prefix length<<16)|magnitude (length excludes sign);
+negative is32-bit sign-extended. Hardware packing for negative DATA is **not**
+verified. Invalid prefixes produce ECD/DATA0 without code consumption rather
+than copying the reference's permissive invalid-prefix motion1 fallback.
+Numeric prefixes: [H.262](https://www.itu.int/rec/T-REC-H.262-200002-S/en);
+private research record `work/ipu-motion-contract-219.json`. No reference decoder
+implementation or optimized table layout copied. B-MBT/DMVector remain refused.
+
+`ipu_vlc_tests.cpp` covers all33 codes with exact DATA/BP/TOP/IRQ, invalid prefix,
+ECD clearing on valid zero, FB-once/empty input, partial TOP without re-decoding.
+Bootstrap8/8, Python55, public-tree gate PASS. Real Release runner built twice
+with MSBuild17.11.9. Final runner SHA256:
+`acb7393bd461e1c17886da789cb74c9b4ac115b8cce45d1fcfbd0a47429d27ad`.
+The first build/run219/220 SHA256:
+`aa7bfa3c8de8e18fa61108f9d97e47dd4781078eada6e109ce91677269637f69`.
+The only second-build change is bounded nonmutating `[ee-ipu-motion]` diagnostics
+in `iop_bridge.cpp` (first16 then powers of two; CTRL/BP/TOP/DATA).
+
+Run219: native Windows exit0xC0000409 before movie IPU commands, no final GS;
+not motion verification. No Windows Application crash event was found. Cause
+unresolved. For220 downloaded official Sysinternals ProcDump into ignored tools;
+archive SHA256 `5fe68e81632f13188930affff20a9a9910170bae654360850d3108cead708a2d`.
+Attached `-e -ma -w ps2EntryRunner.exe`, output under `work/ipu-motion-crash-220/`.
+It saw handled guest-transfer/C++ exceptions and process exit6, no crash/dump.
+Do not call219 fixed merely because220 did not repeat it.
+
+Run220: exit6, no timeout; first refusal was fixed IOP instruction budget.
+EE repeatedly at PC0x303E48, RA0x303E2C. Final direct GS640x508 all black,
+visually reviewed; no nonblack movie/menu/gameplay/audio/saves/recovery claim.
+Run221: targeted logs prove two actual `0x38000000` returning0x10000,
+CTRL0x02623F08, BP0x2086B then0x2086C, TOP0x80819C00 then0x01033800.
+This exercises zero-motion only; other magnitudes/signs have synthetic evidence.
+Run221 `result.json`: timed_out=true at300s, exit_code=null, final capture=null.
+Do not misreport it as a clean budget exit even though the log reaches budget
+diagnostics. Helper220/221 succeeded at real IPU startup; helper219 exited2 on
+ended native. All three used512M,300s, frame interval600 and ordinary host pad.
+
+**Next observed blocker:** STR wait on **toSPR DMA channel9**.
+Read-only generated evidence `generated/lift-007/fn_00303D40_0x303d40.cpp:287-334`:
+PC303E2C loads v1=0x1000D400; PC303E48 reads CHCR and loops on bit8.
+The preceding guest call is303F90. Do not clear STR on read or raise budgets.
+Next experiment222: bounded CHCR/MADR/QWC/SADR and global DMAE/suspend snapshots,
+actual source/destination and completion path; establish the real toSPR contract
+before implementation. Source routing begins in `native/runner/cmake/memory.cmake`;
+upstream runtime has `tryProcessScratchpadDma`, so do not assume it is absent.
+Implement only a proven transport/completion defect, with byte-level scratch/main
+RAM tests, then real runner/build/bounded run. Non-intra BDEC is not yet observed.
+
+Evidence: `work/native-run-219/`,220/,221/ (runtime/result/controller/captures);
+`work/ipu-vdec-run219-launcher.log` and220/221 equivalents;
+`work/ipu-motion-validation-221.json`, `work/ipu-motion-crash-220/procdump-utf8.log`.
+Next unused222, verify directory/processes first. Continue with docs/CONTINUE.md;
+startup helper uses `--timeout 300` alongside the300s-bounded native launcher.
+
+## Current continuation: measured P-picture MBT, next motion-code table
+
+This section supersedes all checkpoints below. HEAD remains published `2cf7b2c`;
+the following changes are local, without commit/push. Existing AGENTS/CONTINUE
+edits and `.vscode/` were preserved. No Computer Use, upstream/generated/input
+edits, dummy output, movie skip or guest flags/RA patches.
+
+Native217 measured the old `0x34000000` refusal: CTRL=`0x02623F08`, PCT=2.
+It is **P-picture**, not B. Exit6, no timeout. Diagnostic runner SHA256:
+`6831be8ef04d1ff61eb33822f60655a7aa23e20d362929d2cdca39e38ae08879`.
+Evidence: `work/native-run-217/{runtime.log,result.json,pad-control-events.jsonl}`,
+`work/ipu-vdec-measurement-217.json`, `work/ipu-vdec-run217-launcher.log`.
+
+Implemented all seven H.262 Table B.3 P-MBT codewords in
+`native/runner/ipu_vlc.h`, integrated via `ee_ipu.h`. DATA is the modes mask
+without length; forward motion additionally sets MC_FRAME=0x80. No extra motion
+bits are consumed: VDEC forces frame prediction. Numeric contracts checked against
+[PCSX2 v2.8.2](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/IPU/IPU_MultiISA.cpp)
+(`ipuVDEC` and P branch of `GetMacroblockModes`) and
+[H.262](https://www.itu.int/rec/T-REC-H.262-200002-S/en), not copied decoder code.
+B-MBT and motion/DMVector still fail closed. Refusals now report value/CTRL/PCT,
+including the next unsupported BDEC mode.
+
+Behavioral regressions in `native/bootstrap_smoke/ipu_vlc_tests.cpp`: all seven
+codes, exact DATA/BP/TOP, malformed zero prefix/ECD/no advance, empty input,
+FB-once, partial TOP refill without re-decoding, and one-shot completion IRQ.
+Initial partial fixture left only30 bits for the32-bit peek; corrected the
+fixture to BP94+FB2, not runtime semantics. Final bootstrap CTest8/8 and Python55
+passed; real Release runner build passed. Public-tree gate passed.
+
+Native218 passed P-MBT and reached **VDEC0x38000000/table2 motion code**,
+CTRL=`0x02623F08`, PCT=2; exit6, `timed_out=false`,300s/512M bound.
+Final runner SHA256:
+`741260ec066223687527254cf57c076e3481c15ca85bfc4054a1c7ac6559c885`.
+Evidence: `work/native-run-218/{runtime.log,result.json,pad-control-events.jsonl}`,
+`work/ipu-vdec-run218-launcher.log`. Both runs used opt-in
+`DRAKENGARD_FRAME_INTERVAL=600`. Native218 final direct GS640x508 is all black,
+also visually reviewed; no nonblack movie/menu/gameplay/audio/saves/recovery proof.
+The startup helper217 observed IPU and exited successfully. Helper218 sent all
+five bounded Left/Cross attempts but hit its180s limit (exit2); runner subsequently
+reached IPU. Do not confuse helper timeout with runner timeout or claim helper218
+success. Next use `python scripts/native_start.py --run 219 --timeout 300`
+alongside the usual bounded launcher; no OS input.
+
+Next experiment: establish table2 signed motion-code DATA, length and sign-bit
+consumption (including negative values, zero, malformed prefixes, FB/starvation),
+implement the actual contract, rebuild runner and bounded-run219. Pinned reference:
+`work/ipu-reference-001/IPU_MultiISA.cpp:1635-1658`, `mpeg2_vlc.h` motion codes.
+The observed motion command has FB0. Do not assume non-intra BDEC is next until
+the runner establishes it. Verify219 is unused and no native/reference is active.
+
 ## Current continuation: intra BDEC, real scratchpad transport, automatic startup
 
 This section supersedes the older IPU checkpoint below. Preserve all pre-existing

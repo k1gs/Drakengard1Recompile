@@ -59,7 +59,16 @@ int main(int argc, char** argv) {
                 std::cerr << std::endl;
             }, nullptr, &diagnostics);
         runtime->setMissingFunctionPolicy(PS2Runtime::MissingFunctionPolicy::Stop);
+        // File-driven diagnostics must progress without restoring/focusing the
+        // window. Raylib otherwise blocks EndDrawing while iconified, including
+        // guest-stop/error propagation. This changes host event waiting only.
+        const bool controlled=configureHostPadWindow();
         if (!runtime->initialize("Drakengard Europe - diagnostic runtime")) return 3;
+        if (controlled) {
+            if (!hostPadWindowRunsAlways())
+                throw std::runtime_error("Host controller diagnostic requires an always-running window loop");
+            std::cerr << "[diagnostic-host] controller source keeps frame/event loop running while minimized\n";
+        }
         pollVirtualPadInput();
         diagnostics.capture.enable(runtime->gs());
         if (!runtime->loadELF(argv[1])) return 4;

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>
+#include <type_traits>
 #include "spu_envelope.h"
 #include "spu_ram_write_port.h"
 #include "spu_adpcm.h"
@@ -31,6 +32,7 @@ class SpuIdleVoices {
         std::array<uint32_t,6> masks{0,0,0xffffff,0xffffff,0xffffff,0xffffff};
         uint32_t keyOn{}, keyOff{}, endx{0xffffff};
         uint16_t mmix{};
+        std::array<int32_t,2> input{};
     };
     std::array<Core,2> cores{};
     uint64_t cycle{}, samples{}, released{};
@@ -119,16 +121,24 @@ public:
     uint32_t retiredStores() const { return stores; }
     int32_t pcm(unsigned core,unsigned voice) const { return cores.at(core).voices.at(voice).interpolated; }
     uint64_t nonzeroSampleCount() const { return nonzeroSamples; }
-    void advanceTo(uint64_t modeledCycle,SpuReverbSetup* effects=nullptr) {
+    const std::array<int32_t,2>& inputPcm(unsigned core) const { return cores.at(core).input; }
+    template<class Input=std::nullptr_t>
+    void advanceTo(uint64_t modeledCycle,SpuReverbSetup* effects=nullptr,Input input={}) {
         if (!enabled) return;
         if (modeledCycle<cycle) throw std::runtime_error("SPU sample clock moved backwards");
         const uint64_t elapsed=modeledCycle-cycle+fraction;
         cycle=modeledCycle; fraction=uint32_t(elapsed%768);
         const uint64_t ticks=elapsed/768;
         if (!ticks) return;
+        const uint64_t firstSample=samples;
         samples+=ticks;
         static const auto gaussian=spuGaussianTable();
-        for (uint64_t tick=0;tick<ticks;++tick) for (auto& core:cores) {
+        for (uint64_t tick=0;tick<ticks;++tick) {
+            std::array<std::array<int32_t,2>,2> inputFrame{};
+            if constexpr (!std::is_same_v<Input,std::nullptr_t>)
+                for (unsigned c=0;c<2;++c) inputFrame[c]=input(c,firstSample+tick);
+            for (auto& core:cores) {
+            core.input=inputFrame[unsigned(&core-cores.data())];
             std::array<int32_t,2> wet{}, dry{};
             released+=std::popcount(core.keyOff&0xffffffu);
             core.endx&=~core.keyOn;
@@ -217,13 +227,18 @@ public:
             // a real nonzero dry signal into core1 (including FX-off history).
             if (effects && &core==&cores[0])
                 for (unsigned side=0;side<2;++side)
-                    if (dry[side] && (core.mmix&(side?0x400:0x800)) &&
-                        (cores[1].mmix&(side?1:2)))
-                        throw std::runtime_error("SPU nonzero core0 external wet mixing is unsupported");
+                    if (((core.mmix&(side?0x400:0x800))?dry[side]:0)+
+                        ((core.mmix&(side?0x40:0x80))?core.input[side]:0))
+                        if (cores[1].mmix&(side?1:2))
+                            throw std::runtime_error("SPU nonzero core0 external wet mixing is unsupported");
             if (effects) effects->observeInput(unsigned(&core-cores.data()),
-                (core.mmix&0x200)?std::clamp(wet[0],-32768,32767):0,
-                (core.mmix&0x100)?std::clamp(wet[1],-32768,32767):0);
+                std::clamp(((core.mmix&0x200)?wet[0]:0)+((core.mmix&0x20)?core.input[0]:0),-32768,32767),
+                std::clamp(((core.mmix&0x100)?wet[1]:0)+((core.mmix&0x10)?core.input[1]:0),-32768,32767));
+            if (effects && &core==&cores[0]) for (unsigned side=0;side<2;++side)
+                if (effects->output(0)[side] && (cores[1].mmix&(side?1:2)))
+                    throw std::runtime_error("SPU nonzero core0 FX external mixing is unsupported");
             core.keyOn=core.keyOff=0;
+            }
         }
     }
     template<class Memory> Access stage(Memory& memory,uint32_t address,uint32_t physical,

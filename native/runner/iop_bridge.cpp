@@ -28,7 +28,10 @@ class CooperativeIopBridge {
     EeIpu ipu;
     EeIpuDma ipuDma;
     uint64_t ipuCommands{};
+    uint64_t ipuBPictureTypes{};
+    uint64_t ipuMotionCommands{};
     uint64_t ipuOutputTransfers{};
+    uint64_t ipuLargeOutputTransfers{},ipuCscCommands{};
     uint32_t ipuFromStart{},ipuFromQwc{};
     Sif0Fifo sif0Fifo;
     unsigned deferredQuanta{};
@@ -97,6 +100,33 @@ public:
                 std::cerr << "[ee-ipu-command] value=0x" << std::hex << value
                           << " result=0x" << ipu.diagnosticCommand()
                           << " bp=0x" << ipu.read(EeIpu::Position) << std::dec << " count=" << count << '\n';
+            if ((value&0xfc000000u)==0x34000000u && ((ipu.read(EeIpu::Control)>>24)&7u)==3) {
+                const auto bCount=++ipuBPictureTypes;
+                if (bCount<=16 || (bCount&(bCount-1))==0)
+                    std::cerr << "[ee-ipu-b-mbt] result=0x" << std::hex << ipu.diagnosticCommand()
+                              << " ctrl=0x" << ipu.read(EeIpu::Control)
+                              << " bp=0x" << ipu.read(EeIpu::Position) << " top=0x" << ipu.read(EeIpu::Top)
+                              << std::dec << " count=" << bCount << '\n';
+            }
+            if ((value&0xfc000000u)==0x38000000u) {
+                const auto motionCount=++ipuMotionCommands;
+                if (motionCount<=16 || (motionCount&(motionCount-1))==0)
+                    std::cerr << "[ee-ipu-motion] value=0x" << std::hex << value
+                              << " result=0x" << ipu.diagnosticCommand()
+                              << " ctrl=0x" << ipu.read(EeIpu::Control)
+                              << " bp=0x" << ipu.read(EeIpu::Position)
+                              << " top=0x" << ipu.read(EeIpu::Top)
+                              << std::dec << " count=" << motionCount << '\n';
+            }
+            if ((value>>28)==7) {
+                const auto cscCount=++ipuCscCommands;
+                if (cscCount<=16 || (cscCount&(cscCount-1))==0)
+                    std::cerr << "[ee-ipu-csc] value=0x" << std::hex << value
+                              << " ctrl=0x" << ipu.read(EeIpu::Control)
+                              << " bp=0x" << ipu.read(EeIpu::Position)
+                              << std::dec << " macroblocks=" << (value&0x7ffu)
+                              << " count=" << cscCount << '\n';
+            }
         }
     }
     void writeIpuInput(std::span<const uint8_t,16> bytes) {
@@ -114,7 +144,8 @@ public:
         pumpIpu(); const auto causes=ipuDma.takeCompletions();
         if (causes&8u) {
             const auto count=++ipuOutputTransfers;
-            if (count<=16 || (count&(count-1))==0) {
+            const auto large=ipuFromQwc>48?++ipuLargeOutputTransfers:0;
+            if (count<=16 || (count&(count-1))==0 || (large && (large<=16 || (large&(large-1))==0))) {
                 std::cerr << "[ee-ipu-from-complete] start=0x" << std::hex << ipuFromStart
                           << " end=0x" << ipuDma.read(0x1000b010u) << " qwc=0x" << ipuFromQwc;
                 if ((ipuFromStart&0x80000000u) && (ipuFromStart&0x7fffffffu)<eeScratchpad.size()) {
@@ -124,6 +155,14 @@ public:
                         uint64_t hash=14695981039346656037ull;
                         for (uint64_t i=0;i<size;++i) hash=(hash^eeScratchpad[offset+i])*1099511628211ull;
                         std::cerr << " scratch_fnv1a64=0x" << hash;
+                    }
+                } else if (!(ipuFromStart&0x80000000u)) {
+                    const auto offset=ipuFromStart&0x1fffffffu;
+                    const uint64_t size=uint64_t(ipuFromQwc)*16;
+                    if (offset<eeRam.size() && size<=eeRam.size()-offset) {
+                        uint64_t hash=14695981039346656037ull;
+                        for (uint64_t i=0;i<size;++i) hash=(hash^eeRam[offset+i])*1099511628211ull;
+                        std::cerr << " ram_fnv1a64=0x" << hash;
                     }
                 }
                 std::cerr << " ctrl=0x" << ipu.read(EeIpu::Control) << " top=0x" << ipu.read(EeIpu::Top)

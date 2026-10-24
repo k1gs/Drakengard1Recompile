@@ -3,19 +3,26 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <iostream>
 #include "spu_ram_write_port.h"
+#include "spu_reverb_dsp.h"
 
 // FX register state and a checked zero-input/workspace invariant. Address pairs
 // retain the reference high/low halves; coefficients keep signed bit patterns.
-// General nonzero reverb processing remains unsupported.
+// The runtime may explicitly bind the functional scalar DSP at initialization.
+// Unbound standalone probes retain their checked zero-input contract.
 class SpuReverbSetup {
     struct Core {
         std::array<uint16_t,48> offsets{};
         std::array<uint16_t,10> coefficients{};
+        SpuReverbDsp dsp;
+        uint64_t frames{},nonzero{};
+        std::array<int32_t,2> output{};
     };
     std::array<Core,2> cores{};
     bool enabled{};
-    const SpuRamWritePort* ram{};
+    SpuRamWritePort* ram{};
+    bool processing{};
     std::array<bool,2> active{};
     std::array<bool,2> unmodeledInputHistory{};
     uint64_t samples{};
@@ -38,10 +45,17 @@ public:
             fields[46]=core?15:14; fields[47]=0xffff;
         }
     }
-    void enable(const SpuRamWritePort* zeroInputRam=nullptr) {
+    void enable(SpuRamWritePort* zeroInputRam=nullptr) {
         if (enabled) throw std::runtime_error("SPU FX setup already enabled");
         enabled=true; ram=zeroInputRam;
     }
+    void enableProcessing() {
+        if (!enabled || !ram || processing || samples || cores[0].frames || cores[1].frames)
+            throw std::runtime_error("SPU FX processing requires fresh bound RAM/sample clock");
+        processing=true;
+    }
+    bool canEnableEffects(unsigned core) const { return processing || supportsZeroInput(core); }
+    const std::array<int32_t,2>& output(unsigned core) const { return cores.at(core).output; }
     bool supportsZeroInput(unsigned index) const {
         if (!ram) return false;
         if (unmodeledInputHistory.at(index)) return false;
@@ -51,7 +65,7 @@ public:
         return start>=end || ram->zeroRange(start,end);
     }
     void setEffects(unsigned core,bool value) {
-        if (value && !supportsZeroInput(core))
+        if (value && !canEnableEffects(core))
             throw std::runtime_error("SPU FX requires a zero workspace and verified zero inputs");
         active.at(core)=value;
     }
@@ -62,15 +76,35 @@ public:
     void advanceSilentInputs(uint64_t sampleCount) {
         if (sampleCount==samples) return;
         if (sampleCount<samples) throw std::runtime_error("SPU FX sample clock moved backwards");
+        if (processing) {
+            for (const auto& core:cores) if (core.frames!=sampleCount)
+                throw std::runtime_error("SPU FX missing routed sample input");
+            samples=sampleCount; return;
+        }
         for (unsigned c=0;c<2;++c) if (active[c] && !supportsZeroInput(c))
             throw std::runtime_error("SPU FX workspace left the zero-input subset");
         samples=sampleCount;
     }
-    // Observe the actual PCM routed into one core's FX path.  The current
-    // reverb model is deliberately zero-input-only, so active FX must reject
-    // nonzero PCM instead of silently treating it as zero.
+    // Process each actual routed frame, or retain the zero-only admission guard
+    // for standalone probes that did not bind the scalar DSP at initialization.
     void observeInput(unsigned core,int32_t left,int32_t right) {
         if (core>=active.size()) throw std::out_of_range("SPU FX core index out of range");
+        if (processing) {
+            auto& state=cores[core];
+            state.output=state.dsp.tick(*ram,state.offsets,state.coefficients,active[core],state.frames+1,{left,right});
+            ++state.frames;
+            if (left || right || state.output[0] || state.output[1]) {
+                const auto count=++state.nonzero;
+                if (count<=8 || (count&(count-1))==0)
+                    std::cerr << "[spu-fx-pcm] core=" << core << " sample=" << state.frames
+                              << " input_l=" << left << " input_r=" << right
+                              << " output_l=" << state.output[0] << " output_r=" << state.output[1]
+                              << " writes=" << active[core]
+                              << " delay_nonzero_stores=" << state.dsp.nonzeroStoreCount()
+                              << " count=" << count << '\n';
+            }
+            return;
+        }
         if (!active[core]) {
             // FX-off output is zero, but a nonzero downsample history cannot
             // be declared empty if effects are subsequently enabled.
@@ -80,6 +114,16 @@ public:
         if (!supportsZeroInput(core))
             throw std::runtime_error("SPU FX zero-input workspace invalid: core="+std::to_string(core));
         if (left!=0 || right!=0) {
+            const auto& state=cores[core];
+            const uint32_t start=(uint32_t(state.offsets[0])<<16)|state.offsets[1];
+            const uint32_t end=(uint32_t(state.offsets[46])<<16)|0xffff;
+            std::cerr << "[spu-fx-domain] core=" << core << " sample=" << samples
+                      << " active=" << active[core] << " left=" << left << " right=" << right
+                      << " start=0x" << std::hex << start << " end=0x" << end << " offsets=";
+            for (auto value:state.offsets) std::cerr << value << ',';
+            std::cerr << " coefficients=";
+            for (auto value:state.coefficients) std::cerr << value << ',';
+            std::cerr << std::dec << "; first unsupported nonzero FX input\n";
             throw std::runtime_error("SPU FX zero-input guard rejected routed PCM: core="+
                                      std::to_string(core)+" left="+std::to_string(left)+
                                      " right="+std::to_string(right));

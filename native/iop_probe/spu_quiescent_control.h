@@ -5,17 +5,20 @@
 #include <stdexcept>
 #include "spu_reverb_setup.h"
 
-// Pinned functional core state. IRQ/ADMA remain closed; mode2 arming requires
-// a bound plain DMA writer, and FX requires the checked zero-input domain.
+// Functional core configuration shared by plain DMA and sample-paced ADMA.
+// SPU IRQ, active stream stop/cancellation and unreviewed modes remain closed.
 // The reference finishes
 // core initialization with STATX=0x80; a real ATTR store with DMA mode zero clears
 // that flag when no transfer is busy. This is
 // not a timed hardware reset model or a completion source for active transfers.
 class SpuQuiescentControl {
-    struct Core { uint16_t attributes{}, autoDma{}, status{0x80}; };
+    struct Core {
+        uint16_t attributes{}, autoDma{}, status{0x80};
+        bool autoBusy{},autoStarted{};
+    };
     std::array<Core,2> cores{};
     bool enabled{};
-    uint32_t stores{};
+    uint32_t stores{},autoDmaStores{};
     SpuReverbSetup* reverb{};
     bool dmaWriter{};
     static int index(uint32_t address) {
@@ -34,14 +37,18 @@ public:
         const auto reg=address&0x3ff;
         if (opcode==0x21 || opcode==0x25) return true;
         if (opcode!=0x29) return false;
-        if (reg==0x1b0) return uint16_t(value)==0;
+        const auto& state=cores[index(address)];
+        if (reg==0x1b0)
+            return !(uint16_t(value)&~3u) &&
+                (!(state.status&0x400) && !state.autoBusy || uint16_t(value)==(state.autoDma&3u)) &&
+                (!state.autoStarted || !((uint16_t(value)^state.autoDma)&(1u<<index(address))));
         // Bits 0/14/15 are retained raw; the pinned functional reference does not
         // apply mute/core-enable effects for them. IRQ/mode3 remain closed;
         // mode2 and FX require the separate reviewed device contracts below.
         const unsigned mode=(value>>4)&3;
         return reg==0x19a && !(uint16_t(value)&0x3f4e) && mode!=3 && (mode!=2 || dmaWriter) &&
-            (!(cores[index(address)].status&0x400) || value==cores[index(address)].attributes) &&
-            (!(value&0x80) || (reverb && reverb->supportsZeroInput(index(address))));
+            (!(state.status&0x400) && !state.autoBusy || value==state.attributes) &&
+            (!(value&0x80) || (reverb && reverb->canEnableEffects(index(address))));
     }
     uint16_t read(uint32_t address) const {
         if (!allows(address,0x25)) throw std::runtime_error("Unsupported SPU control read");
@@ -54,7 +61,8 @@ public:
     }
     uint32_t retiredStores() const { return stores; }
     bool dmaWriteReady(unsigned core) const {
-        return dmaWriter && ((cores.at(core).attributes>>4)&3)==2 && !cores.at(core).autoDma && !(cores.at(core).status&0x400);
+        return dmaWriter && ((cores.at(core).attributes>>4)&3)==2 &&
+            !(cores.at(core).autoDma&(1u<<core)) && !(cores.at(core).status&0x400) && !cores.at(core).autoBusy;
     }
     void beginDmaWrite(unsigned core) {
         if (!dmaWriteReady(core)) throw std::runtime_error("SPU DMA write requires idle mode2 without ADMA");
@@ -63,6 +71,24 @@ public:
     void finishDmaWrite(unsigned core) {
         auto& state=cores.at(core); state.status&=uint16_t(~0x400u);
         if ((state.attributes>>4)&3) state.status|=0x80;
+    }
+    bool autoDmaEnabled(unsigned core) const { return cores.at(core).autoDma&(1u<<core); }
+    bool autoDmaReady(unsigned core) const {
+        return enabled && dmaWriter && autoDmaEnabled(core) &&
+            !(cores.at(core).status&0x400) && !cores.at(core).autoBusy;
+    }
+    void beginAutoDma(unsigned core) {
+        if (!autoDmaReady(core)) throw std::runtime_error("SPU ADMA requires idle bound DMA writer");
+        cores.at(core).autoBusy=cores.at(core).autoStarted=true;
+    }
+    void finishAutoDma(unsigned core) {
+        cores.at(core).autoBusy=false;
+        finishDmaWrite(core); // ADMA did not assert STATX busy at admission.
+    }
+    void observeAutoDmaBuffer(unsigned core,bool empty) {
+        if (!autoDmaEnabled(core)) return;
+        if (empty) cores.at(core).autoDma|=0xfffcu;
+        else cores.at(core).autoDma&=3u;
     }
     template<class Memory> Access stage(Memory& memory,uint32_t address,uint32_t physical,
                                        uint32_t opcode,uint32_t value) const {
@@ -75,7 +101,15 @@ public:
         memory.write16(access.address,access.previous);
         if (exception || !access.write) return;
         auto& core=cores[index(access.physical)];
-        if ((access.physical&0x3ff)==0x1b0) core.autoDma=access.value;
+        if ((access.physical&0x3ff)==0x1b0) {
+            core.autoDma=access.value;
+            const auto count=++autoDmaStores;
+            if (count<=16 || (count&(count-1))==0)
+                std::cerr << "[spu-admas-store] core=" << index(access.physical)
+                          << " value=0x" << std::hex << core.autoDma
+                          << " attr=0x" << core.attributes << " status=0x" << core.status
+                          << std::dec << " count=" << count << "; guest SH retired\n";
+        }
         else {
             const auto oldMode=(core.attributes>>4)&3;
             core.attributes=access.value;

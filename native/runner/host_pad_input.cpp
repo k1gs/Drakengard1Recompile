@@ -12,9 +12,22 @@
 
 // UI thread samples raylib; bridge serializes immutable snapshots to the IOP owner.
 // Keyboard is an explicit virtual device, even without a physical gamepad.
+bool configureHostPadWindow() {
+    if (!std::getenv("DRAKENGARD_PAD_CONTROL")) return false;
+    SetConfigFlags(FLAG_WINDOW_ALWAYS_RUN);
+    return true;
+}
+bool hostPadWindowRunsAlways() { return IsWindowState(FLAG_WINDOW_ALWAYS_RUN); }
 void pollVirtualPadInput() {
     if (!std::getenv("DRAKENGARD_VIRTUAL_PAD")) return;
     if (const char* commandPath=std::getenv("DRAKENGARD_PAD_CONTROL")) {
+        static bool wasMinimized=false;
+        const bool minimized=IsWindowState(FLAG_WINDOW_MINIMIZED);
+        if (minimized!=wasMinimized) {
+            std::cerr << "[diagnostic-host] minimized=" << minimized
+                      << " always_run=" << hostPadWindowRunsAlways() << '\n';
+            wasMinimized=minimized;
+        }
         // Explicit diagnostic controller source. This feeds the existing host
         // snapshot/SIO2 path, never guest memory or a Windows input API.
         std::ifstream file(commandPath,std::ios::binary);

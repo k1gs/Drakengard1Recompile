@@ -50,10 +50,15 @@ public:
     }
     uint64_t writtenWords() const { return written; }
     void setDmaBusy(unsigned core,bool value) { dmaBusy.at(core)=value; }
+    void writeWord(uint32_t address,uint16_t value) {
+        if (address>=ram.size()) throw std::out_of_range("SPU RAM word address");
+        nonzero[address/1024]-=ram[address]!=0;
+        ram[address]=value;
+        nonzero[address/1024]+=value!=0;
+    }
     void transferWord(unsigned core,uint16_t value) {
         auto& cursor=cores.at(core).tsa;
-        const auto at=cursor&0xfffff;
-        nonzero[at/1024]-=ram[at]!=0; ram[at]=value; nonzero[at/1024]+=value!=0;
+        writeWord(cursor&0xfffff,value);
         cursor=(cursor+1)&0xfffff;
     }
     template<class Memory> Access stage(Memory& memory,uint32_t address,uint32_t physical,
@@ -68,9 +73,7 @@ public:
         if (exception || !access.write) return;
         const auto reg=access.physical&0x3ff; auto& core=cores[(access.physical>>10)&1];
         if (reg==0x1ac) {
-            const auto at=core.tsa&0xfffff;
-            nonzero[at/1024]-=ram[at]!=0;
-            ram[at]=access.value; nonzero[at/1024]+=access.value!=0;
+            writeWord(core.tsa&0xfffff,access.value);
             core.tsa=(core.tsa+1)&0xfffff;
             ++written;
             if (written<=8 || written%256==0)

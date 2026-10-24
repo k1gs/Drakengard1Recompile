@@ -64,6 +64,8 @@ public:
         state.budget.enableGuestReboot();
         spdif.enable(); volumes.enable(); spuRam.enable();
         voices.enable(timers.cycles(),&spuRam); reverb.enable(&spuRam); spuControl.enable(&reverb,true);
+        reverb.enableProcessing();
+        spuDma.bindSampleClock();
         dma.enableSpuWriter(spuDma);
     }
     void setClockSource(std::function<drakengard::CdvdCalendar()> source) { cdvd.setClockSource(std::move(source)); }

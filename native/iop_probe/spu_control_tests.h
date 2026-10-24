@@ -45,7 +45,7 @@ inline void spuQuiescentControl() {
             access(attr|alias,0,0x29);
             const auto afterArm=control.retiredStores();
             for (uint32_t value : {0x20u,0x40u,0x80u,0xc080u}) refuses(attr|alias,value,0x29);
-            refuses(adma|alias,1,0x29); refuses(status|alias,0,0x29);
+            refuses(adma|alias,4,0x29); refuses(adma|alias,0x7fff,0x29); refuses(status|alias,0,0x29);
             refuses(attr|alias,0,0x2b); refuses(attr|alias,0,0x24);
             if (control.retiredStores()!=afterArm || control.read(attr) || control.read(status))
                 throw std::runtime_error("Rejected active SPU operation changed quiescent state");
@@ -59,5 +59,59 @@ inline void spuQuiescentControl() {
     memory.write16(0x1f90019a,0x8000); control.complete(memory,staged,true);
     if (memory.read16(0x1f90019a)!=0x55aa || control.read(0x1f90019a) || control.retiredStores()!=before ||
         memory.interruptStatus()) throw std::runtime_error("Faulted SPU control access committed or invented IRQ");
+}
+
+inline void spuAutoDmaControl() {
+    using ps2x::iop::detail::IopMemory;
+    IopMemory memory; SpuRamWritePort ram; ram.enable();
+    SpuQuiescentControl control; control.enable(nullptr,true);
+    SpuDmaWrite writer(ram,control);
+    QuiescentDma dma; dma.reset(memory); dma.enableSpuWriter(writer);
+    const auto access=[&](uint32_t address,uint32_t value,uint32_t opcode) {
+        memory.write32(0x1000,0x3c020000|(value>>16));
+        memory.write32(0x1004,0x34420000|(value&0xffff));
+        memory.write32(0x1008,(opcode<<26)|(4u<<21)|(2u<<16));
+        memory.write32(0x100c,0); memory.write32(0x1010,0x03e00008); memory.write32(0x1014,0);
+        return bareCall(memory,0x1000,0,address,0x1000,0x1100,
+                        {.dma=&dma,.spuControl=&control}).value;
+    };
+    access(0xbf90019a,0x8020,0x29); access(0xbf90059a,0x8020,0x29);
+    for (unsigned core=0;core<2;++core) {
+        const uint32_t reg=0x1f9001b0+core*0x400,status=0x1f900344+core*0x400;
+        const uint32_t base=core?0x1f801500:0x1f8010c0;
+        memory.write16(reg,0xface);
+        memory.write32(base,0x8000); memory.write32(base+4,0x00010002);
+        for (uint32_t alias:{0u,0x80000000u,0xa0000000u}) {
+            for (uint32_t value:{0u,1u,2u,3u}) {
+                const auto stores=control.retiredStores();
+                access(reg|alias,0x9abc0000u|value,0x29);
+                if (access(reg|alias,0,0x25)!=value || access(reg|alias,0,0x21)!=value ||
+                    memory.read16(reg)!=0xface || control.read(status)!=0x80 ||
+                    control.dmaWriteReady(core)!=!(value&(1u<<core)) ||
+                    !control.dmaWriteReady(1-core) || memory.interruptStatus() ||
+                    control.retiredStores()!=stores+1)
+                    throw std::runtime_error("ADMAS halfword/core-mask/idle side effects differ");
+                if (value&(1u<<core)) {
+                    bool rejected=false;
+                    try { access(base+8,0x01000201,0x2b); }
+                    catch (const std::runtime_error&) { rejected=true; }
+                    if (!rejected || memory.read32(base+8) || memory.read32(base)!=0x8000 ||
+                        control.read(status)!=0x80 || memory.interruptStatus() || ram.peek(0))
+                        throw std::runtime_error("ADMAS incorrectly routed streaming data through plain DMA");
+                }
+            }
+            access(reg|alias,0,0x29);
+        }
+        access(reg,1u<<(1-core),0x29); // non-own bit does not enable this core's ADMA
+        const auto prior=control.read(reg);
+        const auto stores=control.retiredStores();
+        const auto staged=control.stage(memory,reg,reg,0x29,1u<<core);
+        memory.write16(reg,uint16_t(1u<<core));
+        control.complete(memory,staged,true);
+        if (control.read(reg)!=prior || control.retiredStores()!=stores ||
+            memory.read16(reg)!=0xface || !control.dmaWriteReady(core) || memory.interruptStatus())
+            throw std::runtime_error("Faulted ADMAS store committed configuration or completion");
+        access(reg,0,0x29);
+    }
 }
 }

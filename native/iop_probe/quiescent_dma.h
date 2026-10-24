@@ -19,6 +19,9 @@ public:
     void pumpSio2(ps2x::iop::detail::IopMemory& memory) { if (sio2Engine) sio2Engine->pump(memory); }
     void enableSpuWriter(SpuDmaWrite& writer) { spuWriter=&writer; }
     void pumpSpu(ps2x::iop::detail::IopMemory& memory) { if (spuWriter) spuWriter->pump(memory); }
+    template<class Memory> std::array<int32_t,2> readSpuInput(Memory& memory,unsigned core,uint64_t sample) {
+        return spuWriter?spuWriter->readInput(memory,core,sample):std::array<int32_t,2>{};
+    }
     void enableCdvdReceiver() { m_cdvdReceiver = true; }
     void enableSif1Receiver() { m_sif1Receiver = true; }
     void enableSif0Sender() { m_sif0Sender = true; }

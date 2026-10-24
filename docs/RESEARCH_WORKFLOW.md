@@ -43,6 +43,10 @@ This is a checkpoint-specific controller recipe, not visual dialog recognition
 or a renderer/guest-memory patch. Native216's direct GS frames verified the
 warning at observation1800 and the Square Enix logo at3000. Frame1200 still
 showed Accessing, so the earlier1200 recipe was too early in214/215.
+Current continuation uses `--timeout 300` for this helper alongside a native
+launcher still bounded to300s. Helper218 exhausted its default180s before IPU;
+220/221 successfully observed IPU with the300s option. Helper exit and native
+timeout/exit are separate evidence fields; record both.
 
 For an explicit diagnostic run, `DRAKENGARD_FRAME_INTERVAL=600` enables direct
 GS snapshots every600 host-frame observations, capped at32 files. Accepted

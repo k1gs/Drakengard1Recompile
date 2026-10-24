@@ -28,7 +28,8 @@ inline void plainSpuDmaWrite() {
         writer.pump(memory);
         if (ram.peek(0xffff0)!=0x1234+core || ram.peek(0)!=0x1244+core ||
             control.read(regs+0x344)!=0x400 || memory.interruptStatus() ||
-            ram.allows(regs+0x1ac,0x29,0) || control.allows(regs+0x19a,0x29,0x8000))
+            ram.allows(regs+0x1ac,0x29,0) || control.allows(regs+0x19a,0x29,0x8000) ||
+            control.allows(regs+0x1b0,0x29,1u<<core))
             throw std::runtime_error("SPU first burst/busy/wrap/CPU access guard differs");
         bool rearm=false;
         try { writer.validateStart(memory,base+8,0x01000201); } catch (const std::runtime_error&) { rearm=true; }

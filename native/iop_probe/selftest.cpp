@@ -9,6 +9,9 @@
 #include "spu_wet_tests.h"
 #include "spu_setup_transfer_tests.h"
 #include "spu_dma_tests.h"
+#include "spu_adma_tests.h"
+#include "spu_reverb_dsp_tests.h"
+#include "spu_fx_route_tests.h"
 #include "cooperative_clock.h"
 #include "../runner/gs_interrupt_line.h"
 #include "../runner/empty_gif_chain.h"
@@ -132,6 +135,7 @@ int main() {
         iop_tests::spdifSetup();
         iop_tests::spuVolumeRegisters();
         iop_tests::spuQuiescentControl();
+        iop_tests::spuAutoDmaControl();
         iop_tests::stoppedSpuVoices();
         iop_tests::silentSpuVoices();
         iop_tests::nonzeroSpuAdpcm();
@@ -139,6 +143,9 @@ int main() {
         iop_tests::zeroInputSpuEffects();
         iop_tests::spuSetupTransfers();
         iop_tests::plainSpuDmaWrite();
+        iop_tests::spuAutoDmaStreaming();
+        iop_tests::nonzeroSpuReverbDsp();
+        iop_tests::spuAutoDmaReverbRouting();
         IopMemory memory;
         code(memory, {0x2402002a, 0x03e00008, 0});
         auto result = bareCall(memory, 0x1000, 0, 0, 0x1000, 0x1030);

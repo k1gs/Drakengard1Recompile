@@ -106,6 +106,12 @@ public:
             const bool voiceSupported = voices && voices->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31]);
             const bool reverbSupported = reverb && reverb->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31]);
             const bool ramSupported = spuRam && spuRam->allows(target, opcode, cpu.gpr[(instruction >> 16) & 31]);
+            if (dma && opcode==0x2b && (target==0x1f8010c8 || target==0x1f801508) &&
+                !(cpu.gpr[(instruction >> 16) & 31]&0x01000000) && (memory.read32(target)&0x01000000))
+                std::cerr << "[strict-spu-dma-stop-store] pc=0x" << std::hex << cpu.pc
+                          << " register=0x" << target << " previous=0x" << memory.read32(target)
+                          << " value=0x" << cpu.gpr[(instruction >> 16) & 31]
+                          << std::dec << " steps=" << steps << '\n';
             if (dma && opcode == 0x2b && dma->channelRegister(target) && (target & 15) == 8 &&
                 (cpu.gpr[(instruction >> 16) & 31] & 0x01000000)) {
                 const auto base = target & ~15u;
@@ -119,6 +125,36 @@ public:
                         for (unsigned n = 0; n < 4; ++n)
                             std::cerr << " tag" << n << "=0x" << memory.read32(tadr + n * 4);
                     std::cerr << std::dec << '\n';
+                }
+                if (SpuDmaWrite::channel(target) && spuControl) {
+                    const unsigned core=target==0x1f801508;
+                    const auto admas=spuControl->read(0x1f9001b0u+core*0x400u);
+                    static std::array<uint64_t,2> requests{};
+                    if (admas&(1u<<core)) {
+                        const auto count=++requests[core];
+                        if (count<=8 || (count&(count-1))==0) {
+                            std::cerr << "[spu-adma-request] core=" << core << " admas=0x" << std::hex << admas
+                                      << " attr=0x" << spuControl->read(0x1f90019au+core*0x400u);
+                            if (spdif) std::cerr << " spdif=0x" << spdif->outputValue();
+                            if (voices) std::cerr << " mmix=0x" << voices->read(0x1f900198u+core*0x400u);
+                            if (volumes) std::cerr << std::dec << " input_l=" << volumes->gain(core,6)
+                                                   << " input_r=" << volumes->gain(core,7);
+                            const uint64_t halfwords=uint64_t(memory.read32(base+4)>>16)*(memory.read32(base+4)&0xffffu)*2;
+                            const auto source=memory.read32(base);
+                            if (!(source&1u) && source<IopMemory::RamSize && halfwords*2<=IopMemory::RamSize-source) {
+                                uint64_t nonzero=0,hash=14695981039346656037ull;
+                                for (uint64_t n=0;n<halfwords;++n) {
+                                    const auto sample=memory.read16(source+uint32_t(n*2));
+                                    nonzero+=sample!=0;
+                                    hash=(hash^uint8_t(sample))*1099511628211ull;
+                                    hash=(hash^uint8_t(sample>>8))*1099511628211ull;
+                                }
+                                std::cerr << std::dec << " halfwords=" << halfwords << " nonzero=" << nonzero
+                                          << " source_fnv1a64=0x" << std::hex << hash;
+                            }
+                            std::cerr << std::dec << " count=" << count << '\n';
+                        }
+                    }
                 }
             }
             if ((target >= IopMemory::RamSize || width > IopMemory::RamSize - target) &&
@@ -210,9 +246,19 @@ public:
         if (cdvdDma && cdvd) cdvdDma->pump(memory, *cdvd);
         if (cdvd && cdvd->takeInterruptEdge()) memory.setInterruptStatus(memory.interruptStatus() | 4u);
         if (timers) memory.setInterruptStatus(memory.interruptStatus() | timers->advance(1));
-        if (dma) dma->pumpSpu(memory);
+        // DMA admission/refill follows TimeUpdate: tick the input consumer before
+        // admitting a new producer, so a boundary start cannot overwrite its first block.
         if (dma) dma->pumpSio2(memory);
-        if (voices && timers) voices->advanceTo(timers->cycles(),reverb);
+        if (voices && timers) voices->advanceTo(timers->cycles(),reverb,
+            [&](unsigned core,uint64_t sample) {
+                auto pcm=dma?dma->readSpuInput(memory,core,sample):std::array<int32_t,2>{};
+                if (volumes) for (unsigned side=0;side<2;++side)
+                    pcm[side]=(pcm[side]*volumes->gain(core,6+side))>>15;
+                else if (pcm[0] || pcm[1])
+                    throw std::runtime_error("SPU input PCM requires actual input-volume owner");
+                return pcm;
+            });
         if (reverb && voices) reverb->advanceSilentInputs(voices->sampleCount());
+        if (dma) dma->pumpSpu(memory);
     }
 };

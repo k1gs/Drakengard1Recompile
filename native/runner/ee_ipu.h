@@ -7,6 +7,7 @@
 #include <utility>
 #include "ipu_vlc.h"
 #include "ipu_bdec.h"
+#include "ipu_csc.h"
 
 namespace drakengard {
 class EeIpu {
@@ -22,7 +23,10 @@ class EeIpu {
     bool busy{},interrupt{},topBusy{},vlcDecoded{},errorCode{};
     std::array<Quadword,8> outputFifo{};
     unsigned outputHead{},outputSize{},outputPosition{},blockNumber{},coefficientIndex{};
-    std::array<uint8_t,768> macroblock{};
+    std::array<uint8_t,1024> macroblock{};
+    std::array<uint8_t,384> cscInput{};
+    unsigned cscRemaining{};
+    bool cscConverted{};
     std::array<int16_t,64> coefficients{};
     std::array<int,3> predictors{};
     enum class BlockStage { Dc, Ac, Output, Drain, Check, Prefix, Top };
@@ -152,9 +156,32 @@ class EeIpu {
             }
         }
     }
+    void processCsc() {
+        while (cscRemaining) {
+            if (!cscConverted) {
+                while (tablePosition<cscInput.size()) {
+                    if (!peek({cscInput.data()+tablePosition,8})) return;
+                    advance(64); tablePosition+=8;
+                }
+                convertIpuCscRgb32(cscInput,macroblock,thresholds);
+                cscConverted=true; outputPosition=0;
+            }
+            while (outputPosition<64 && outputSize<8) {
+                auto& destination=outputFifo[(outputHead+outputSize)&7u];
+                for (unsigned i=0;i<16;++i) destination[i]=macroblock[outputPosition*16+i];
+                ++outputPosition; ++outputSize;
+            }
+            if (outputPosition<64) return;
+            --cscRemaining; tablePosition=0; cscConverted=false;
+        }
+        // CSC completes once the final QW is accepted by the output FIFO.
+        // Those final QWs may still be pending CPU/DMA reads.
+        complete();
+    }
     void process() {
         if (!busy) return;
         if ((command>>28)==2) { processBlock(); return; }
+        if ((command>>28)==7) { processCsc(); return; }
         if ((command>>28)==3) {
             if (!vlcDecoded) {
                 uint32_t bits{};
@@ -163,12 +190,21 @@ class EeIpu {
                 if (((command>>26)&3u)==0) {
                     decoded=decodeIpuMacroblockIncrement(bits,(configuration&0x00800000u)!=0);
                     result=(decoded.length<<16)|decoded.value;
+                } else if (((command>>26)&3u)==2) {
+                    const auto motion=decodeIpuMotionCode(bits);
+                    decoded.length=motion.length;
+                    result=motion.data;
                 } else {
-                    // VDEC's I-picture MBT result is the modes bitmask without
-                    // a length field: intra=1, optional quantizer=16.
-                    if (bits&0x80000000u) decoded={1,1};
+                    // B-MBT adds consumed length; I/P return modes only.
+                    const unsigned picture=(configuration>>24)&7u;
+                    if (picture==3)
+                        decoded=decodeIpuBidirectionalMacroblockType(bits);
+                    else if (picture==2)
+                        decoded=decodeIpuPredictiveMacroblockType(bits);
+                    else if (bits&0x80000000u) decoded={1,1};
                     else if (bits&0x40000000u) decoded={17,2};
                     result=decoded.value;
+                    if (picture==3) result|=decoded.length<<16;
                 }
                 errorCode=!decoded.length;
                 advance(decoded.length);
@@ -225,20 +261,27 @@ public:
                 result=top=command=0; thresholds={}; busy=topBusy=vlcDecoded=errorCode=false; interrupt=true;
                 outputHead=outputSize=outputPosition=blockNumber=coefficientIndex=codedPattern=0;
                 predictors={}; startCode=false; blockStage=BlockStage::Dc;
+                cscRemaining=0; cscConverted=false;
             }
             return;
         }
         if (address!=Command) throw std::runtime_error("Unsupported IPU register write");
         const auto opcode=value>>28;
-        if (opcode!=0 && opcode!=2 && opcode!=3 && opcode!=4 && opcode!=5 && opcode!=6 && opcode!=9)
+        if (opcode!=0 && opcode!=2 && opcode!=3 && opcode!=4 && opcode!=5 && opcode!=6 && opcode!=7 && opcode!=9)
             throw std::runtime_error("Unsupported IPU decode/conversion command: opcode="+
                                      std::to_string(opcode)+" value="+std::to_string(value));
-        if (opcode==3 && (((value>>26)&3u)>1 ||
-                         (((value>>26)&3u)==1 && ((configuration>>24)&7u)>1)))
-            throw std::runtime_error("Unsupported IPU VDEC table: value="+std::to_string(value));
+        if (opcode==3 && (((value>>26)&3u)>2 ||
+                         (((value>>26)&3u)==1 && ((configuration>>24)&7u)>3)))
+            throw std::runtime_error("Unsupported IPU VDEC table: value="+std::to_string(value)+
+                                     " CTRL="+std::to_string(read(Control))+
+                                     " PCT="+std::to_string((configuration>>24)&7u));
         if (opcode==2 && (!(value&0x08000000u) || (configuration&0x00900000u) || !(configuration&0x00200000u)))
-            throw std::runtime_error("Unsupported BDEC mode (requires MPEG2 intra, IVF1, normal scan)");
-        const uint32_t options=opcode==0?0x7fu:opcode==2?0x0e1f003fu:opcode==3?0x0400003fu:opcode==4?0x3fu:opcode==5?0x0800003fu:opcode==9?0x01ff01ffu:0u;
+            throw std::runtime_error("Unsupported BDEC mode (requires MPEG2 intra, IVF1, normal scan): value="+
+                                     std::to_string(value)+" CTRL="+std::to_string(read(Control))+
+                                     " PCT="+std::to_string((configuration>>24)&7u));
+        if (opcode==7 && (value&0x08000000u))
+            throw std::runtime_error("Unsupported CSC RGB16 output: value="+std::to_string(value));
+        const uint32_t options=opcode==0?0x7fu:opcode==2?0x0e1f003fu:opcode==3?0x0c00003fu:opcode==4?0x3fu:opcode==5?0x0800003fu:opcode==7?0x040007ffu:opcode==9?0x01ff01ffu:0u;
         if (value&~(0xf0000000u|options)) throw std::runtime_error("Unsupported IPU command option bits");
         if (busy && opcode!=0) throw std::runtime_error("IPU command replaced an unfinished operation");
         command=value; tablePosition=0; vlcDecoded=errorCode=startCode=false;
@@ -247,6 +290,10 @@ public:
             blockNumber=coefficientIndex=outputPosition=0; blockStage=BlockStage::Dc;
             if (value&0x04000000u) predictors.fill(128<<((configuration>>16)&3));
             top=0; topBusy=true;
+        }
+        if (opcode==7) {
+            if (outputSize) throw std::runtime_error("CSC replaced undrained output");
+            cscRemaining=value&0x7ffu; cscConverted=false; outputPosition=0;
         }
         if (opcode==0) {
             fifoHead=fifoCount=windowHead=buffered=0; bitPosition=value&0x7f;
