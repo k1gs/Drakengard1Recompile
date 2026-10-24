@@ -10,6 +10,7 @@
 // Wire order: Select,L3,R3,Start,Up,Right,Down,Left,L2,R2,L1,R1,Triangle,Circle,Cross,Square.
 struct VirtualPadInput {
     bool connected{};
+    bool cancelPending{}; // Host focus loss cancels an unreported tap latch.
     uint16_t buttons{0xffff}; // Active low, sampled from the host input producer.
     std::array<uint8_t,4> axes{0x7f,0x7f,0x7f,0x7f}; // RX,RY,LX,LY.
     std::array<uint8_t,12> pressure{};

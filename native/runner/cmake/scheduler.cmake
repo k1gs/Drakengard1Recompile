@@ -15,6 +15,8 @@ set(scheduler_run_entry "    m_running.store(true, std::memory_order_release);")
 replace_scheduler("${scheduler_run_entry}" "${scheduler_run_entry}\n    EeDeviceSafePoint devices;")
 replace_scheduler("        processPendingEvents();"
     "        devices.advance(*this,m_runtime,m_eeCycle,(m_enabledIntcMask & 1u)!=0,thread(kMainThreadId) ? &thread(kMainThreadId)->context : nullptr);\n        processPendingEvents();")
+replace_scheduler("            function(m_rdram, &context, &m_runtime);"
+    "            const uint32_t entryPc = context.pc;\n            const uint32_t entryRa = getRegU32(&context, 31);\n            const uint32_t entrySp = getRegU32(&context, 29);\n            function(m_rdram, &context, &m_runtime);\n            drakengard::diagnoseEeTransfer(\"scheduler\", entryPc, entryPc, entryRa, entrySp, m_rdram, context);")
 replace_scheduler("    handlers.emplace(id,"
     "    logEeIrqRegistration(dmac,cause,handler,argument,gp);\n    handlers.emplace(id,")
 replace_scheduler("    case EeEventType::VBlankStart:\n        ++m_vsyncTick;"
@@ -25,7 +27,7 @@ replace_scheduler("    std::sort(matching.begin(), matching.end(),"
     "    logEeIrqDelivery(dmac,cause,matching.size());\n    std::sort(matching.begin(), matching.end(),")
 set(scheduler_file "${CMAKE_BINARY_DIR}/private_cooperative_Scheduler.cpp")
 file(CONFIGURE OUTPUT "${scheduler_file}"
-    CONTENT "#include \"ee_device_safe_point.h\"\n${scheduler_source}" @ONLY)
+    CONTENT "#include \"ee_device_safe_point.h\"\n#include \"ee_transfer_diagnostic.h\"\n${scheduler_source}" @ONLY)
 get_target_property(runtime_sources ps2_runtime SOURCES)
 list(FILTER runtime_sources EXCLUDE REGEX "/EeScheduler[.]cpp$")
 set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")

@@ -45,6 +45,7 @@ class BootstrapSession {
 public:
     SifRegisters sif;
     void enableVirtualPad() { sio2.enableVirtualPad(); dma.enableSio2(sio2Dma); }
+    void configureRuntimeBudget(uint32_t limit) { state.budget.configureRuntimeLimit(limit); }
     void publishPadInput(const VirtualPadInput& input) { sio2.publishInput(input); }
     void videoEvent(bool start) {
         if (!state.budget.inRuntime()) return;

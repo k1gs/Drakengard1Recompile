@@ -212,7 +212,7 @@ public:
         if (timers) memory.setInterruptStatus(memory.interruptStatus() | timers->advance(1));
         if (dma) dma->pumpSpu(memory);
         if (dma) dma->pumpSio2(memory);
-        if (voices && timers) voices->advanceTo(timers->cycles());
+        if (voices && timers) voices->advanceTo(timers->cycles(),reverb);
         if (reverb && voices) reverb->advanceSilentInputs(voices->sampleCount());
     }
 };

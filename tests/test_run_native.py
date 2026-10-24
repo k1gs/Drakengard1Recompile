@@ -39,6 +39,26 @@ class NativeLaunchGuards(unittest.TestCase):
     def test_virtual_pad_requires_iop_video_events(self):
         self.refuses_before_intake(["--input-complete", "--iop-bootstrap", "--ee-firmware-entry", "--virtual-pad"])
 
+    def test_nondefault_runtime_budget_requires_entry(self):
+        for preset in ("512", "1024"):
+            with self.subTest(preset=preset):
+                self.refuses_before_intake(["--input-complete", "--iop-runtime-millions", preset])
+
+    def test_write_watch_requires_firmware_entry(self):
+        self.refuses_before_intake(["--input-complete", "--ee-write-watch", "0x11fe70"])
+
+    def test_write_watch_address_is_aligned_and_bounded(self):
+        for address in ("0x11fe71", str(32 * 1024 * 1024 - 7), str(32 * 1024 * 1024)):
+            with self.subTest(address=address):
+                self.refuses_before_intake(["--input-complete", "--iop-bootstrap", "--ee-firmware-entry",
+                                            "--ee-write-watch", address])
+
+    def test_write_watch_arm_value_requires_watch_and_is_32_bit(self):
+        self.refuses_before_intake(["--input-complete", "--iop-bootstrap", "--ee-firmware-entry",
+                                    "--ee-write-watch-arm-value", "1"])
+        self.refuses_before_intake(["--input-complete", "--iop-bootstrap", "--ee-firmware-entry",
+                                    "--ee-write-watch", "0x11fe70", "--ee-write-watch-arm-value", "0x100000000"])
+
 
 if __name__ == "__main__":
     unittest.main()

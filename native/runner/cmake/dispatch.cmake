@@ -33,9 +33,15 @@ if(runtime_fatal_devices STREQUAL runtime_reset)
     message(FATAL_ERROR "Pinned runtime memory exception contract changed")
 endif()
 include("${REPO_ROOT}/native/runner/cmake/thread_failure.cmake")
+string(REPLACE "    const uint32_t entryPc = ctx->pc;\n    targetFn(rdram, ctx, this);"
+    "    const uint32_t entryPc = ctx->pc;\n    const uint32_t entryRa = getRegU32(ctx, 31);\n    const uint32_t entrySp = getRegU32(ctx, 29);\n    targetFn(rdram, ctx, this);\n    drakengard::diagnoseEeTransfer(\"dispatch\", sourcePc, entryPc, entryRa, entrySp, rdram, *ctx);"
+    runtime_diagnostic "${runtime_fatal_devices}")
+if(runtime_diagnostic STREQUAL runtime_fatal_devices)
+    message(FATAL_ERROR "Pinned guest dispatch target invocation changed")
+endif()
 set(runtime_file "${CMAKE_BINARY_DIR}/private_extended_Runtime.cpp")
 file(CONFIGURE OUTPUT "${runtime_file}"
-    CONTENT "#include <exception>\n#include \"kernel_functions.h\"\n#include \"firmware_functions.h\"\n#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"sif_transport.h\"\n${runtime_fatal_devices}" @ONLY)
+    CONTENT "#include <exception>\n#include \"kernel_functions.h\"\n#include \"firmware_functions.h\"\n#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"sif_transport.h\"\n#include \"ee_transfer_diagnostic.h\"\n${runtime_diagnostic}" @ONLY)
 set_source_files_properties("${runtime_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
 get_target_property(runtime_sources ps2_runtime SOURCES)

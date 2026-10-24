@@ -162,7 +162,7 @@ inline void silentSpuVoices() {
         if (voices.read(0x1f90000a))
             throw std::runtime_error("Zero-loop key-off failed to release its envelope");
     }
-    // The bounded domain remains fail-closed for changed RAM and noise.
+    // The domain remains fail-closed for unsupported header mutations and noise.
     {
         IopMemory memory; SpuRamWritePort ram; ram.enable();
         SpuIdleVoices voices; voices.enable(0,&ram);
@@ -171,25 +171,25 @@ inline void silentSpuVoices() {
         store(voices,memory,0x1f9001a0,1);
         voices.advanceTo(768);
         store(ram,memory,0x1f9001a8,0);
-        store(ram,memory,0x1f9001aa,0x2801);
-        store(ram,memory,0x1f9001ac,1);
+        store(ram,memory,0x1f9001aa,0x2800);
+        store(ram,memory,0x1f9001ac,0x0800);
         bool refused=false;
         try { voices.advanceTo(768*2); } catch (const std::runtime_error&) { refused=true; }
-        if (!refused) throw std::runtime_error("Mutated zero stream was not rejected");
+        if (!refused) throw std::runtime_error("Reserved ADPCM flags in mutated RAM were not rejected");
     }
     {
         IopMemory memory; SpuRamWritePort ram; ram.enable();
         SpuIdleVoices voices; voices.enable(0,&ram);
         ramBlock(ram,memory,0,0x2800,0);
         ramBlock(ram,memory,0,0x2808,0);
-        store(ram,memory,0x1f9001aa,0x2809);
-        store(ram,memory,0x1f9001ac,1);
+        store(ram,memory,0x1f9001aa,0x2808);
+        store(ram,memory,0x1f9001ac,0x0050);
         store(voices,memory,0x1f900004,0x1000);
         store(voices,memory,0x1f9001a0,1);
         voices.advanceTo(768*13);
         bool refused=false;
         try { voices.advanceTo(768*14); } catch (const std::runtime_error&) { refused=true; }
-        if (!refused) throw std::runtime_error("Nonzero next zero block was not rejected");
+        if (!refused) throw std::runtime_error("Unsupported next-block predictor was not rejected");
     }
     {
         IopMemory memory; SpuRamWritePort ram; ram.enable();

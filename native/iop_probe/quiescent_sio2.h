@@ -20,7 +20,11 @@ class QuiescentSio2 {
     std::deque<uint8_t> rx;
     Dualshock2 pad;
     VirtualPadInput input;
+    uint16_t pendingButtons{}, previousReport{0xffff};
+    std::array<uint8_t,12> pendingPressure{};
+    std::array<bool,12> pendingPressureValid{};
     uint64_t totalPackets{};
+    static constexpr std::array<unsigned,12> pressureButtonBits{5,7,4,6,12,13,14,15,10,11,8,9};
     static bool command(uint32_t address) {
         return address>=0x1f808200 && address<=0x1f80823c && !(address&3);
     }
@@ -32,7 +36,26 @@ public:
         if (virtualPad) throw std::runtime_error("Virtual pad already enabled");
         virtualPad=true;
     }
-    void publishInput(const VirtualPadInput& sample) { input=sample; }
+    void publishInput(const VirtualPadInput& sample) {
+        // Preserve real host press edges until one actual pad report samples
+        // them. UI frames and guest serial polls run at different rates.
+        if (sample.cancelPending) {
+            pendingButtons=0;
+            pendingPressureValid.fill(false);
+        } else if (sample.connected) {
+            const uint16_t pressed=uint16_t(input.buttons&~sample.buttons);
+            pendingButtons|=pressed;
+            for (unsigned i=0;i<pendingPressure.size();++i)
+                if (pressed&(uint16_t(1)<<pressureButtonBits[i])) {
+                    pendingPressure[i]=sample.pressure[i];
+                    pendingPressureValid[i]=true;
+                }
+        } else {
+            pendingButtons=0;
+            pendingPressureValid.fill(false);
+        }
+        input=sample;
+    }
     bool takeInterruptEdge() { const bool value=interruptEdge; interruptEdge=false; return value; }
     void fifoWrite(uint8_t value) {
         if (!virtualPad || !configured || packetIndex>=commands.size())
@@ -52,7 +75,20 @@ public:
             ++packetIndex; ++packetCount; tx.clear(); return;
         }
         auto sample=input; if (port) sample.connected=false;
+        if (!port) {
+            sample.buttons&=uint16_t(~pendingButtons);
+            for (unsigned i=0;i<sample.pressure.size();++i)
+                if (pendingPressureValid[i]) sample.pressure[i]=pendingPressure[i];
+        }
         const auto reply=pad.exchange(tx,sample);
+        if (!port && tx.size()>=5 && tx[1]==0x42 && reply[1]!=0xf3 && sample.connected) {
+            pendingButtons=0;
+            pendingPressureValid.fill(false);
+            if (sample.buttons!=previousReport) {
+                std::cerr << "[sio2-pad-input-report] buttons=0x" << std::hex << sample.buttons << std::dec << '\n';
+                previousReport=sample.buttons;
+            }
+        }
         if (rx.size()+reply.size()>1024) throw std::runtime_error("SIO2 RX capacity exceeded");
         rx.insert(rx.end(),reply.begin(),reply.end());
         ++packetCount;

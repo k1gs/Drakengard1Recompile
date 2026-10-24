@@ -1074,3 +1074,43 @@ device work; no sample was discarded or completion invented. Main menu, audible
 output, gameplay, saves and recovery remain unverified. The user requested a local
 checkpoint commit without a push. See [the handoff](HANDOFF_2026-10-24.md) for
 commands, evidence boundaries and the next experiment.
+
+### Nonzero ADPCM and real input reports (2026-10-24, local work)
+
+The voice model now decodes signed low-nibble-first ADPCM into a block latch and
+a 32-sample FIFO. It retains predictor history across blocks, saturates PCM,
+advances fixed-point pitch, and applies four-tap Gaussian interpolation before
+ADSR. Existing NAX, LSA, loop, ENDX and key-off checks remain in place. A write to
+already fetched sample RAM does not rewrite the current block/FIFO; the next
+block load reads the actual current RAM. Unsupported predictors, reserved flags,
+noise and volume sweeps remain explicit refusals.
+
+The interpolation coefficients are generated analytically and checked against all
+1024 numeric coefficients in the pinned
+[SPU interpolation reference](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SPU2/interpolate_table.h).
+The decoder/state semantics were checked against the pinned
+[SPU mixer](https://github.com/PCSX2/pcsx2/blob/v2.8.2/pcsx2/SPU2/Mixer.cpp).
+No upstream implementation or coefficient table is vendored.
+
+Active effects still require verified zero routed input and workspace. Nonzero
+wet PCM is rejected. Nonzero input while FX is off marks unmodeled filter history,
+so re-enabling FX cannot silently assume that history is empty. Potential nonzero
+core-to-core external wet mixing also remains unsupported. Decoder tests and PCM
+traces do not establish audible host output.
+
+Native host taps are retained until one real SIO2 poll report samples them. Pressure
+comes from the actual host snapshot; losing focus cancels pending taps without
+disconnecting the virtual device. A Windows arrow-state fallback handles host arrow
+events that did not reach raylib in the controlled experiment. There are no guest
+RAM input patches or ready-flag substitutions.
+
+Native195 delivered actual Left and Cross reports, decoded nonzero PCM on core 1
+voice 23 and left the no-card dialog. Its final GS capture shows Square Enix.
+Native196 repeated the changed path with earlier input and its final GS capture
+shows Cavia. Both ended at the finite IOP instruction budget without a supervisor
+timeout. These logos are not a verified main menu or gameplay result.
+
+The launcher now offers `--iop-runtime-millions 256|512|1024`; the default remains
+256. Larger diagnostic presets require firmware entry, are selected once before
+guest reboot, and cannot be renewed by device polling or a second BOOTEND. Initial
+boot and reboot allowances stay unchanged; the supervisor timeout is separate.

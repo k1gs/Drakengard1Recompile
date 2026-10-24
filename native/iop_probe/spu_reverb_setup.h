@@ -2,6 +2,7 @@
 #include <array>
 #include <cstdint>
 #include <stdexcept>
+#include <string>
 #include "spu_ram_write_port.h"
 
 // FX register state and a checked zero-input/workspace invariant. Address pairs
@@ -16,6 +17,7 @@ class SpuReverbSetup {
     bool enabled{};
     const SpuRamWritePort* ram{};
     std::array<bool,2> active{};
+    std::array<bool,2> unmodeledInputHistory{};
     uint64_t samples{};
     static int index(uint32_t address) {
         if (address&1) return -1;
@@ -42,6 +44,7 @@ public:
     }
     bool supportsZeroInput(unsigned index) const {
         if (!ram) return false;
+        if (unmodeledInputHistory.at(index)) return false;
         const auto& fields=cores.at(index).offsets;
         const uint32_t start=(uint32_t(fields[0])<<16)|fields[1];
         const uint32_t end=(uint32_t(fields[46])<<16)|0xffff;
@@ -52,16 +55,35 @@ public:
             throw std::runtime_error("SPU FX requires a zero workspace and verified zero inputs");
         active.at(core)=value;
     }
-    // With zero input, delay RAM and filter history, every multiply/add and RAM
+    // With verified zero input, delay RAM and filter history, every multiply/add and RAM
     // write of the reference reverb remains zero for any signed coefficients.
     // The address phase follows the sample counter, including while FX is off.
-    // Call only after the zero-sample voice decoder; active audio/DMA is excluded.
+    // The voice owner must validate routed PCM with observeInput for each frame.
     void advanceSilentInputs(uint64_t sampleCount) {
         if (sampleCount==samples) return;
         if (sampleCount<samples) throw std::runtime_error("SPU FX sample clock moved backwards");
         for (unsigned c=0;c<2;++c) if (active[c] && !supportsZeroInput(c))
             throw std::runtime_error("SPU FX workspace left the zero-input subset");
         samples=sampleCount;
+    }
+    // Observe the actual PCM routed into one core's FX path.  The current
+    // reverb model is deliberately zero-input-only, so active FX must reject
+    // nonzero PCM instead of silently treating it as zero.
+    void observeInput(unsigned core,int32_t left,int32_t right) {
+        if (core>=active.size()) throw std::out_of_range("SPU FX core index out of range");
+        if (!active[core]) {
+            // FX-off output is zero, but a nonzero downsample history cannot
+            // be declared empty if effects are subsequently enabled.
+            if (left || right) unmodeledInputHistory[core]=true;
+            return;
+        }
+        if (!supportsZeroInput(core))
+            throw std::runtime_error("SPU FX zero-input workspace invalid: core="+std::to_string(core));
+        if (left!=0 || right!=0) {
+            throw std::runtime_error("SPU FX zero-input guard rejected routed PCM: core="+
+                                     std::to_string(core)+" left="+std::to_string(left)+
+                                     " right="+std::to_string(right));
+        }
     }
     bool allows(uint32_t address,uint32_t opcode,uint32_t=0) const {
         return enabled && index(address)>=0 && (opcode==0x21 || opcode==0x25 || opcode==0x29);

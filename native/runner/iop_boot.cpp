@@ -6,6 +6,9 @@
 #include <filesystem>
 #include <iterator>
 #include <ctime>
+#include <charconv>
+#include <cstdlib>
+#include <string_view>
 
 namespace drakengard {
 namespace {
@@ -59,6 +62,18 @@ void IopBoot::enableEntryDevices() {
             (status.type() != std::filesystem::file_type::not_found))
             throw StrictDeviceError("Reference absent-ROM1 profile requires both ROM1 companions to be absent");
     }
+    uint32_t runtimeLimit = IopExecutionBudget::RuntimeLimit;
+    if (const char* value = std::getenv("DRAKENGARD_IOP_RUNTIME_BUDGET")) {
+        uint32_t millions{};
+        const std::string_view text(value);
+        const auto parsed = std::from_chars(text.data(), text.data() + text.size(), millions);
+        if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() ||
+            (millions != 256 && millions != 512 && millions != 1024))
+            throw StrictDeviceError("Invalid DRAKENGARD_IOP_RUNTIME_BUDGET preset");
+        runtimeLimit = millions * 1000000u;
+    }
+    impl->session->configureRuntimeBudget(runtimeLimit);
+    std::cerr << "[iop-runtime-budget] instructions=" << runtimeLimit << "; fixed, never renewed by device polls\n";
     impl->session->enableEntryDevices();
     std::cerr << "[cooperative-rom1] verified absent companion profile; 4 MiB zero-backed read-only aperture\n";
 }

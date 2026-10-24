@@ -104,4 +104,57 @@ void checkVirtualPad() {
     for (uint8_t byte:{0x81,0x28,0}) sio.fifoWrite(byte);
     expect(sio.read(0x1f80826c)==0x1d100 && sio.availableBytes()==3);
     for (unsigned i=0;i<3;++i) expect(sio.fifoRead()==0xff);
+
+    QuiescentSio2 edges; Registers edgeRegisters; edges.enable(); edges.enableVirtualPad();
+    const auto edgeStore=[&](uint32_t address,uint32_t value) {
+        edgeRegisters.write32(address,value); edges.afterWrite(edgeRegisters,address);
+    };
+    edgeStore(0x1f808268,0x3bc);
+    VirtualPadInput released; released.connected=true; edges.publishInput(released);
+    auto pressed=released; pressed.buttons=0xff7f;
+    edges.publishInput(pressed); edges.publishInput(released); // Real tap between serial polls.
+    const auto readReport=[&] {
+        edgeStore(0x1f808200,0x140540);
+        for (auto byte:poll) edges.fifoWrite(byte);
+        std::array<uint8_t,5> result{};
+        for (auto& byte:result) byte=edges.fifoRead();
+        return result;
+    };
+    expect(readReport()==std::array<uint8_t,5>{0xff,0x41,0x5a,0x7f,0xff});
+    expect(readReport()==std::array<uint8_t,5>{0xff,0x41,0x5a,0xff,0xff});
+    edges.publishInput(pressed); released.connected=false; edges.publishInput(released);
+    released.connected=true; edges.publishInput(released);
+    expect(readReport()==std::array<uint8_t,5>{0xff,0x41,0x5a,0xff,0xff});
+
+    // Negotiate pressure mode (ID 0x79) through the FIFO, then release
+    // a short tap before the next report. The report must retain the pressure
+    // byte from the actual press snapshot, not fabricate 255.
+    edgeStore(0x1f808200,0x140540);
+    for (auto byte:std::array<uint8_t,5>{1,0x43,0,1,0}) edges.fifoWrite(byte);
+    for (unsigned i=0;i<5;++i) edges.fifoRead();
+    edgeStore(0x1f808200,0x180600);
+    for (auto byte:std::array<uint8_t,6>{1,0x4f,0,0xff,0xff,3}) edges.fifoWrite(byte);
+    for (unsigned i=0;i<6;++i) edges.fifoRead();
+    edgeStore(0x1f808200,0x140540);
+    for (auto byte:std::array<uint8_t,5>{1,0x43,0,0,0}) edges.fifoWrite(byte);
+    for (unsigned i=0;i<5;++i) edges.fifoRead();
+    auto pressurePressed=released; pressurePressed.buttons=uint16_t(~(1u<<14));
+    pressurePressed.pressure[6]=200;
+    edges.publishInput(pressurePressed); edges.publishInput(released);
+    edgeStore(0x1f808200,0x541500);
+    std::array<uint8_t,21> pressurePoll{}; pressurePoll[0]=1; pressurePoll[1]=0x42;
+    for (auto byte:pressurePoll) edges.fifoWrite(byte);
+    std::array<uint8_t,21> pressureReply{};
+    for (auto& byte:pressureReply) byte=edges.fifoRead();
+    expect(pressureReply[1]==0x79 && pressureReply[9+6]==200);
+    edgeStore(0x1f808200,0x541500);
+    for (auto byte:pressurePoll) edges.fifoWrite(byte);
+    for (auto& byte:pressureReply) byte=edges.fifoRead();
+    expect(pressureReply[9+6]==0);
+
+    // Focus cancellation clears the latch while retaining the connected pad.
+    auto focusPressed= released; focusPressed.buttons=uint16_t(~(1u<<14)); focusPressed.pressure[6]=177;
+    edges.publishInput(focusPressed);
+    auto focusLost=released; focusLost.cancelPending=true; edges.publishInput(focusLost);
+    expect(readReport()==std::array<uint8_t,5>{0xff,0x79,0x5a,0xff,0xff});
 }

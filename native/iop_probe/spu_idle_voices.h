@@ -6,9 +6,12 @@
 #include <stdexcept>
 #include "spu_envelope.h"
 #include "spu_ram_write_port.h"
+#include "spu_adpcm.h"
+#include "spu_gaussian.h"
+#include "spu_reverb_setup.h"
 
-// Voice setup plus a deliberately bounded zero-sample ADPCM stream traversal.
-// Other sample data, noise and sweeps fail closed. This produces no host audio claim.
+// Functional ADPCM voice state. Noise and volume sweeps remain fail-closed.
+// Decoded PCM is observable here; no host audio output is established.
 class SpuIdleVoices {
     struct Voice {
         std::array<uint16_t,6> parameters{0,0,0x3fff,0,0,0};
@@ -16,6 +19,11 @@ class SpuIdleVoices {
         bool loopMode{};
         SpuEnvelope envelope;
         uint32_t pitchFraction{}, decoded{}, consumed{};
+        SpuAdpcmDecoder decoder;
+        SpuAdpcmDecoder::Samples blockPcm{};
+        std::array<int16_t,32> fifo{};
+        bool blockLoaded{};
+        int32_t output{}, interpolated{};
         bool started{};
     };
     struct Core {
@@ -29,13 +37,13 @@ class SpuIdleVoices {
     uint32_t fraction{}, stores{};
     bool enabled{};
     const SpuRamWritePort* ram{};
-    bool zeroBlock(uint32_t address,uint8_t* flags=nullptr) const {
+    uint64_t nonzeroSamples{};
+    bool validBlock(uint32_t address,uint8_t* flags=nullptr) const {
         if (!ram) return false;
         const auto base=address&0xffff8;
         const auto header=ram->peek(base);
         const auto blockFlags=uint8_t(header>>8);
         if ((blockFlags&~uint8_t(7)) || ((header>>4)&15)>4) return false;
-        for (unsigned i=1;i<8;++i) if (ram->peek((base+i)&0xfffff)) return false;
         if (flags) *flags=blockFlags;
         return true;
     }
@@ -76,7 +84,7 @@ public:
                 return false; // Noise needs a real generator.
             }
             for (unsigned v=0;v<24;++v)
-                if ((mask&(1u<<v)) && !zeroBlock(core.voices[v].addresses[0])) {
+                if ((mask&(1u<<v)) && !validBlock(core.voices[v].addresses[0])) {
                     const auto start=core.voices[v].addresses[0];
                     std::cerr << "[spu-unsupported-key-on] core=" << ((address>>10)&1) << " voice=" << v
                               << " start=0x" << std::hex << start;
@@ -109,7 +117,9 @@ public:
     uint64_t sampleCount() const { return samples; }
     uint64_t stoppedReleaseCount() const { return released; }
     uint32_t retiredStores() const { return stores; }
-    void advanceTo(uint64_t modeledCycle) {
+    int32_t pcm(unsigned core,unsigned voice) const { return cores.at(core).voices.at(voice).interpolated; }
+    uint64_t nonzeroSampleCount() const { return nonzeroSamples; }
+    void advanceTo(uint64_t modeledCycle,SpuReverbSetup* effects=nullptr) {
         if (!enabled) return;
         if (modeledCycle<cycle) throw std::runtime_error("SPU sample clock moved backwards");
         const uint64_t elapsed=modeledCycle-cycle+fraction;
@@ -117,22 +127,26 @@ public:
         const uint64_t ticks=elapsed/768;
         if (!ticks) return;
         samples+=ticks;
+        static const auto gaussian=spuGaussianTable();
         for (uint64_t tick=0;tick<ticks;++tick) for (auto& core:cores) {
+            std::array<int32_t,2> wet{}, dry{};
             released+=std::popcount(core.keyOff&0xffffffu);
             core.endx&=~core.keyOn;
             for (unsigned n=0;n<24;++n) {
                 auto& voice=core.voices[n]; const auto bit=1u<<n;
                 if (core.keyOff&bit) voice.envelope.release();
                 if (core.keyOn&bit) {
-                    if ((core.masks[1]&bit) || !zeroBlock(voice.addresses[0]))
+                    if ((core.masks[1]&bit) || !validBlock(voice.addresses[0]))
                         throw std::runtime_error("SPU key-on sample changed before retirement boundary");
                     voice.envelope.attack(); voice.loopMode=false;
                     voice.addresses[2]=voice.addresses[0]|1;
                     voice.pitchFraction=voice.decoded=voice.consumed=0; voice.started=true;
+                    voice.decoder.reset(); voice.fifo.fill(0); voice.blockLoaded=false;
+                    voice.output=voice.interpolated=0;
                 }
                 if (!voice.started) continue;
                 uint8_t flags{};
-                if ((core.masks[1]&bit) || !zeroBlock(voice.addresses[2],&flags)) {
+                if ((core.masks[1]&bit) || !validBlock(voice.addresses[2],&flags)) {
                     std::cerr << "[spu-unsupported-stream] core=" << (&core-cores.data()) << " voice=" << n
                               << " phase=" << voice.envelope.phase << " env=" << voice.envelope.value
                               << " pitch=0x" << std::hex << voice.parameters[2]
@@ -141,15 +155,28 @@ public:
                     if (ram) for (unsigned word=0;word<8;++word)
                         std::cerr << " word" << word << "=0x" << ram->peek(((voice.addresses[2]&0xffff8)+word)&0xfffff);
                     std::cerr << std::dec << '\n';
-                    throw std::runtime_error("SPU voice left the verified zero-sample stream subset");
+                    throw std::runtime_error("Unsupported SPU ADPCM stream header/noise");
                 }
                 const auto block=voice.addresses[2]&0xffff8;
                 if ((flags&4) && !voice.loopMode)
                     voice.addresses[1]=block;
                 if (int32_t(voice.decoded-voice.consumed)<=12) {
+                    if (voice.envelope.phase) {
+                        if (!voice.blockLoaded) {
+                            std::array<uint16_t,8> words{};
+                            for (unsigned i=0;i<8;++i) words[i]=ram->peek((block+i)&0xfffff);
+                            const auto decoded=voice.decoder.decode(words);
+                            if (!decoded) throw std::runtime_error("Unsupported SPU ADPCM block");
+                            voice.blockPcm=*decoded; voice.blockLoaded=true;
+                        }
+                        const unsigned offset=((voice.addresses[2]&7)-1)*4;
+                        for (unsigned i=0;i<4;++i)
+                            voice.fifo[(voice.decoded+i)%32]=voice.blockPcm.at(offset+i);
+                    }
                     voice.decoded+=4;
                     voice.addresses[2]=(voice.addresses[2]+1)&0xfffff;
                     if (!(voice.addresses[2]&7)) {
+                        voice.blockLoaded=false;
                         if (flags&1) {
                             core.endx|=bit;
                             voice.addresses[2]=(voice.addresses[1]+1)&0xfffff;
@@ -162,10 +189,40 @@ public:
                         }
                     }
                 }
+                voice.interpolated=0;
+                if (voice.envelope.phase) {
+                    const auto& coefficients=gaussian[(voice.pitchFraction&0xff0)>>4];
+                    for (unsigned i=0;i<4;++i)
+                        voice.interpolated+=(int32_t(coefficients[i])*voice.fifo[(voice.consumed+i)%32])>>15;
+                }
                 voice.envelope.tick(voice.parameters[3],voice.parameters[4]);
-                voice.pitchFraction+=std::min(voice.parameters[2],uint16_t(0x3fff));
+                voice.output=(voice.interpolated*voice.envelope.value)>>15;
+                if (voice.output && ++nonzeroSamples<=8)
+                    std::cerr << "[spu-adpcm-pcm] core=" << (&core-cores.data()) << " voice=" << n
+                              << " pcm=" << voice.interpolated << " envelope=" << voice.envelope.value
+                              << " output=" << voice.output << '\n';
+                for (unsigned side=0;side<2;++side) {
+                    const auto value=(voice.output*int32_t(int16_t(directGain(voice.parameters[side]))))>>15;
+                    if (core.masks[3+side*2]&bit) wet[side]+=value;
+                    if (core.masks[2+side*2]&bit) dry[side]+=value;
+                }
+                int32_t pitch=std::min(voice.parameters[2],uint16_t(0x3fff));
+                if (n && (core.masks[0]&bit))
+                    pitch=std::clamp((pitch*(32768+core.voices[n-1].output))>>15,0,0x3fff);
+                voice.pitchFraction+=pitch;
                 voice.consumed+=voice.pitchFraction>>12; voice.pitchFraction&=0xfff;
             }
+            // Core-to-core output/master volume and external mixing are not yet
+            // modeled. Never assert zero wet input when that path could carry
+            // a real nonzero dry signal into core1 (including FX-off history).
+            if (effects && &core==&cores[0])
+                for (unsigned side=0;side<2;++side)
+                    if (dry[side] && (core.mmix&(side?0x400:0x800)) &&
+                        (cores[1].mmix&(side?1:2)))
+                        throw std::runtime_error("SPU nonzero core0 external wet mixing is unsupported");
+            if (effects) effects->observeInput(unsigned(&core-cores.data()),
+                (core.mmix&0x200)?std::clamp(wet[0],-32768,32767):0,
+                (core.mmix&0x100)?std::clamp(wet[1],-32768,32767):0);
             core.keyOn=core.keyOff=0;
         }
     }
@@ -194,7 +251,7 @@ public:
             auto& target=voice.addresses[field/2];
             target=(field&1) ? (target&0xf0000)|(access.value&0xfff8) : (uint32_t(access.value&15)<<16)|(target&0xfff8);
             if (field/2==1) voice.loopMode=true;
-            if (field/2==2) target|=1;
+            if (field/2==2) { target|=1; voice.blockLoaded=false; }
         } else if (reg==0x340) core.endx&=0xff0000;
         else if (reg==0x342) core.endx&=0xffff;
         ++stores;

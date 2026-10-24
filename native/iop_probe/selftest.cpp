@@ -5,6 +5,8 @@
 #include "spu_volume_tests.h"
 #include "spu_control_tests.h"
 #include "spu_idle_voice_tests.h"
+#include "spu_adpcm_tests.h"
+#include "spu_wet_tests.h"
 #include "spu_setup_transfer_tests.h"
 #include "spu_dma_tests.h"
 #include "cooperative_clock.h"
@@ -60,6 +62,24 @@ int main() {
         if (runBudget.deadline()!=1000+IopExecutionBudget::RuntimeLimit || !runBudget.inRuntime())
             throw std::runtime_error("Post-boot budget lost its finite monotonic allowance");
         rejects([&] { runBudget.retiredRebootCompletion(2000); },"single completed guest reboot");
+        rejects([&] { runBudget.configureRuntimeLimit(512000000); },"before reboot entry");
+        IopExecutionBudget extendedBudget;
+        extendedBudget.configureRuntimeLimit(512000000);
+        rejects([&] { extendedBudget.configureRuntimeLimit(1024000000); },"one configuration");
+        extendedBudget.enableGuestReboot();
+        extendedBudget.retiredRebootEntry(100);
+        extendedBudget.retiredRebootCompletion(1000);
+        if (extendedBudget.deadline()!=512001000 || !extendedBudget.inRuntime())
+            throw std::runtime_error("Configured extended runtime budget lost its deadline");
+        rejects([&] { extendedBudget.retiredRebootCompletion(2000); },"single completed guest reboot");
+        IopExecutionBudget invalidBudget;
+        rejects([&] { invalidBudget.configureRuntimeLimit(0); },"Unsupported finite");
+        rejects([&] { invalidBudget.configureRuntimeLimit(1024000001); },"Unsupported finite");
+        invalidBudget.configureRuntimeLimit(1024000000);
+        invalidBudget.enableGuestReboot(); invalidBudget.retiredRebootEntry(100);
+        rejects([&] { invalidBudget.configureRuntimeLimit(256000000); },"before reboot entry");
+        invalidBudget.retiredRebootCompletion(1000);
+        if (invalidBudget.deadline()!=1024001000) throw std::runtime_error("Maximum finite budget overflowed");
         {
             ps2x::iop::detail::IopMemory irqMemory;
             QuietInterrupts videoIrqs; videoIrqs.reset(irqMemory);
@@ -99,6 +119,8 @@ int main() {
         iop_tests::spuQuiescentControl();
         iop_tests::stoppedSpuVoices();
         iop_tests::silentSpuVoices();
+        iop_tests::nonzeroSpuAdpcm();
+        iop_tests::nonzeroSpuWetRouting();
         iop_tests::zeroInputSpuEffects();
         iop_tests::spuSetupTransfers();
         iop_tests::plainSpuDmaWrite();

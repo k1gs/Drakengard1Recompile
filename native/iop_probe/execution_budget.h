@@ -7,14 +7,25 @@
 class IopExecutionBudget {
     uint32_t begin{}, end{PhaseLimit};
     bool rebootAllowed{}, rebootStarted{}, runtimeStarted{};
+    uint32_t runtimeLimit{RuntimeLimit};
+    bool runtimeConfigured{};
 public:
     static constexpr uint32_t PhaseLimit = 8000000;
     // Post-boot guest services now execute continuously during EE spin loops.
     // Keep a finite diagnostic run allowance; idle loops cannot renew it.
     static constexpr uint32_t RuntimeLimit = 256000000;
+    static constexpr uint32_t MaxRuntimeLimit = 1024000000;
     uint32_t deadline() const { return end; }
     bool inReboot() const { return rebootStarted && !runtimeStarted; }
     bool inRuntime() const { return runtimeStarted; }
+    void configureRuntimeLimit(uint32_t limit) {
+        if (runtimeConfigured || rebootStarted || runtimeStarted)
+            throw std::runtime_error("IOP runtime budget requires one configuration before reboot entry");
+        if (limit != RuntimeLimit && limit != 512000000 && limit != MaxRuntimeLimit)
+            throw std::runtime_error("Unsupported finite IOP runtime budget");
+        runtimeLimit = limit;
+        runtimeConfigured=true;
+    }
     void enableGuestReboot() {
         if (rebootAllowed) throw std::runtime_error("IOP reboot budget already enabled");
         rebootAllowed = true;
@@ -34,6 +45,6 @@ public:
         if (!rebootStarted || runtimeStarted || retired <= begin || retired > end)
             throw std::runtime_error("IOP runtime budget requires a single completed guest reboot");
         runtimeStarted = true;
-        end = retired + RuntimeLimit; // Three finite phases, below 272M instructions.
+        end = retired + runtimeLimit;
     }
 };
