@@ -19,9 +19,9 @@ A source-only project working toward a native PC port of **Drakengard**.
 </div>
 
 > **Research in progress. No playable build is available.**
-> The European executable has been lifted locally. Original guest code reaches
-> IOP reboot, resource loading and a recognizable native controller-warning screen.
-> A rendered menu and gameplay are still unverified.
+> The native diagnostic runner reaches the **main menu** and the New Game confirmation
+> using ordinary controller input. Starting a new game still stops before verified
+> gameplay; the latest captured post-confirmation frame is black.
 
 ## The project
 
@@ -39,9 +39,9 @@ revision or dump authenticity. Game-specific bindings require the verified ELF h
 | --- | --- | --- |
 | Input & toolchain | Read-only intake, pinned tools and local European ELF lift | Broader translation and runtime coverage |
 | EE ↔ IOP | Guest-owned reboot, two actual BOOTEND stores and SIF transfers | Broader device and service coverage |
-| Guest modules & input | Original IOP modules execute; optional VBlank experiment reaches SIO2 port setup | Command queue, FIFO, DMA and DualShock protocol |
+| Guest modules & input | Original IOP modules execute; SIO2 accepts ordinary button presses/releases and menu selections | Broader controller coverage and in-game validation |
 | Disc services | 226 CDVD transfers and 5,997,856 bytes read from the verified ISO | Validate later disc operations |
-| Graphics & gameplay | Recognizable native warning screen; duplicate scanout corrected | Investigate dim output, reach menu, then real gameplay |
+| Graphics & gameplay | Rendered title, main menu and New Game difficulty confirmation | Complete the post-confirmation transition and reach real gameplay |
 | Audio, saves & recovery | Validation matrix documented | Verify these in actual gameplay |
 
 Passing CI validates preparation tools and synthetic service contracts.
@@ -50,16 +50,17 @@ live in [IOP bootstrap notes](docs/IOP_BOOTSTRAP.md).
 
 ### Native screenshots
 
-Actual guest GS output, captured locally on Windows. These show the game's **DualShock 2
-not detected** warning, not a working menu. The images retain their original brightness;
-dim output and controller support remain unresolved.
+Actual guest GS output from the native diagnostic runner on Windows, not a host splash
+or an emulator screenshot. The current image shows the **New Game / Load Game / Options**
+menu reached in run 240 at 640×511. Pixels retain their original brightness; no game-state
+patches or menu mockups were used. This is menu evidence, not gameplay verification.
 
-**Current frame — corrected scanout**
+**Current milestone — main menu reached**
 
-![Native controller warning after correcting interlaced scanout](docs/images/native-frame-after.png)
+![Drakengard main menu rendered by the native diagnostic runner, with New Game selected](docs/images/native-frame-after.png)
 
 <details>
-<summary>Earlier frame — before the scanout correction</summary>
+<summary>Earlier milestone — controller warning with duplicated scanout</summary>
 
 ![Earlier native frame with vertically duplicated text](docs/images/native-frame-before.png)
 
@@ -105,10 +106,12 @@ failure cases before extending coverage. See the [project rules](AGENTS.md).
 ## Source-only & licensing
 
 This repository distributes original project source, synthetic tests, configuration templates
-and reviewed documentation. It includes **no game data, BIOS, original executables or generated
-game code**. Supply your own local inputs; keep them in ignored directories.
+and reviewed documentation, including two explicitly approved screenshots. It includes
+**no game inputs, BIOS, original executables or generated game code**. Supply your own
+local inputs; keep them in ignored directories.
 
 Original project code and documentation are licensed under [MIT](LICENSE). No upstream runtime
 or generated game code is vendored. Any future third-party integration needs its own license review.
+Game imagery in documentation remains the property of its respective rights holders.
 
 *Independent, unofficial research project. Not affiliated with the game's rights holders.*

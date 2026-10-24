@@ -13,7 +13,7 @@ EXTENSIONS = {"docs": {".md"}, "scripts": {".py", ".java"}, "tests": {".py"},
 # Pin exact bytes: this is not permission to publish arbitrary captures/assets.
 REVIEWED_IMAGES = {
     "docs/images/native-frame-before.png": "fe7a4867e88e943eb6d7d5c5fe482bd506d65a9af6e971072bd3379537712ef6",
-    "docs/images/native-frame-after.png": "de438372ece191621f41e875d9bb256c41cf29579e3cd7948cd4c476ae2aebfa",
+    "docs/images/native-frame-after.png": "459b40b9668f88d8d60a9b5fda96d478964605e7eb2f30515c3987d3d8716e63",
 }
 
 
