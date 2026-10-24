@@ -21,60 +21,40 @@
 Более новые результаты журнала и явные указания пользователя важнее checkpoint
 ниже. Не запускай старый номер эксперимента повторно и не перезаписывай evidence.
 
-## Актуальный checkpoint: 2026-10-24
+## Актуальный checkpoint: 2026-10-25
 
-- Входной опубликованный checkpoint —231fa5e (README с настоящим главным меню).
-  Текущий опубликованный hash определяй по Git HEAD/origin/main.
-- Сохраняются IPU I/P/B MBT/motion, toSPR chains, RGB32 CSC, ADMA/FX/stop,
-  scalar COP1 compare fix. Неподдерживаемое поведение не подменяется успехом.
-- Native240 missing scheduler target0x298154 был **обрезанным leaf map**, не
-  основанием для произвольного resume alias. У функции0x297E44 анализ кончался
-  после delay slot другого jump; обычное продолжение не было декодировано.
-- Прежний RecoverLeafFunctionFlow.java восстановил реальные инструкции до
-  exclusive0x2983E8, включая JR/stack restore. Новая карта functions-ghidra-009.csv:
-  8583 records вместо8585, два старых фрагмента объединены, +388 реальных bytes.
-  Прочие строки карты не изменились; исходный Ghidra project открывался read-only.
-- Настоящий runner теперь использует свежий lift-008. Исходные inputs,
-  upstream и прежние generated units не редактировались; новых stubs/skips нет.
-- Синтетический delay-slot-exit regression: до recovery отсутствует epilogue,
-  после — непосредственный выход, два busy iterations, pause/resume и реальные
-  эффекты branch/jump/return delay instructions дают ожидаемые регистры.
-  Это локальный Ghidra test, не полная проверка native scheduler.
-- Native242 реально прошёл старую границу и выполняет восстановленный хвост.
-  Следующая фактическая граница — ожидание toSPR DMA9 на PC0x2981E4,
-  RA0x2984FC. Native243 измерил CHCR0x101/MADR0x110049E0/QWC0x60/SADR0,
-  D_CTRL1/D_ENABLER0x1201. Source попадает в существующую VU0 data memory.
-- Native242/243:1024M/300s, watchdog timed_out=true/exit=null; IOP/SIF работают,
-  STR остаётся установленным. Финальный periodic GS16800 чёрный640x511.
-  Нет final-on-exit capture, gameplay/host audio/saves/recovery не доказаны.
-- Проверенный runner243 SHA256:
-  `2052fa9845d1996478187657580203c590b2caf29cd785495164e76432c010bf`.
-  Release/MSBuild17.11.9, Python55, bootstrap11/11, strict IOP1/1 PASS.
-- Native241 не проверил post-Yes: throwaway observer ждал отсутствующий первый
-  periodic capture600 и пропустил титул. Это не device fault; рецепт исправлен
-  в242. Первая периодическая точка может не создать файл до готовности GS.
-- `.vscode/` и `native/Splash.png` сохраняй; сплешскрин отложен. Старые
-  C0000409 и grouping key0xCD277739 не объявлены исправленными.
+- Предыдущая модель закончила scheduler298154 fix в cf3692d. Повторная сверка
+  lift008 подтверждает owning fn297E44, реальный fallthrough298154 и все12
+  resume labels в switch/dispatch table. Native241 уже занят; не повторяй его.
+- Реализован следующий подтверждённый контракт: normal DMA9 из настоящей shared
+  VU0 data RAM в SPR. DMAE/suspend, source bounds, SPR wrap, регистры/STR и cause9
+  после копирования; никаких отдельных буферов/нулей/read-side completion.
+- Native244 реально прошёл прежний wait и logged минимум16 VU0→SPR completion;
+  source/destination hashes совпадают и отличаются от нулевого payload.
+  В trace есть возврат прежнего восстановленного leaf к2983E8.
+- Bootstrap12/12 и real Release/PCH build PASS. Run244 exit5/no timeout.
+  FinalGS640x511RGB128 gray — не gameplay. Меню/Yes подтверждены реальными
+  GS-кадрами и ordinary SIO2 press/release. Host audio/saves/recovery не доказаны.
+- Новый target **0x29353C, RA0x2984EC**, owner0x29322C. Его карта заканчивается
+  ровно на missing target после alternate-entry jump-delay exit. Требуется
+  проверить реальные инструкции/epilogue и bounded recovery; alias запрещён.
+- Источник, hashes, точные ограничения и evidence pointers — в верхнем handoff.
+  .vscode/Splash остаются нетронутыми; upstream/generated/input read-only.
 
 ## Следующий эксперимент
 
-Следующий244 (проверь свободный номер): установить нормальный DMA9 контракт для
-измеренного source0x110049E0 в VU0 data RAM, QWC0x60, destination SPR0.
-Проверить admission, настоящий shared-memory producer, перенос, обновление
-MADR/QWC/SADR/STR и completion/cause9 по pinned reference. Реализовать только
-подтверждённое поведение в оригинальном адаптере; tests/build/bounded native.
-Никакого STR-clear-on-read, фиктивного IRQ, отдельной RAM или нулевых данных.
-Не заявлять, что VCALLMS после этой точки уже выполнен: native до него не дошёл.
+Следующий245 (проверь свободный номер): owning leaf0x29322C, реальный epilogue,
+read-only bounded flow recovery существующим Ghidra workflow; свежие map/lift,
+сверка checkpoint/resume dispatch, поведенческие тесты, настоящий runner и
+native245. Не угадывай конец по соседнему fragment без проверки инструкций,
+не добавляй aliases/пустой epilogue/успешные stubs. Старый lift008 не редактируй.
 
-Меню242/243: проверенный титулGS9000→Start, menu9600→Cross, NORMAL10200→Left,
-highlighted Yes10800→Cross;700ms и подтверждённый SIO2 press/release. В243 Yes
-подан около196.5s, остаётся примерно100s после него. Проверяй актуальные GS
-состояния, не нажимай вслепую по номеру кадра. Startup helper unchanged.
-
-Private evidence: work/leaf-flow-contract-243.json, work/native-run-{241,242,243}/,
-work/flow-runN-{launcher,startup}.log и menu.jsonl; Ghidra/lift logs в handoff.
-Восстановление карты и synthetic reproduction — docs/ANALYSIS_REGRESSIONS.md.
-Промпт продолжения — docs/NEXT_MODEL_PROMPT.md.
+Меню244: actual GS title9000→Start, menu9600→Cross, NORMAL10200→Left,
+highlighted Yes10800→Cross;700ms и SIO2 press/release. Проверяй изображения,
+не нажимай вслепую по номеру кадра. Private observer work/spr-vu0-menu-244.py
+сканирует доступные captures, не ждёт отсутствующий600, и принимает новый run ID.
+Его ROIs/reference images checkpoint-specific; свежий вывод не перезаписывай.
+Промпт — docs/NEXT_MODEL_PROMPT.md.
 
 ## Инструменты и границы
 
@@ -105,8 +85,8 @@ work/flow-runN-{launcher,startup}.log и menu.jsonl; Ghidra/lift logs в handoff
 
 ## Следующий ограниченный прогон
 
-На момент checkpoint следующий номер —244. Сначала проверь, что каталог
-`work/native-run-244` свободен и другой native/reference процесс не работает.
+На момент checkpoint следующий номер —245. Сначала проверь, что каталог
+`work/native-run-245` свободен и другой native/reference процесс не работает.
 Если номер уже занят, выбери следующий свободный, сохрани прежние результаты.
 
 Настоящий executable: `build/native/ps2xRuntime/Release/ps2EntryRunner.exe`.
@@ -115,13 +95,13 @@ runner, проверь exit code сборки и запиши SHA-256 прове
 
 ```powershell
 cmake --build build/native --config Release --target ps2EntryRunner --parallel 4
-python scripts/run_native.py --input-complete --run 244 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 1024
+python scripts/run_native.py --input-complete --run 245 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 1024
 ```
 
 Пока launcher работает, отдельным процессом запусти:
 
 ```powershell
-python scripts/native_start.py --run 244 --timeout 300
+python scripts/native_start.py --run 245 --timeout 300
 ```
 
 Не жди завершения launcher перед запуском controller helper. Он проходит

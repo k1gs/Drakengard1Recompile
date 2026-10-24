@@ -1,6 +1,73 @@
 # Drakengard Europe continuation handoff
 
-## Latest: truncated leaf recovered; next measured VU0-data toSPR wait
+## Latest: resume fix independently verified; VU0-data toSPR passed in native244
+
+Entry checkpoint cf3692d already fixed native240 target0x298154. This continuation
+independently compared the actual lift-008 switch and dispatch registrations:
+all12 resume labels belong to fn0x297E44, including the observed loop0x2981E4.
+0x298154 is ordinary recovered fallthrough, not a missing alias. Old before/after
+Ghidra logs contain the missing-epilogue failure and actual pause/resume/delay-slot
+PASS. Entry executable matches native243 SHA2052fa9845d1996478187657580203c590b2caf29cd785495164e76432c010bf.
+Private audit: work/leaf-resume-audit-244.json. Native241 is already occupied and
+was not repeated; new run244 also passes the old boundary and exits that leaf.
+
+Implemented normal DMA9 VU0-data→SPR in original ee_spr_vu0.h/CMake overlay.
+The upstream normal path mapped only main RAM and left the measured VU source
+pending. This adapter reads the SAME m_vu0Data used by CPU/VIF/VU execution and
+writes actual m_scratchpad. Canonical4KiB VU0 source, exact normal0x101 options,
+full bounds before writing, 16KiB SPR wrap, real MADR/QWC/SADR progression.
+DMAE/suspend gate admission; deferred normal VU requests are serviced by existing
+completion consumption, not CHCR reads. Cause9 is queued only after data copy.
+Existing main-RAM normal/fromSPR and source-chain paths remain unchanged.
+Aliases/source crossings, micro memory/VU1/interleave are unsupported; no new
+buffer, zero-data substitution, fake STR/IRQ or PC/RA patches. Current VU0 runtime
+is synchronous on the EE owner; asynchronous arbitration/hardware timing unproven.
+Contract references: pinned PCSX2v2.8.2 SPR.cpp and Dmac.cpp in work/ipu-reference-001,
+exact hashes and scope in work/spr-vu0-contract-244.json. No implementation copied.
+
+Bootstrap12/12 PASS (work/spr-vu0-bootstrap-test-244.log); real Release/PCH build
+PASS (work/spr-vu0-native-build-244.log). Initial test build missing<string> was
+corrected; failed log retained. New tests cover source producer updates, exact
+1536 bytes, guards/source preservation, SPR wrap, stopped/deferred starts, final
+VU quadword, empty transfer and once-only completion edge; bad options/mirrors/
+crossings refuse before modifying state/data. Previous Python55/strict IOP1/1
+remain prior-checkpoint results; those unrelated checks were not rerun here.
+
+Native244: SHA256 eb05a13886f851f91c04a8bf0606163d745201c414eabe8ddf5216b93d3f9666,
+1024M/300s/frame600, exit5/timed_out=false. Private observer scanned available
+captures, matched actual GS title9000/menu9600/NORMAL10200/Yes10800 and ordinary
+Start/Cross/Left/Cross700ms had SIO2 press/releases. Matched GS states were
+subsequently visually inspected. No Computer Use or OS input.
+
+At least16 actual VU0→SPR completions logged, with varying QWC/payloads. First:
+source110049E0/requestedQWC60 → MADR11004FE0, SADR600, STR cleared, D_STAT27F
+(bit9 asserted), final QWC0 from completed adapter. Source/destination FNV1a64
+both64A7DDCB9D750C25; this differs from all-zero1536-byte hash6AB05EF9AA8B9B25.
+The log's qwc field is the original request count. Subsequent fromSPR transfers
+also progressed. Trace includes caller0x2983E8 after restored leaf return.
+
+**Current blocker:** EE scheduler missing target0x29353C, RA0x2984EC,
+SP0x11D9D0, exit5/no timeout. The next owner0x29322C map ends exactly0x29353C;
+generated conditional exit293524→293538 enters another jump's delay instruction
+then falls through at the function end. Adjacent fragments2936AC..2936CC and
+2936E0..2937D0 are visible in the map. This supports another incomplete-leaf
+hypothesis, but a real epilogue/bounded recovery must be verified before export.
+Do not register arbitrary aliases or infer hardware VU success from this trace.
+Final GS640x511 is flat RGB128 gray, privately converted/visually reviewed.
+No gameplay/host-audio/saves/recovery proof; old crashes/grouping key unresolved.
+
+**Next experiment245 (verify unused):** inspect original instructions/Ghidra owner
+0x29322C and reachable epilogue, recover only verified flow using the existing
+read-only analysis regression workflow, export a fresh map/lift, compare all
+resume labels/registrations and run behavioral checks/build/bounded native245.
+Do not overwrite lift008 or original inputs/upstream. The prior synthetic
+alternate-delay-slot-exit regression remains relevant; no unverified padded span.
+Use the existing ordinary menu recipe; private observer work/spr-vu0-menu-244.py
+can be reused with a NEW run number/output after reviewing its exact GS ROIs.
+Private logs: work/spr-vu0-run244-{launcher,startup,observer}.log and menu.jsonl,
+work/native-run-244/, work/spr-vu0-contract-244.json. Captures/assets remain private.
+
+## Historical: truncated leaf recovered; measured VU0-data toSPR wait
 
 This supersedes all checkpoints below. Entry HEAD231fa5e includes the approved
 README main-menu illustration; use Git HEAD/origin/main for subsequent publication.

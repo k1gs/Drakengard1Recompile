@@ -1416,3 +1416,20 @@ ordinary menu input completes before200s, leaving roughly100s after Yes.
 Last periodic GS16800 black640x511; no final-on-exit capture or gameplay/audio/
 saves/recovery proof. Next244 establishes the real VU0-data-to-SPR transfer,
 admission and completion contract. Exact evidence/hashes are in top handoff.
+
+## Verified leaf resumes and normal VU0-data toSPR (2026-10-25)
+
+The previous missing target298154 fix is already present: owner297E44 has its
+real continuation and all12 emitted resume switch cases are registered. Native244
+passes the restored leaf and its former DMA9 wait. New original normal transfer
+reads actual shared VU0 data, checks full canonical4KiB bounds, respects DMAE/
+suspend, wraps SPR16KiB and queues cause9 after real copying/register updates.
+No duplicate VU RAM, zero samples, read-side STR clear or arbitrary resume alias.
+
+Bootstrap12/12 and native Release/PCH PASS. Native244 logs >=16 real completion
+edges with equal source/destination hashes and nonzero data; reaches a NEW missing
+scheduler target29353C/RA2984EC, exit5/no timeout. Its owning leaf29322C map ends
+at that address after another alternate delay-slot exit. Next245 verifies the
+actual epilogue and bounded analysis recovery before fresh export/lift/build/run.
+Final directGS flat gray640x511, not gameplay/audio proof. Exact private evidence
+and supported/unsupported subset boundaries are in the top continuation handoff.

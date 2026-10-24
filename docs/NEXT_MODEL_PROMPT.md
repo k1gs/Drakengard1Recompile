@@ -1,36 +1,31 @@
-# Промпт для следующей модели
+# Промпт продолжения
 
-Продолжи Drakengard 1 Recompile, PS2 Europe, в `D:\proj\drakengard 1 recompile`.
-Прочитай AGENTS.md, docs/CONTINUE.md, последние CURRENT_STATE.md и верхний
-актуальный docs/HANDOFF_2026-10-24_CONTINUATION.md. Проверь HEAD/status/процессы.
-Входной checkpoint231fa5e пройден; текущий опубликованный hash смотри в Git.
+Продолжи Drakengard 1 Recompile, PS2 Europe, в D:\proj\drakengard 1 recompile.
+Прочитай AGENTS.md, docs/CONTINUE.md, последние CURRENT_STATE.md и верхний handoff.
+Проверь Git HEAD/status/процессы. Без субагентов; сохраняй .vscode/ и native/Splash.png.
 
-Missing scheduler target0x298154 оказался обрезанным leaf map, не просто
-пропущенным alias. Existing RecoverLeafFunctionFlow восстановил реальную функцию
-0x297E44 до exclusive0x2983E8. Новая карта functions-ghidra-009.csv/fresh lift008
-подключена runner overlay; старый generated/upstream/input не редактировались.
-Локальный synthetic delay-slot-exit до recovery падает на missing epilogue;
-после выполняет exit/busy-loop/pause-resume с правильными delay effects.
-Python55, bootstrap11/11, strict IOP1/1, полный настоящий runner build PASS.
+Старый missing scheduler target298154 уже исправлен cf3692d и повторно проверен:
+owner297E44 восстановлен, все12 resume labels зарегистрированы. Следующий normal
+VU0-data→SPR DMA9 контракт реализован и прошёл native244 (минимум16 реальных
+completion с совпадающими ненулевыми source/destination hashes). Tests12/12 и
+native Release/PCH build PASS. Никакого read-side STR clear/фиктивного IRQ/нуля.
 
-Native242 прошёл старую границу;243 измерил следующую: **normal toSPR DMA9 wait**
-на PC0x2981E4/RA0x2984FC. CHCR0x101, MADR0x110049E0 (существующая VU0 data RAM),
-QWC0x60, SADR0, D_CTRL1/D_ENABLER0x1201. STR остаётся установленным до300s watchdog.
-Меню/Yes проходят обычным pad до200s; IOP/SIF продолжают работу. Последний
-periodic GS16800 чёрный640x511, final-on-exit нет. Gameplay/audio/saves не доказаны.
-VCALLMS после этого wait ещё не выполнен. Старые C0000409/keyCD277739 не исправлены.
+Текущий blocker: native244 exit5/no timeout, missing EE scheduler target29353C,
+RA2984EC, owning leaf29322C, map ends29353C. Generated branch293524→293538 входит
+в delay instruction другого jump, затем выходит за обрезанный конец. Это
+подтверждённая новая граница, ещё не исправленный leaf. FinalGS серый640x511,
+реальное gameplay/audio/saves/recovery не доказаны. Меню и NORMAL dialog работают.
 
-Следующий244 (проверь номер): исследуй normal DMA9 admission/transfer/completion
-для измеренного VU0 data source. Используй существующие shared VU0 data и SPR,
-установи настоящие MADR/QWC/SADR/STR и completion/cause9 по pinned reference.
-Реализуй подтверждённый контракт с поведенческими boundary/IRQ тестами,
-собери настоящий runner и проверь bounded native1024M/300s. Не ограничивайся планом.
+Следующий245 (сначала проверь unused): исследуй реальные инструкции/epilogue
+этого owner, восстанови только подтверждённый bounded flow через существующие
+read-only Ghidra scripts (docs/ANALYSIS_REGRESSIONS.md), экспортируй новую карту
+и fresh lift, не меняя old lift008. Сверь все resume labels с registration table,
+проверь delay-slot/yield/resume и настоящий native245 максимум300s/1024M.
+Ordinary menu observer/GS refs и evidence paths указаны в handoff/CONTINUE.
+Не добавляй произвольные aliases, RA/PC patches, padding, ready flags или skips.
 
-Не используй Computer Use/OS input, guest ready/PC/RA patches, skip, фиктивный
-IRQ/перенос или нулевые данные. Startup helper unchanged; первые periodic capture
-могут отсутствовать, не жди слепо файл600. Меню-рецепт и evidence в CONTINUE/handoff.
-Сохрани .vscode/ и native/Splash.png: сплешскрин отложен. Кадры/дампы/inputs/
-BIOS/generated остаются ignored, кроме уже approved README images. Субагенты
-необязательны; разрешена только GPT-5.6 Luna. Focused validated commit/push разрешён
-после staged review/check_public_tree.py. В конце обнови журнал, handoff,
-CONTINUE и этот промпт; сообщи фактический результат и один следующий эксперимент.
+Реализуй и проверь установленную причину, не ограничивайся планом. Inputs read-only;
+upstream/generated вручную не редактируй. Private captures/BIOS/maps/lifts не
+публикуй. Обнови CURRENT_STATE, верхний handoff и CONTINUE. Focused validated
+commits/normal push разрешены по AGENTS; перед публикацией staged review и
+scripts/check_public_tree.py. Сплешскрин остаётся отложенной задачей.
