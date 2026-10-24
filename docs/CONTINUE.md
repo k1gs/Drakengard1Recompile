@@ -21,88 +21,48 @@
 Более новые результаты журнала и явные указания пользователя важнее checkpoint
 ниже. Не запускай старый номер эксперимента повторно и не перезаписывай evidence.
 
-## Сохранённый checkpoint: 2026-10-24
+## Актуальный checkpoint: 2026-10-24
 
-- Проект: Drakengard 1, PS2 Europe. Опубликован `2cf7b2c` в `origin/main`.
-- Реализованы EE INTC W1C, исправление ширины signed branches, рабочий PCH
-  write-watch, IPU FIFO/нормальный DMA, BCLR/FDEC/SETIQ/SETVQ/SETTH,
-  VDEC macroblock-address-increment, I/P/B-picture macroblock-type и motion code.
-- Intra BDEC: MPEG2, IVF1, обычный scan, DC predictors, DC/AC VLC и escape,
-  inverse quantization, математический IDCT, frame/field DCT, выходной FIFO.
-  Bit-exact округление IDCT на PS2 не подтверждено. MPEG1, IVF0, alternate scan
-  и non-intra BDEC пока явно отклоняются.
-- Из IPU передаются настоящие 48 QW в scratchpad; адрес SPR не превращается
-  в адрес основной RAM. Native216 подтвердил минимум 512 таких передач.
-- Native217 измерил отказ `0x34000000`: CTRL=`0x02623F08`, PCT=2 (P-picture).
-  Реализованы все семь P-MBT кодов, modes без поля длины, forward → MC_FRAME.
-- Motion table2 реализована для0/±1..16. Signed DATA следует pinned reference;
-  аппаратная упаковка отрицательных результатов не подтверждена. Invalid prefix
-  даёт ECD без фиктивного motion=1.
-- Native221 подтвердил две реальные `0x38000000`: DATA=`0x10000`,
-  CTRL=`0x02623F08`, BP=`0x2086B` затем `0x2086C`.
-- Native222 установил точный toSPR контракт: CHCR=`0x105` (source-chain),
-  QWC=0, TADR=`0x006ACE80`, SADR=`0x70000000`, DMAE=1/suspend=0.
-- Реализованы настоящие RAM→SPR source chains: REFE/CNT/NEXT/REF/END,
-  TTE/TIE, 16-KiB wrap и DMAC cause9 после копирования. REFS/CALL/RET,
-  VU/SPR sources и nonzero-QWC restart явно отклоняются. Normal SPR остаётся
-  upstream; interleave/fromSPR chain не подменяются успешным завершением.
-- RGB32 CSC реализована: planar Y/Cb/Cr384B → RGBA1024B на блок, целочисленная
-  IPU matrix, clipping/SETTH и FIFO/backpressure. RGB16 явно отклоняется.
-- Native224 прошёл `0x700003E8`: 1000 блоков, from-IPU QWC=`0xFA00`,
-  RAM `0x01C4BB40..0x01D45B40`, FNV1a64=`0x21F997E470CAA325`
-  (совпадает с начальным чёрным RGBA/alpha128). Exit6, `timed_out=false`.
-- SPU2 ADMAS установлен: physical=`0x1F9001B0`, core0; core1=`0x1F9005B0`.
-  Idle SH low bits0..3/readback реализованы в прежнем SpuQuiescentControl.
-  Enable mask core0=1/core1=2; нет фиктивного переноса, STATX или IRQ.
-- Native227 подтвердил retired ADMAS core0=1, ATTR=`0xC080`, STATX=0,
-  затем отказал на реальном запросе **ADMA streaming transfer**: IOP PC=`0x88130`,
-  DMA4 CHCR register=`0x1F8010C8`, requested CHCR=`0x01000201`,
-  MADR=`0x0018C900`, BCR=`0x00C00010` (12288 bytes). Exit6/no timeout.
-- Реальная ADMA уже реализована оставленным черновиком: split PCM16 в общей
-  SPU RAM, opposite-half refill, MADR и completion по sample clock. Native229
-  прошёл два refill и выдал PCM(-2,-2), затем остановился на nonzero FX guard.
-- Native230 измерил фактические ненулевые FX коэффициенты и workspace
-  `0xFC810..0xFFFFF`. Добавлен оригинальный scalar DSP: FIR39, reflections,
-  comb/APF, signed Q15, actual delay RAM. FX-off сохраняет фильтры без RAM stores.
-  Старые zero-input probes сохраняют свою отдельную строгую границу.
-- Native231 прошёл эту границу: три refill по512 halfwords, реальный ненулевой
-  PCM и минимум320 ненулевых delay stores. Весь stream ещё не завершился до
-  следующего видеоотказа; host audio и native full-stream completion не доказаны.
-- B-picture MBT реализован: все11 префиксов, DATA=(length<<16)|modes|MC_FRAME,
-  включая intra; I/P без поля длины. D-picture остаётся явным отказом.
-  Native232 прошёл минимум512 B-MBT, DATA0x40088, advancing BP/TOP. Также появились
-  четыре настоящих ADMA completion (общие counters102..105), сверх refill-only231.
-- Native232 timed_out300s без finalGS. Dump после остановки прогресса установил
-  свёрнутое host-окно: CORE flags0xA04, ALWAYS_RUN=0, eventWaiting=0. Raylib ждёт
-  восстановления окна. Stack candidates/MAP с точным совпадением .text —
-  диагностика, не полноценный unwind; dump и MAP только в ignored work/.
-- Для файлового --pad-control включён/проверяется FLAG_WINDOW_ALWAYS_RUN;
-  гостевые данные/completion не менялись. Native233 — bounded проверка;
-  фактический следующий контракт и номер продолжения записаны ниже.
-  Не угадывай backward-motion/non-intra ветку до её наблюдения.
-- Native225 timed out300s до movie, native226 crash=`0xC0000409` до нового
-  ADMAS=1. Эти прогоны не доказывают контракт. В227 ProcDump crash не повторил,
-  dump не создал; причина219/226 не установлена и не исправлена.
-- Финальный GS231 чёрный640x508. Меню/nonblack movie/audio/gameplay/saves/
-  recovery не подтверждены. Strict IOP1/1, bootstrap10/10, Python55, native
-  Release/public-tree PASS. Изменения локальные; без commit/push/CI claim.
+- Опубликован0859793 в origin/main, CI40106657373 PASS. Последующие коммиты
+  определяй по Git HEAD; актуальное разрешение пользователя включает push
+  проверенных исходников и продолжение работы.
+- Реализованы I/P/B MBT, motion VDEC, RAM→SPR source chains, RGB32 CSC,
+  настоящий sample-paced ADMA transport и scalar nonzero FX. Unsupported
+  MPEG1/IVF0/alternate scan/non-intra BDEC и другие режимы остаются закрыты.
+- Старый active ADMA stop уже реализован как два отдельных события:
+  CHCR01000201→00000201 снимает DMAC STR, сохраняя producer и подавляя IRQ;
+  ADMAS0 после disarm останавливает producer без completion/IRQ/RAM clear.
+  MADR/BCR/STATX, настоящая SPU RAM и consumer/write cursors сохраняются.
+  Новое включение/передача проверены тестами обоих ядер. Нулевые samples
+  не подставляются; inaccurate emulator RAM-zero workaround не переносился.
+- Native236 подтвердил настоящий stop и дошёл до **титульного экрана
+  Drakengard / PRESS START BUTTON**, прямые GS8400/9000,640x511,
+  приватно визуально проверены. Это не OS-window screenshot и не меню.
+- Start236 sequence11 FFF7/700ms принят SIO2 с отпусканием; финальный кадр
+  показывает переход титула. Exit6/no timeout из-за diagnostic512M budget.
+- Native237 использует тот же binary и существующий1024M budget при прежнем
+  лимите300s; его результат и следующий эксперимент смотри в верхнем handoff.
+- Strict IOP1/1 с disarm/drain/no-IRQ/stop/rearm/faulted-SH tests PASS005,
+  native Release build002 PASS. Bootstrap10/10 и Python55 из предыдущего
+  checkpoint остаются PASS. Hardware rounding/timing, host audio, gameplay,
+  saves/recovery не подтверждены. Crash219/226 не объявлен исправленным.
+- `.vscode/` и пользовательский `native/Splash.png` сохраняй. Сплешскрин ещё
+  не интегрирован: задача отложена, его нельзя выдавать за кадр игры.
 
-## Актуальный следующий блокер после234
+## Результат237 и следующий эксперимент
 
-Native233/234 exit6, timed_out=false. Реальный guest PC0x87778 очищает STR:
-CHCR0x01000201→0x00000201 в0x1F8010C8, core0 ADMA. MADR/source0x18DD00,
-BCR0x00C00010, end0x18F900, remaining3584 halfwords, pending0 bytes,
-sample481783, IOP step375375262. Четыре ADMA completion до остановки повторены.
-Финальный GS234 идентичен чёрному233; меню/host audio не подтверждены.
+Главное меню NEW GAME / LOAD GAME / OPTIONS реально отрисовано в GS10800.
+После обычного Cross появился диалог NORMAL/Yes/No (GS13200), затем Left/Cross
+подтвердили Yes. Все нажатия/отпускания подтверждены SIO2. Native237 использовал
+тот же executable,1024M/300s; завершился watchdog timed_out=true, exit=null.
+Последний GS16200 чёрный640x511, IOP/SIF продолжали работу; нового явного device
+отказа не было. Это не gameplay и не доказанное зависание. Кадры только в work/.
 
-Следующий свободный номер235 (сначала проверь). Установи точный контракт
-STR-clear для producer/refill, уже записанной ring RAM, MADR/BCR, busy/STATX,
-consumer cursor, IRQ и rearm. Только затем реализуй отмену и stop/rearm tests,
-сборку и bounded native. Не подменяй отмену finish()/ложным completion.
-Подробности и private evidence pointers находятся в верхнем handoff.
-Bootstrap10/10, strict IOP1/1, Python55 и native Release PASS. Все изменения
-локальные, без публикации. Сплешскрин native/Splash.png сохранён и ждёт отдельной
-интеграции после текущей device-границы.
+Следующий238 (проверь, что номер свободен): повторить неизменённый код с1024M/300s,
+раньше подать обычные Start/Cross/Left/Cross после проверки соответствующих GS
+состояний и оставить больше времени после New Game. Установить первую реальную
+post-Yes границу, затем диагностировать/реализовать её. Не объявлять заранее
+BDEC/movie/loading причиной чёрного кадра. Готовый промпт: docs/NEXT_MODEL_PROMPT.md.
 
 ## Инструменты и границы
 
@@ -133,8 +93,8 @@ Bootstrap10/10, strict IOP1/1, Python55 и native Release PASS. Все изме�
 
 ## Следующий ограниченный прогон
 
-На момент checkpoint следующий номер —232. Сначала проверь, что каталог
-`work/native-run-232` свободен и другой native/reference процесс не работает.
+На момент checkpoint следующий номер —238. Сначала проверь, что каталог
+`work/native-run-238` свободен и другой native/reference процесс не работает.
 Если номер уже занят, выбери следующий свободный, сохрани прежние результаты.
 
 Настоящий executable: `build/native/ps2xRuntime/Release/ps2EntryRunner.exe`.
@@ -143,13 +103,13 @@ runner, проверь exit code сборки и запиши SHA-256 прове
 
 ```powershell
 cmake --build build/native --config Release --target ps2EntryRunner --parallel 4
-python scripts/run_native.py --input-complete --run 235 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 512
+python scripts/run_native.py --input-complete --run 238 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 1024
 ```
 
 Пока launcher работает, отдельным процессом запусти:
 
 ```powershell
-python scripts/native_start.py --run 235 --timeout 300
+python scripts/native_start.py --run 238 --timeout 300
 ```
 
 Не жди завершения launcher перед запуском controller helper. Он проходит

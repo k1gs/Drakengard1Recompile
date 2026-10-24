@@ -1352,3 +1352,21 @@ GS remains all black640x508. No menu/gameplay/host-audio/saves/recovery claim.
 Native234 keeps the cancellation refusal and adds exact CHCR store/active-state
 diagnostics; see the current handoff for its result and next experiment. All
 captures, dumps, linker maps and pinned references stay in ignored work/.
+
+## ADMA stop and rendered main menu (2026-10-24)
+
+The active producer no longer treats DMAC STR-clear as an unsupported reconfiguration.
+Only the observed automatic CHCR0x201 is accepted: refill/MADR remain sample-paced,
+and later drain suppresses DMAC IRQ. ADMAS0 after disarm separately releases producer
+and CPU RAM-port ownership without finish(), advancing MADR to end, modifying STATX
+or interrupt latches, or clearing real input RAM. Other active modes remain closed.
+The reference's expressly inaccurate buffer-zero workaround is omitted.
+
+Both-core tests cover pending and drained bookkeeping, RAM/register retention,
+no late IRQ, armed disable refusal, exception rollback and genuine restart completion.
+Strict IOP1/1 PASS005 and native build002 PASS. Native236 confirms actual stop;
+native237 reaches the rendered title, main menu and NORMAL difficulty confirmation.
+Ordinary Start/Cross/Left/Cross were accepted and released via SIO2.237 uses the
+existing1024M option, still300s max; timed out after New Game Yes with black last
+GS and active IOP/SIF. No new device fault or gameplay/audio/saves proof. See top
+handoff and private work/adma-stop-menu-evidence-237.json for the next experiment.

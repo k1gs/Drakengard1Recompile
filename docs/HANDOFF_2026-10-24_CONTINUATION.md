@@ -1,4 +1,74 @@
-# Continuation handoff: nonzero ADPCM, startup logos, EE return failure
+# Drakengard Europe continuation handoff
+
+
+## Latest: ADMA disarm/stop passed; rendered main menu and New Game dialog
+
+Published accumulated checkpoint0859793 to origin/main; CI40106657373 succeeded.
+The user authorized further validated source commits/pushes and a final next-model
+prompt. Preserve unrelated `.vscode/` and `native/Splash.png`; no inputs, generated
+code, upstream files, dumps or images were published. Use Git HEAD for the latest
+publication rather than historical hashes below.
+
+Native234 measured guest PC0x87778 clearing DMA4 STR, CHCR01000201->00000201.
+Pinned v2.8.2 IopHw.h/DmaExec, IopDma.cpp and ReadInput.cpp distinguish DMAC STR
+from the SPU producer: STR-clear does not reset input counters; final DMAC IRQ
+checks STR. Implemented automatic-only exact0x201 disarm, real refill/MADR progress
+and suppressed IRQ on later drain. Other CHCR values and active rearm still refuse.
+
+Native235 verified this and then refused actual guest SH0 to ADMAS0xBF9001B0,
+PC0x8787C, step377226678. Its executable SHA256 was
+`c3c3d13cbea1d524f8f55ceb0cb81b748c63ca191d8bb2cb2c05a82e44ad6ca6`;
+exit6/no timeout. Added the distinct ADMAS0 stop only after DMAC disarm (or idle):
+release producer/RAM-port ownership; discard producer remainder/pending accounting;
+retain MADR/BCR/STATX/interrupt latches, actual SPU RAM and sample/write cursors.
+No finish() call or invented completion. The reference's RAM-zero workaround is
+explicitly marked inaccurate in its own source and is deliberately not applied.
+This is a functional convention; no hardware timing equivalence claim.
+
+Tests cover both cores with pending0/pending640 byte stops, whole ring retention
+over inactive ticks, armed-stop refusal, faulted SH rollback, disarm-only drain
+without IRQ and genuine new transfer completion after reenable/rearm.
+Strict IOP1/1 PASS005; native Release build002 PASS. Earlier bootstrap10/10 and
+Python55 remain unchanged/passing. A test-only mixed-auto-type compile failure002
+was corrected; failed log retained. Private contracts:
+`work/adma-stop-dmac-contract-235.json`, `work/adma-stop-producer-contract-236.json`.
+
+Native236 SHA256 `8ce4e1004eaaa91f3c9b577fcb69a655347d0cebbaaa1b09c557f1dad55f517b`:
+actual core0 ADMAS0 retired; `[spu-adma-stopped]` MADR0x18E100, remaining3072,
+pending0, sample488529, without completion/IRQ/RAM clearing. Continued beyond it.
+Direct GS7200 shows Project Dragonsphere logo; GS8400/9000 show **Drakengard /
+PRESS START BUTTON** at640x511. Privately converted and visually inspected.
+These are guest GS captures, not OS-window screenshots. No Computer Use.
+
+At15:32:32.636027UTC host pad sequence11 pressed Start0xFFF7 for700ms;
+SIO2 press/release both observed. Final236 GS shows the title zoom/transition,
+not an opened menu. Exit6/no timeout because the configured512M IOP budget was
+exhausted. This is a diagnostic resource bound, not a newly measured device fault.
+Native237 repeats unchanged code with existing1024M option, still300s maximum,
+frame interval600 and ordinary startup helper300. Its outcome follows below.
+
+Native237 used the SAME236 executable,1024M IOP budget and300s watchdog.
+Start sequence11 FFF7/700ms at15:36:09.816133UTC was accepted/released by SIO2.
+GS10800 **renders the main menu: NEW GAME / LOAD GAME / OPTIONS**. Cross sequence12
+at15:36:49.911480UTC opened the NORMAL difficulty Yes/No dialog, visible atGS13200.
+Left13 at15:37:36.436445UTC and Cross14 at15:37:42.469194UTC confirmed Yes;
+all press/releases are logged through actual SIO2. Images remain private.
+
+Native237 ended timed_out=true/exit_code=null at300s. Last periodic GS16200 is
+black640x511; IOP/SIF continued through728402427+ instructions. No explicit new
+unsupported-device refusal was observed. There is no final-GS-on-exit capture.
+This is bounded post-New-Game transition evidence, **not gameplay or a diagnosed
+hang**. Menu/dialog are directly rendered GS evidence, not OS-window or host-audio
+verification. Private summary: `work/adma-stop-menu-evidence-237.json`.
+
+**Next experiment238 (verify unused first):** reproduce title/menu with unchanged
+code and1024M/300s, use ordinary Start/Cross/Left/Cross earlier once their actual
+GS states are verified, leaving more time after New Game. Observe the first
+post-Yes producer/device/control-flow boundary; instrument that boundary only.
+Do not assume BDEC, movie decode or loading is the cause of a black frame. If
+needed compare an equivalent bounded owned reference state sequentially. Preserve
+unsupported guards and follow the first actual failure. Gameplay, host audio,
+saves/recovery and older crash219/226 remain unverified. No splash integration.
 
 
 ## Publication and continuation authorization (2026-10-24)
@@ -9,7 +79,7 @@ reviewed for publication; ignored evidence, `.vscode/`, and `native/Splash.png`
 remain excluded. Statements about no publication in historical entries describe
 those earlier experiments. The current checkpoint is identified by Git HEAD.
 
-## Current continuation: B-picture MBT passed; diagnostic window wait repaired
+## Historical checkpoint: B-picture MBT passed; diagnostic window wait repaired
 
 This supersedes the ADMA/FX checkpoint below. All work remains local; published
 HEAD is still2cf7b2c. Preserve unrelated WIP, `.vscode/` and `native/Splash.png`.
@@ -78,7 +148,7 @@ then build and run bounded native235. Do not call finish() on cancellation or
 claim hardware timing from the emulator. No movie/menu/gameplay/audio proof.
 
 
-## Current continuation: real ADMA input and nonzero FX passed; next B-picture MBT
+## Historical checkpoint: real ADMA input and nonzero FX passed; next B-picture MBT
 
 This supersedes the ADMAS-only checkpoint below. HEAD remains2cf7b2c; all changes
 are local, including the preceding agent's P/motion/toSPR/CSC/ADMA work. Preserve
@@ -149,7 +219,7 @@ host window instead of the reported initial pink background. It is queued,
 not implemented. Keep that host presentation separate from guest frame evidence;
 review asset/public-tree handling before any publication.
 
-## Current continuation: ADMAS configuration retired, next actual ADMA transfer
+## Historical checkpoint: ADMAS configuration retired, next actual ADMA transfer
 
 This section supersedes all checkpoints below. Local changes over HEAD2cf7b2c,
 no commit/push. Earlier source/docs and `.vscode/` preserved; no Computer Use,
@@ -227,7 +297,7 @@ Evidence: `work/native-run-225/`,226/,227/ and corresponding
 private final GS227/review PNG. Next unused228, verify directory/processes.
 Entry point: docs/CONTINUE.md; startup helper unchanged, no OS input.
 
-## Current continuation: RGB32 CSC passed, next IOP halfword MMIO
+## Historical checkpoint: RGB32 CSC passed, next IOP halfword MMIO
 
 This section supersedes older checkpoints below. Local continuation over HEAD
 `2cf7b2c`, no commit/push. All earlier source/docs edits and `.vscode/` preserved.
@@ -295,7 +365,7 @@ Evidence: `work/native-run-224/{runtime.log,result.json,pad-control-events.jsonl
 `work/ipu-csc-validation-224.json`, private final/review GS images.
 Next unused225; verify directory/processes. Resume via docs/CONTINUE.md.
 
-## Current continuation: real toSPR chains, next CSC command
+## Historical checkpoint: real toSPR chains, next CSC command
 
 This section supersedes all older checkpoints below. Local changes over published
 HEAD `2cf7b2c`; no commit/push. Preserved earlier source/docs work and `.vscode/`.
@@ -363,7 +433,7 @@ Evidence: `work/native-run-222/` and223/ (runtime/result/controller/GS);
 all inputs, reference source, raw captures and evidence remain ignored.
 Next unused224, verify directory and processes; entry point docs/CONTINUE.md.
 
-## Current continuation: motion VDEC exercised, toSPR STR wait
+## Historical checkpoint: motion VDEC exercised, toSPR STR wait
 
 This section supersedes the checkpoints below. Local continuation over HEAD
 `2cf7b2c`, no commit/push. Preserved earlier P-MBT/AGENTS/CONTINUE edits and
@@ -427,7 +497,7 @@ Evidence: `work/native-run-219/`,220/,221/ (runtime/result/controller/captures);
 Next unused222, verify directory/processes first. Continue with docs/CONTINUE.md;
 startup helper uses `--timeout 300` alongside the300s-bounded native launcher.
 
-## Current continuation: measured P-picture MBT, next motion-code table
+## Historical checkpoint: measured P-picture MBT, next motion-code table
 
 This section supersedes all checkpoints below. HEAD remains published `2cf7b2c`;
 the following changes are local, without commit/push. Existing AGENTS/CONTINUE
@@ -478,7 +548,7 @@ implement the actual contract, rebuild runner and bounded-run219. Pinned referen
 The observed motion command has FB0. Do not assume non-intra BDEC is next until
 the runner establishes it. Verify219 is unused and no native/reference is active.
 
-## Current continuation: intra BDEC, real scratchpad transport, automatic startup
+## Historical checkpoint: intra BDEC, real scratchpad transport, automatic startup
 
 This section supersedes the older IPU checkpoint below. Preserve all pre-existing
 INTC/write-watch/signed-branch work and `.vscode/`. Implementation used no Computer
@@ -556,7 +626,7 @@ Do not publish or claim a complete MPEG decoder. Audio, menu, movement/combat,
 saves and recovery remain unverified. No forced ready flags, RA repair, invented
 stream prefix or dummy DMA completion was introduced. Evidence stays ignored.
 
-## Current continuation: IPU transport/VLC and control without Computer Use
+## Historical checkpoint: IPU transport/VLC and control without Computer Use
 
 This section supersedes the historical sections below. The existing INTC/W1C
 work was preserved; original inputs, upstream and generated lifts remain unchanged.

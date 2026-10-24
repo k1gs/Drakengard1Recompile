@@ -6,7 +6,7 @@
 #include "spu_reverb_setup.h"
 
 // Functional core configuration shared by plain DMA and sample-paced ADMA.
-// SPU IRQ, active stream stop/cancellation and unreviewed modes remain closed.
+// SPU IRQ and unreviewed modes remain closed. ADMA stop requires prior DMAC disarm.
 // The reference finishes
 // core initialization with STATX=0x80; a real ATTR store with DMA mode zero clears
 // that flag when no transfer is busy. This is
@@ -14,7 +14,7 @@
 class SpuQuiescentControl {
     struct Core {
         uint16_t attributes{}, autoDma{}, status{0x80};
-        bool autoBusy{},autoStarted{};
+        bool autoBusy{},autoStarted{},autoDmacStopped{};
     };
     std::array<Core,2> cores{};
     bool enabled{};
@@ -38,10 +38,15 @@ public:
         if (opcode==0x21 || opcode==0x25) return true;
         if (opcode!=0x29) return false;
         const auto& state=cores[index(address)];
-        if (reg==0x1b0)
+        if (reg==0x1b0) {
+            // A zero ADMAS store is the distinct input-producer stop. An
+            // active DMAC must first have retired its exact STR-clear store.
+            if (!uint16_t(value) && state.autoStarted)
+                return !(state.status&0x400) && (!state.autoBusy || state.autoDmacStopped);
             return !(uint16_t(value)&~3u) &&
                 (!(state.status&0x400) && !state.autoBusy || uint16_t(value)==(state.autoDma&3u)) &&
                 (!state.autoStarted || !((uint16_t(value)^state.autoDma)&(1u<<index(address))));
+        }
         // Bits 0/14/15 are retained raw; the pinned functional reference does not
         // apply mute/core-enable effects for them. IRQ/mode3 remain closed;
         // mode2 and FX require the separate reviewed device contracts below.
@@ -80,6 +85,16 @@ public:
     void beginAutoDma(unsigned core) {
         if (!autoDmaReady(core)) throw std::runtime_error("SPU ADMA requires idle bound DMA writer");
         cores.at(core).autoBusy=cores.at(core).autoStarted=true;
+        cores.at(core).autoDmacStopped=false;
+    }
+    void disarmAutoDma(unsigned core) { cores.at(core).autoDmacStopped=true; }
+    void stopAutoDma(unsigned core) {
+        auto& state=cores.at(core);
+        if (!state.autoBusy || !state.autoDmacStopped || autoDmaEnabled(core))
+            throw std::runtime_error("SPU ADMA stop requires DMAC disarmed and ADMAS zero");
+        // No transfer-end callback: STATX, MADR and interrupt latches are not a
+        // cancellation acknowledgement. Already copied input RAM stays intact.
+        state.autoBusy=state.autoStarted=state.autoDmacStopped=false;
     }
     void finishAutoDma(unsigned core) {
         cores.at(core).autoBusy=false;
@@ -103,6 +118,7 @@ public:
         auto& core=cores[index(access.physical)];
         if ((access.physical&0x3ff)==0x1b0) {
             core.autoDma=access.value;
+            if (!core.autoDma && !core.autoBusy) core.autoStarted=false;
             const auto count=++autoDmaStores;
             if (count<=16 || (count&(count-1))==0)
                 std::cerr << "[spu-admas-store] core=" << index(access.physical)

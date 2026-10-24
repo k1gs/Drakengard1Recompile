@@ -11,7 +11,7 @@
 class SpuDmaWrite {
     struct Transfer {
         uint32_t source{},remaining{},end{},delay{},burst{},bcr{};
-        bool active{},automatic{};
+        bool active{},automatic{},disarmed{};
     };
     struct Input {
         uint32_t writePosition{0x100},pendingBytes{};
@@ -77,19 +77,32 @@ class SpuDmaWrite {
         ram.setDmaBusy(core,false); transfer.active=false;
         const uint32_t icrAddress=core?0x1f801574:0x1f8010f4;
         auto icr=memory.read32(icrAddress); const unsigned bit=core?0:4;
-        if (icr&(1u<<(16+bit))) {
+        if (!transfer.disarmed && (icr&(1u<<(16+bit)))) {
             icr|=1u<<(24+bit);
             if (icr&0x800000) icr|=0x80000000;
             memory.write32(icrAddress,icr); memory.setInterruptStatus(memory.interruptStatus()|8);
         }
         ++completed;
-        std::cerr << (transfer.automatic?"[spu-adma-complete]":"[spu-dma-write-complete]")
+        std::cerr << (transfer.disarmed?"[spu-adma-drained-no-irq]":
+                      transfer.automatic?"[spu-adma-complete]":"[spu-dma-write-complete]")
                   << " core=" << core << " bytes=" << bytes << " transfers=" << completed
                   << " sample=" << inputs[core].nextSample << '\n';
     }
-    template<class Memory> void validateActive(const Memory& memory,unsigned core) const {
-        const auto& transfer=transfers[core]; const auto base=channelBase(core);
-        if (memory.read32(base+8)!=0x01000201) {
+    template<class Memory> void validateActive(const Memory& memory,unsigned core) {
+        auto& transfer=transfers[core]; const auto base=channelBase(core);
+        const auto chcr=memory.read32(base+8);
+        // DMAC STR and the SPU input producer are separate owners. The pinned
+        // functional reference keeps refilling until ADMAS is disabled, but
+        // its final callback raises a DMAC IRQ only if STR is still set.
+        if (transfer.automatic && chcr==0x201) {
+            if (!transfer.disarmed)
+                std::cerr << "[spu-adma-dmac-disarmed] core=" << core
+                          << " remaining_halfwords=" << transfer.remaining
+                          << " pending_bytes=" << inputs[core].pendingBytes
+                          << " sample=" << inputs[core].nextSample << '\n';
+            transfer.disarmed=true;
+            control.disarmAutoDma(core);
+        } else if (chcr!=0x01000201 || transfer.disarmed) {
             std::cerr << "[spu-dma-active-refusal] core=" << core
                       << " automatic=" << transfer.automatic << " chcr=0x" << std::hex
                       << memory.read32(base+8) << " madr=0x" << memory.read32(base)
@@ -101,8 +114,20 @@ class SpuDmaWrite {
             throw std::runtime_error("Active SPU DMA cancellation/reconfiguration unsupported");
         }
         if (transfer.automatic && (memory.read32(base+4)!=transfer.bcr ||
-            memory.read32(base)!=transfer.source-inputs[core].pendingBytes || !control.autoDmaEnabled(core)))
+            memory.read32(base)!=transfer.source-inputs[core].pendingBytes))
             throw std::runtime_error("Active SPU ADMA source/size/configuration changed");
+        if (transfer.automatic && !control.autoDmaEnabled(core)) {
+            if (!transfer.disarmed)
+                throw std::runtime_error("SPU ADMA disabled before DMAC STR clear");
+            std::cerr << "[spu-adma-stopped] core=" << core << " madr=0x" << std::hex
+                      << memory.read32(base) << std::dec << " dropped_halfwords=" << transfer.remaining
+                      << " pending_bytes=" << inputs[core].pendingBytes
+                      << " sample=" << inputs[core].nextSample << "; no completion/IRQ/RAM clear\n";
+            control.stopAutoDma(core);
+            transfer.active=false; transfer.remaining=0;
+            inputs[core].pendingBytes=0;
+            ram.setDmaBusy(core,false);
+        }
     }
 public:
     SpuDmaWrite(SpuRamWritePort& memory,SpuQuiescentControl& state):ram(memory),control(state) {}

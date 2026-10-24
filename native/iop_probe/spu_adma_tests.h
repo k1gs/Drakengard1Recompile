@@ -106,6 +106,29 @@ inline void transport() {
         check(!s.memory.interruptStatus() && s.memory.read32(base+8)==0x201);
     }
 }
+inline void dmacDisarmKeepsProducer() {
+    for (unsigned core=0;core<2;++core) {
+        Stream s; s.configure(core,1024); s.source(core,1024);
+        const uint32_t base=core?0x1f801500:0x1f8010c0, ring=0x2000+core*0x400;
+        const uint32_t icr=core?0x1f801574:0x1f8010f4;
+        s.writer.readInput(s.memory,core,0); s.start(core);
+        for (unsigned sample=1;sample<=4;++sample) s.writer.readInput(s.memory,core,sample);
+        const auto first=s.ram.peek(ring+0x100);
+        s.memory.write32(base+8,0x201); s.writer.pump(s.memory);
+        check(s.memory.read32(base)==0x10400 && s.ram.peek(ring+0x100)==first);
+        refuses([&] { s.writer.validateStart(s.memory,base+8,0x01000201); });
+        for (unsigned sample=5;sample<=259;++sample) s.writer.readInput(s.memory,core,sample);
+        check(s.memory.read32(base)==0x10800 && s.memory.read32(base+8)==0x201);
+        check(s.memory.read32(icr)==(0x800000u|(1u<<(core?16:20))) && !s.memory.interruptStatus());
+        check(s.ram.peek(ring)==Stream::value(512,core));
+        for (unsigned sample=260;sample<270;++sample) s.writer.readInput(s.memory,core,sample);
+        check(!s.memory.interruptStatus());
+    }
+    Stream plain; plain.configure(0,1024); plain.source(0,1024);
+    plain.writer.readInput(plain.memory,0,0); plain.start(0);
+    plain.memory.write32(0x1f8010c8,0x200);
+    refuses([&] { plain.writer.pump(plain.memory); });
+}
 inline void partialStereoAndBounds() {
     Stream s; s.configure(0,256); s.source(0,512);
     s.writer.readInput(s.memory,0,0); s.start(0);
@@ -128,6 +151,37 @@ inline void partialStereoAndBounds() {
     Stream shortBlock; shortBlock.configure(0,128);
     refuses([&] { shortBlock.start(0); });
     check(shortBlock.ram.zeroRange(0x2000,0x23ff) && !shortBlock.memory.interruptStatus());
+}
+inline void producerStopAndRestart() {
+    for (unsigned core=0;core<2;++core) for (unsigned at:{1u,4u}) {
+        Stream s; s.configure(core,1024); s.source(core,1024);
+        const uint32_t base=core?0x1f801500:0x1f8010c0,regs=0x1f900000+core*0x400;
+        const uint32_t ring=0x2000+core*0x400, icr=core?0x1f801574:0x1f8010f4;
+        s.writer.readInput(s.memory,core,0); s.start(core);
+        check(!s.control.allows(regs+0x1b0,0x29,0)); // Cannot kill an armed DMAC.
+        for (unsigned n=1;n<=at;++n) s.writer.readInput(s.memory,core,n);
+        std::array<uint16_t,1024> snapshot;
+        for (unsigned n=0;n<snapshot.size();++n) snapshot[n]=s.ram.peek(ring+n);
+        const uint32_t madr=s.memory.read32(base),status=s.control.read(regs+0x344),mask=s.memory.read32(icr);
+        s.memory.write32(base+8,0x201); s.writer.pump(s.memory);
+        check(s.control.allows(regs+0x1b0,0x29,0));
+        const auto faulted=s.control.stage(s.memory,regs+0x1b0,regs+0x1b0,0x29,0);
+        s.memory.write16(regs+0x1b0,0); s.control.complete(s.memory,faulted,true);
+        check(s.control.autoDmaEnabled(core));
+        refuses([&] { s.writer.validateStart(s.memory,base+8,0x01000201); });
+        s.store(s.control,regs+0x1b0,0); s.writer.pump(s.memory);
+        check(s.memory.read32(base)==madr && s.memory.read32(base+4)==0x00200010);
+        check(s.control.read(regs+0x344)==status && s.memory.read32(icr)==mask && !s.memory.interruptStatus());
+        // Producer ownership released; original TSA/CPU RAM port is accessible.
+        check(s.ram.allows(regs+0x1ac,0x29,0));
+        for (unsigned n=at+1;n<=270;++n) s.writer.readInput(s.memory,core,n);
+        for (unsigned n=0;n<snapshot.size();++n) check(s.ram.peek(ring+n)==snapshot[n]);
+        check(s.memory.read32(base)==madr && !s.memory.interruptStatus());
+        s.configure(core,512,0x18000); s.source(core,512,0x18000); s.start(core);
+        for (unsigned n=271;n<=280;++n) s.writer.readInput(s.memory,core,n);
+        check(s.memory.read32(base)==0x18400 && s.memory.read32(base+8)==0x201);
+        check(s.memory.interruptStatus()==8);
+    }
 }
 struct CpuStream:Stream {
     QuiescentDma dma;
@@ -183,6 +237,8 @@ inline void retirementBoundaryAndRouting() {
 }
 }
 inline void spuAutoDmaStreaming() {
-    adma_test::transport(); adma_test::partialStereoAndBounds(); adma_test::retirementBoundaryAndRouting();
+    adma_test::transport(); adma_test::dmacDisarmKeepsProducer();
+    adma_test::partialStereoAndBounds(); adma_test::producerStopAndRestart();
+    adma_test::retirementBoundaryAndRouting();
 }
 }
