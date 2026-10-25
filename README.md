@@ -14,7 +14,7 @@ A source-only project working toward a native PC port of **Drakengard**.
 
 [Project site](https://dod1.keggs.ru) · [Telegram channel](https://t.me/dodrecomp)
 
-[Progress](#progress) · [Getting started](#getting-started) · [Documentation](#documentation)
+[Progress](#progress) · [Getting started](#getting-started)
 
 </div>
 
@@ -42,29 +42,10 @@ revision or dump authenticity. Game-specific bindings require the verified ELF h
 | Guest modules & input | Original IOP modules execute; SIO2 accepts ordinary button presses/releases and menu selections | Broader controller coverage and in-game validation |
 | Disc services | 226 CDVD transfers and 5,997,856 bytes read from the verified ISO | Validate later disc operations |
 | Graphics & gameplay | Rendered main menu, prologue and Chapter I mission briefing | Verify in-world movement and combat |
-| Audio, saves & recovery | Validation matrix documented | Verify these in actual gameplay |
+| Audio, saves & recovery | Not yet verified | Verify these in actual gameplay |
 
 Passing CI validates preparation tools and synthetic service contracts.
-It does **not** establish a working port. Detailed evidence and the current boundary
-live in [IOP bootstrap notes](docs/IOP_BOOTSTRAP.md).
-
-### Native screenshots
-
-Actual guest GS output from the native diagnostic runner on Windows, not a host splash
-or an emulator screenshot. The reviewed image shows the **New Game / Load Game / Options**
-menu reached in run 240 at 640×511. Pixels retain their original brightness; no game-state
-patches or menu mockups were used. This is menu evidence, not gameplay verification.
-
-**Reviewed screenshot — main menu reached**
-
-![Drakengard main menu rendered by the native diagnostic runner, with New Game selected](docs/images/native-frame-after.png)
-
-<details>
-<summary>Earlier milestone — controller warning with duplicated scanout</summary>
-
-![Earlier native frame with vertically duplicated text](docs/images/native-frame-before.png)
-
-</details>
+It does **not** establish a working port.
 
 ## Getting started
 
@@ -85,18 +66,9 @@ the original image outside the repository.
 The fingerprint tool inspects inputs; it does not extract an ISO or establish authenticity.
 The native runner is a diagnostic experiment and requires additional local preparation.
 
-## Documentation
-
-| Guide | What it covers |
-| --- | --- |
-| [IOP bootstrap](docs/IOP_BOOTSTRAP.md) | Guest execution evidence, strict device models and blockers |
-| [SIF protocol](docs/SIF_PROTOCOL.md) | Packet, RPC and DMA coverage |
-| [Media](docs/MEDIA.md) | Read-only ISO/CDVD services and checks |
-| [Kernel patch](docs/KERNEL_PATCH.md) | Translation evidence and validation limits |
-
 ## Contributing
 
-Focused work on device contracts, CPU behavior, synthetic tests and documentation is welcome.
+Focused work on device contracts, CPU behavior and synthetic tests is welcome.
 For runtime reports, include the tool revision, input fingerprint, first blocker and a reproducible
 procedure. Keep game data, BIOS, generated guest code, saves and raw traces out of issues and patches.
 
@@ -106,12 +78,11 @@ failure cases before extending coverage. See the [project rules](AGENTS.md).
 ## Source-only & licensing
 
 This repository distributes original project source, synthetic tests, configuration templates
-and reviewed documentation, including two explicitly approved screenshots. It includes
+and the project README. It includes
 **no game inputs, BIOS, original executables or generated game code**. Supply your own
 local inputs; keep them in ignored directories.
 
 Original project code and documentation are licensed under [MIT](LICENSE). No upstream runtime
 or generated game code is vendored. Any future third-party integration needs its own license review.
-Game imagery in documentation remains the property of its respective rights holders.
 
 *Independent, unofficial research project. Not affiliated with the game's rights holders.*

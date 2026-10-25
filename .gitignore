@@ -44,3 +44,6 @@ SLES_*
 SLUS_*
 SCES_*
 SLPS_*
+
+# Keep progress/handoff documentation local, outside the public tree.
+/docs/

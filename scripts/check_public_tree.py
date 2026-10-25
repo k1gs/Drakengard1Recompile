@@ -1,34 +1,23 @@
 """Conservative tracked/index publication gate; not a substitute for diff review."""
 from pathlib import PurePosixPath
-import hashlib
 import subprocess
 import sys
 
 ROOT_FILES = {"README.md", "AGENTS.md", "LICENSE",
               ".gitignore", ".gitattributes"}
-EXTENSIONS = {"docs": {".md"}, "scripts": {".py", ".java"}, "tests": {".py"},
+EXTENSIONS = {"scripts": {".py", ".java"}, "tests": {".py"},
               "native": {".cpp", ".h", ".cmake", ".txt"},
               ".github": {".yml", ".yaml", ".md"}}
-# Explicitly approved README illustrations, visually reviewed, without metadata.
-# Pin exact bytes: this is not permission to publish arbitrary captures/assets.
-REVIEWED_IMAGES = {
-    "docs/images/native-frame-before.png": "fe7a4867e88e943eb6d7d5c5fe482bd506d65a9af6e971072bd3379537712ef6",
-    "docs/images/native-frame-after.png": "459b40b9668f88d8d60a9b5fda96d478964605e7eb2f30515c3987d3d8716e63",
-}
 
 
 def allowed_path(name):
     path = PurePosixPath(name)
-    return name in ROOT_FILES or name in REVIEWED_IMAGES or (
+    return name in ROOT_FILES or (
         len(path.parts) > 1 and path.parts[0] in EXTENSIONS
         and path.suffix in EXTENSIONS[path.parts[0]])
 
 
 def content_errors(name, data):
-    if name in REVIEWED_IMAGES:
-        if hashlib.sha256(data).hexdigest() != REVIEWED_IMAGES[name]:
-            return [f"Unreviewed image content: {name}"]
-        return []
     errors = []
     if len(data) > 256 * 1024 or b"\0" in data:
         errors.append(f"Oversized/binary file: {name}")
@@ -59,7 +48,7 @@ def main():
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
-    print("Public tree gate passed (tracked/index source and pinned documentation images; manual review still required).")
+    print("Public tree gate passed (tracked/index source; manual review still required).")
     return 0
 
 

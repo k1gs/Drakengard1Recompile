@@ -1,15 +1,13 @@
 # Project rules
 
 - Scope: Drakengard 1, PS2, Europe. CURRENT_STATE.md is a local, ignored progress journal.
-- For "continue", "resume", or "продолжи", follow docs/CONTINUE.md. Read the latest
-  CURRENT_STATE.md entries when available and the top current handoff section before acting.
-  Read docs/ROADMAP.md if present; otherwise use the maintained handoff. Preserve unrelated work.
+- For "continue", "resume", or "продолжи", read the latest CURRENT_STATE.md when
+  available. Keep progress and handoff notes local in ignored work/ directories.
+  Do not publish docs/ or next-model prompts. Preserve unrelated work.
 - Never search for, inspect, or analyze incoming game files before the user confirms they are complete.
 - Keep original input read-only. Inputs, BIOS, extracted files, analysis exports, generated guest code,
   saves, traces and screenshots belong in ignored game/, private/, work/, tools/, or generated/.
-  Exception authorized by the user: the two reviewed README screenshots in docs/images/,
-  pinned by exact SHA-256 in scripts/check_public_tree.py. Other captures remain private.
-- Public Git contains original source, synthetic tests, configuration templates and reviewed documentation only.
+- Public Git contains original source, synthetic tests, configuration templates, README and project rules only.
   Run scripts/check_public_tree.py before each publication; review staged content as well.
 - Do not invent addresses, ELF hashes, symbols, timing, supported APIs or runtime success.
 - Fail closed at unsupported behavior. Never make a stub return success just to advance boot.
