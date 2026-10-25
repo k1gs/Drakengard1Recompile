@@ -1,6 +1,63 @@
 # Drakengard Europe continuation handoff
 
-## Latest: Chapter I title reached; gameplay continuation is the priority (2026-10-25)
+## Latest: mission briefing reached; preserve host-crash evidence (2026-10-25)
+
+Runtime source checkpoint a4aa639 is unchanged in257–261. Actual runner SHA256:
+106577eb7f987d369f17ff01c283dc1933e4e10cb7ab286f8d74561d49ec3272.
+All requested300s/2048M/frame300/cap64/metricsOFF.257/258 saved53/54 periodic
+captures, exercising the new capture option. FPS optimization remains postponed.
+
+Native258 ordinary Start19 on ChapterI was followed by black15600, gray15900,
+then NEW actual640x511 mission briefing "Chapter1 Verse2" at16200. Narrative,
+Weapon/Continue and character preview are visible. This is past the chapter
+title, NOT verified world movement/combat/audio/saves.258 watchdogtrue/exitnull.
+SIO2 reports prove serial delivery, not guest application consumption.
+
+Native260 gave ordinary Start on three visually verified company logos AFTER
+all20 startup Left/release/Cross/release transitions and sequence10. The startup
+helper's fifth pair is its LAST write. Intro0 precedes menu launch; no movie/
+PC/RAM/ready/timer patch. Briefing14400/error2.2464; Cross23 pressed/released.
+Raw14700 is SAME briefing, error10.2009: bound10 falsely stopped the observer.
+Last15600 still briefing. Native300s watchdog, all helpers0, no Continue proof.
+
+New private261/progression.py uses bound12 for ROI90,110,600,355, ref25816200.
+Actual26014400/14700/15600 accepted; negative menu29.716/prologue42.195/
+chapter60.948/black67.158/gray70.676 rejected. Syntax/throwaway calibration PASS.
+Native261 did NOT exercise this path: Windows0xC0000409 ended early (~71s),
+timed_outfalse, before menu/first IPU; no explicit Native blocker. Same exit code
+existed219/226; same cause unproven. No matching recent Application crash event.
+
+Native262 COMPLETE under ProcDump12.02, same exact runner/profile:300s watchdog,
+exitnull, launcher124. Startup/intro/menu0; progression1 at bounded295s deadline,
+not a new device refusal. Collector0, no .dmp; actual nativePID23368 attachment
+logged handled EeDispatcherTransfer exceptions, then target exit at watchdog.
+The sporadic2610xC0000409 remains UNRESOLVED, not fixed by lack of recurrence.
+
+262 actual page11100/11400/11700 Start18/19/20; chapter12600 Start21, same title
+13200 Start22. Briefing15300/error9.35508: Cross23 at12:18:16.339851UTC.
+SAME briefing15600/error1.32498: Cross24 at12:18:21.407425UTC. All real SIO2
+press/release. Thus observer bound12 actually exercised its intended retry.
+Final16500 rawGS remains briefing, not world movement/combat/gameplay. No explicit
+Native blocker/unsupported/exhaustion; actual IOP begin14404316/deadline2062404316.
+Evidence: ignored native-run-257..262, chapter1-257..262, spr-vu0-runN-menu.jsonl;
+262 has original mixed-encoding ProcDump log and corrected UTF8 review copy.
+
+Remaining boundary: briefing Continue has no observed application effect despite
+serial ACKs. Next263 verified unused; no native/reference/collector left running.
+Normal runner WITHOUT debugger, same300s/2048M/frame300/cap64/metricsOFF.
+Copy261 progression into fresh263: ONLY change briefing Cross holds to3000ms,
+other buttons700ms; max2 Cross, same-page/fresh-frame guards and bound12 retained.
+Reuse260 intro and257 menu with CLI263, menu ONLY after intro0. This tests a
+host-wall hold/EE sampling hypothesis, NOT a diagnosed bug or FPS optimization.
+If it still fails, trace actual application pad-consumption instead of asserting
+timer/ready trouble. Preserve host-crash evidence; never claim debugger is a fix.
+
+No runtime/generated changes or rebuild this phase. Prior14bootstrap/57Python/
+build are baseline checks; new proof is helper syntax/calibration and actual
+bounded native paths. Preserve .vscode/Splash, input/upstream/maps/private evidence.
+README now states mission briefing; approved pinned images remain the old menu.
+
+## Previous: Chapter I title reached; gameplay continuation is the priority (2026-10-25)
 
 User explicitly postponed menu performance. Continue GAME progression, preserve
 existing renderer/lookup fixes, do not resume optimization. Native255 ordinary

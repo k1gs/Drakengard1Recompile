@@ -173,8 +173,16 @@ instrumented native pair support a local improvement, not a general FPS promise.
 Do not treat a fixed instruction allowance as a device contract violation.255
 reached ChapterI before the exact1024M ceiling; an explicit finite2048M preset
 kept monotonic counters and closed exhaustion.256 passed that ceiling, but late
-Cross near300s did not establish a scene transition. Faster observation, not a
-ready/PC/timer patch, is the next experiment. Optional DRAKENGARD_FRAME_LIMIT1..64
-(default32), paired with interval300, permits bounded~5s captures through300s.
-Parser/build checks do not prove native execution of the new capture option;
-257 was deliberately not launched after the user's stop request.
+Cross near300s did not establish a scene transition. Optional
+DRAKENGARD_FRAME_LIMIT1..64 (default32), paired with interval300, permits bounded
+~5s captures through300s. Actual257/258 saved53/54 captures on the rebuilt binary,
+so the capture option now has native evidence as well as parser/build checks.
+
+Keep phase completion separate from input acknowledgement: SIO2 reports establish
+serial delivery, not application consumption.257's Start was pressed/released
+while the first prologue page remained visible. A controller must await actual
+next-state evidence, with only bounded normal-input retries on fresh same-state
+frames.258 then reached the mission briefing after ChapterI Start: intermediate
+black/gray frames alone were not a diagnosed hang. Review rawGS; normalized ROI
+change is only an observation trigger, never gameplay proof. No ready/PC/timer
+patch or instruction-budget renewal is justified by these observations.

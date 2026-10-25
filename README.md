@@ -19,9 +19,9 @@ A source-only project working toward a native PC port of **Drakengard**.
 </div>
 
 > **Research in progress. No playable build is available.**
-> The native diagnostic runner reaches the **main menu** and the New Game confirmation
-> using ordinary controller input. Starting a new game still stops before verified
-> gameplay; the latest captured post-confirmation frame is black.
+> The native diagnostic runner reaches the **Chapter I mission briefing** after
+> the main menu and narrative prologue, using ordinary controller input.
+> In-world movement and combat are not yet verified.
 
 ## The project
 
@@ -41,7 +41,7 @@ revision or dump authenticity. Game-specific bindings require the verified ELF h
 | EE ↔ IOP | Guest-owned reboot, two actual BOOTEND stores and SIF transfers | Broader device and service coverage |
 | Guest modules & input | Original IOP modules execute; SIO2 accepts ordinary button presses/releases and menu selections | Broader controller coverage and in-game validation |
 | Disc services | 226 CDVD transfers and 5,997,856 bytes read from the verified ISO | Validate later disc operations |
-| Graphics & gameplay | Rendered title, main menu and New Game difficulty confirmation | Complete the post-confirmation transition and reach real gameplay |
+| Graphics & gameplay | Rendered main menu, prologue and Chapter I mission briefing | Verify in-world movement and combat |
 | Audio, saves & recovery | Validation matrix documented | Verify these in actual gameplay |
 
 Passing CI validates preparation tools and synthetic service contracts.
@@ -51,11 +51,11 @@ live in [IOP bootstrap notes](docs/IOP_BOOTSTRAP.md).
 ### Native screenshots
 
 Actual guest GS output from the native diagnostic runner on Windows, not a host splash
-or an emulator screenshot. The current image shows the **New Game / Load Game / Options**
+or an emulator screenshot. The reviewed image shows the **New Game / Load Game / Options**
 menu reached in run 240 at 640×511. Pixels retain their original brightness; no game-state
 patches or menu mockups were used. This is menu evidence, not gameplay verification.
 
-**Current milestone — main menu reached**
+**Reviewed screenshot — main menu reached**
 
 ![Drakengard main menu rendered by the native diagnostic runner, with New Game selected](docs/images/native-frame-after.png)
 

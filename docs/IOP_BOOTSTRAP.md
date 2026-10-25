@@ -1469,5 +1469,11 @@ default256 and512/1024 remain. Counters never reset/renew on idle or polls; the
 300s wall limit remains. Maximum valid phase end plus allowance2,063,999,999 fits
 32-bit bounds, covered by all-preset/reconfiguration/invalid/overflow checks.
 Native256 passed the old ceiling and reached300s watchdog without a new explicit
-refusal; still ChapterI title, not gameplay. Capture/readiness changes prepared
-for257 have unit/build verification only. See top handoff for actual binary SHAs.
+refusal. Native257/258 then exercised actual FRAME_INTERVAL300/FRAME_LIMIT64:
+53/54 periodic captures respectively, beyond the default32. Both used executable
+106577eb7f987d369f17ff01c283dc1933e4e10cb7ab286f8d74561d49ec3272.
+Native258 ordinary ChapterI Start was followed by black/gray transition frames
+and actual mission briefing "Chapter1 Verse2" at16200. These runs do not establish
+world gameplay. SIO2 press/release confirms serial reports, not application
+consumption; native257's accepted prologue Start did not visibly advance its page.
+See top handoff for latest run, actual input sequence and remaining boundary.
