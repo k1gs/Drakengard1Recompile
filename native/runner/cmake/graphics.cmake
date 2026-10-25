@@ -31,8 +31,23 @@ string(REPLACE "${color_anchor}"
 if(graphics_diagnostic STREQUAL graphics_next)
     message(FATAL_ERROR "Pinned GS sprite color diagnostic point changed")
 endif()
+# Pin the complete old four-channel arithmetic before replacing its body.
+string(FIND "${graphics_diagnostic}" "    const uint8_t r = lerpChannel(" bilinear_begin)
+string(FIND "${graphics_diagnostic}" "\n}\n\nvoid GSCpuBackend::DrawSprite" bilinear_end)
+if(bilinear_begin LESS 0 OR bilinear_end LESS bilinear_begin)
+    message(FATAL_ERROR "Pinned GS bilinear function boundary changed")
+endif()
+math(EXPR bilinear_length "${bilinear_end} - ${bilinear_begin}")
+string(SUBSTRING "${graphics_diagnostic}" ${bilinear_begin} ${bilinear_length} bilinear_channels)
+string(SHA256 bilinear_hash "${bilinear_channels}")
+if(NOT bilinear_hash STREQUAL "bd835128f1eb8ffbf87d5094768ff304dde8fc22da0858aec8310216ad478d55")
+    message(FATAL_ERROR "Pinned GS bilinear interpolation contract changed")
+endif()
+string(REPLACE "${bilinear_channels}"
+    "    return drakengard::filterGsBilinearRgba(c00, c10, c01, c11, fx, fy);"
+    graphics_filtered "${graphics_diagnostic}")
 file(CONFIGURE OUTPUT "${graphics_file}"
-    CONTENT "#include \"gs_scanout.h\"\n#include \"gs_color_diagnostic.h\"\n${graphics_diagnostic}" @ONLY)
+    CONTENT "#include \"gs_bilinear.h\"\n#include \"gs_scanout.h\"\n#include \"gs_color_diagnostic.h\"\n${graphics_filtered}" @ONLY)
 set_source_files_properties("${graphics_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/gs")
 get_target_property(runtime_sources ps2_runtime SOURCES)

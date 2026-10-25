@@ -1,6 +1,63 @@
 # Drakengard Europe continuation handoff
 
-## Latest: main-menu sparse dispatch overhead reduced (2026-10-25)
+## Latest: packed GS bilinear filtering preserves exact pixels (2026-10-25)
+
+Continued the low menu-FPS task frombb4ba5b. Prior251 identified scalar
+lerpChannel81/1906 raw samples, with124/1906 in unassigned ucrtbase work.
+Original gs_bilinear.h now interpolates all RGBA channels using SSE2, preserving
+separate float sub/mul/add order, exact fractional rounding and saturating pack.
+Do not use add0.5/truncate: it fails for the float just below0.5. Fractional
+coordinates are finite[0,1]; scalar fallback is retained for nonSSE2. Keep precise
+FP/no reassociation or FMA. Quality/filter weights, texture reads/wrapping/CLUT,
+TEXA/blending/depth, guest clocks and compiler flags are unchanged.
+
+The graphics overlay pins the entire old arithmetic/packing body SHA256:
+bd835128f1eb8ffbf87d5094768ff304dde8fc22da0858aec8310216ad478d55.
+Only that build-local body is replaced. Upstream and existing generated lifts
+remain untouched. Public regression2,048,594 exact syntheticRGBA comparisons:
+all byte pairs/1/16 fractions, ties and adjacent floats, randomRGBA/triangle
+fractions and4 host rounding modes. Bootstrap13/13, Python55 and actual Release/
+PCH runner PASS. Local tests are not a queried CI result.
+
+Private A/B compiles the preserved old and current actual CPU backend with the
+same /O2/archAVX2/fp:precise flags.416 paired synthetic draws cover13texture
+formats,4wraps,nearest/linear,FST/STQ,sprite/triangle plus varied CLUT/TEXA,
+alpha/blend/mask/depth. All4MiB VRAM bytes match after EVERYdraw;1,145,627 changed
+framebuffer-byte observations prevent accepting no-op draws. The first fixture
+was rejected for zero writes (default depth NEVER); only the fixture was corrected
+to explicit ALWAYS and a separate Z base, then real comparisons passed.
+
+Synthetic actual-backend128 T8linear256x128 sprites,3 alternating pairs:
+median0.301296s ->0.254510s (15.53% less time for THISworkload). This is not an
+18% whole-game/FPS claim. Native252 menu8400 GS640x511 privately inspected;
+whole decodedRGB is pixel-identical to prior251 menu9600, RGBMAE0/0/0/bboxnull,
+without resize/alignment. Ordinary startup1..10 then Start11 with actual SIO2
+press/release; no NewGame.300s/1024M/frame600, watchdogtrue/exitnull, no new explicit
+scheduler/device refusal. No final-on-exit capture from watchdog termination.
+
+Native252 executable SHA256:
+4e3992b7052434131f18b6e1e95366e58b9f05cf0f6a05153e4a271b44d3816d.
+Exact MAP relink code/layout proof .text SHA256:
+8fadacb8019669601a0a148108bb0c47a9efc4f1c16dc3aa2b35bd89efee8c27.
+New30.0020s profile1903IPs/hotCPU99.73%onecore. No lerpChannel/ucrtbase IP sampled
+in this interval; packed math is now INLINED in SampleTexture, so costs move across
+symbol boundaries. Before DLL samples were not stack-attributed. One RIP interval
+perbuild/nearest MAP/ICF/suspend limitations; no weighted ETW/stacks, unique guest
+FPS or GPU utilization measured. Current major costs: SampleTexture, texture/page
+reads, CLUT, WritePixel and strict IOP. No precise whole-game speedup inferred.
+
+Evidence: work/gs-bilinear-252/{report.md,report.json,comparison.json,
+menu-comparison.json,binary-proof.json,samples-b.json,modules.json,symbols.map},
+baseline_backend.*, raster_compare.cpp/build/results, logs and menu-review.png;
+work/native-run-252 and work/spr-vu0-run252-menu.jsonl. All private/ignored.
+Next253 (verify unused/no active process): establish a trustworthy guest GS frame/
+draw-production rate distinct from UI callbacks and collect bounded indexed-texture/
+CLUT draw-state statistics at the same menu. Use those before selecting palette/
+texture fast paths; any cache needs explicit CLUT/TEXA/state invalidation tests.
+Keep software raster accuracy and device/timer work. Saved game boundary remains
+first prologue page below, not gameplay/audio/saves/recovery. Splash is deferred.
+
+## Previous: main-menu sparse dispatch overhead reduced (2026-10-25)
 
 The current user priority is low main-menu FPS. Native249 identified a saturated
 execution thread (99.63% of one core), with software GS texture/pixel work the

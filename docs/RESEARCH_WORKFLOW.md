@@ -131,3 +131,21 @@ one change and record compiler flags. New results/next experiment are in handoff
 
 The bounded sparse helper rejects only PCs outside actual sorted table extremes;
 holes inside still need exact search. Real dispatch retains mutation checks.
+
+
+## Exact GS arithmetic optimization
+
+The packed bilinear helper keeps the original scalar floating-point operation
+order and lround half-away rounding for finite fractional coordinates[0,1].
+Adding0.5 before truncation misrounds the float immediately below0.5; compare the
+fractional part instead. Compile without FP contraction/reassociation. Public
+bootstrap regression includes all byte pairs, sprite fractions, arbitrary RGBA/
+triangle fractions, tie-neighbor floats and four host rounding modes.
+
+For the252 experiment a private old/new actual-backend A/B compared every4MiB
+VRAM byte after416 varied synthetic draws. Require a nonzero-write witness: the
+initial default-depth-NEVER fixture was correctly rejected as vacuous. Math tests,
+real raster equivalence, synthetic timed workload and native menu are distinct
+validation layers. Timed synthetic sprites do not establish game FPS. Inlining
+moves costs into SampleTexture; disappearance of a symbol/DLL sample is not a
+precise whole-game speedup. Record exact binary/MAP proof and equivalent raw frames.

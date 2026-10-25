@@ -21,28 +21,32 @@
 Более новые результаты журнала и явные указания пользователя важнее checkpoint
 ниже. Не запускай старый номер эксперимента повторно и не перезаписывай evidence.
 
-## Актуальный checkpoint: производительность меню, 2026-10-25
+## Актуальный checkpoint: GS-фильтрация, 2026-10-25
 
-Продолжай снижение затрат CPU в меню по последнему запросу пользователя.
-Первый фикс уже проверен: sparse_dispatch.h отсекает адреса вне реальных
-sorted nonempty таблиц ядра/BIOS до binary search, точность и проверки исходных
-инструкций при dispatch сохранены. Guest clocks/качество рендера не менялись.
+Продолжай performance-задачу меню. После sparse lookup fix bb4ba5b добавлен
+точный packed RGBA bilinear в gs_bilinear.h через hash-pinned graphics overlay.
+Координаты/CLUT/TEXA/качество/guest clocks и compiler flags прежние. SIMD сохраняет
+порядок float-операций и lround ties, включая float just below0.5. Не меняй на
+add0.5/truncate или FMA; inputs — finite fractional weights[0,1].
 
-Synthetic sparse/boundary/singleton/UINT_MAX/mutation checks, Python55 и настоящий
-Release PASS. Native251: обычный Start11/SIO2 ACK, главное меню9600 GS640x511
-просмотрено, ROI MAE0;300s watchdog/exitnull, без нового явного device/scheduler
-отказа. Combined lookup7.38% raw samples249 ->1.36%251. Это не FPS/weightedETW:
-nearest MAP/RIP без stacks; ICF объединял kernel/firmware lower_bound, поэтому
-baseline6.54% нельзя приписывать только kernel. Верхний handoff содержит SHA,
-evidence, синтетический benchmark и ограничения замера.
+2,048,594 math comparisons, private416 paired real-backend synthetic draws с
+полным равенством4MiB VRAM, bootstrap13/13, Python55 и настоящий Release PASS.
+Синтетический пакет T8linearSprite: median0.301296s ->0.254510s,15.53% меньше
+времени на этот workload, не FPS игры. Native252300s/1024M/frame600 watchdogtrue/
+exitnull: Start11/SIO2 ACK, menu8400 GS640x511 визуально проверено и весьRGB кадр
+пиксельно совпал с251menu9600. Нового явного device/scheduler отказа нет.
 
-Следующий252 (проверь unused): измерить dominant software GS sprite/texture/filter
-на том же меню, выбрать один безопасный fast path по реальному draw state,
-проверить synthetic pixel equality и bounded native до/после. GS был крупнейшей
-именованной группой (~46% samples249). Не понижай качество/не пропускай device
-работу/таймеры и не меняй все compiler flags сразу. Runner Release /Od, GS/runtime
-/O2; флаги не менялись, это отдельный будущий опыт. Unique guest FPS не измерен.
-Последняя игровая граница остаётся первой страницей пролога ниже.
+Новый профиль30s: математика встроилась в SampleTexture; отдельных lerpChannel/
+ucrtbase IP не встретилось. Нельзя переводить перестановку символов в точный
+прирост FPS. Главные затраты остаются в SampleTexture/чтении текстур/CLUT/пикселях
+и IOP. Точные SHA/evidence/ограничения — верхний handoff. Unique guest FPS пока
+не измерен. Предыдущий lookup fix сохранён; его combined samples7.38% ->1.36%.
+
+Следующий253 (проверь unused): достоверный счётчик guest GS frame/draw production,
+отдельно от UI callbacks, и bounded indexed-texture/CLUT draw-state statistics на
+том же меню. По ним выбери следующий fast path; cache требует явной проверки
+CLUT/TEXA/state invalidation. Не снижай качество/не пропускай device/таймеры.
+Сохранённая игровая граница — первая страница пролога ниже. Splash отложен.
 
 ## Сохранённый checkpoint пролога: 2026-10-25
 
@@ -115,8 +119,8 @@ Old maps/lifts сохраняй; сначала проверь новые име
 
 ## Следующий ограниченный прогон
 
-На момент checkpoint следующий номер —252. Сначала проверь, что каталог
-`work/native-run-252` свободен и другой native/reference процесс не работает.
+На момент checkpoint следующий номер —253. Сначала проверь, что каталог
+`work/native-run-253` свободен и другой native/reference процесс не работает.
 Если номер уже занят, выбери следующий свободный, сохрани прежние результаты.
 
 Настоящий executable: `build/native/ps2xRuntime/Release/ps2EntryRunner.exe`.
@@ -125,14 +129,14 @@ runner, проверь exit code сборки и запиши SHA-256 прове
 
 ```powershell
 cmake --build build/native --config Release --target ps2EntryRunner --parallel 4
-python scripts/run_native.py --input-complete --run 252 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 1024
+python scripts/run_native.py --input-complete --run 253 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 1024
 ```
 
-Пока launcher работает, дождись появления `work/native-run-252/pad-control.txt`,
+Пока launcher работает, дождись появления `work/native-run-253/pad-control.txt`,
 затем отдельным процессом запусти:
 
 ```powershell
-python scripts/native_start.py --run 252 --timeout 300
+python scripts/native_start.py --run 253 --timeout 300
 ```
 
 Не жди завершения launcher перед запуском controller helper. Он проходит

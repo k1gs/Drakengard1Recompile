@@ -4,25 +4,29 @@
 Прочитай AGENTS.md, docs/CONTINUE.md, последние CURRENT_STATE.md и верхний handoff;
 проверь HEAD/status/реальные процессы. Без субагентов; сохраняй .vscode/Splash.
 
-Текущий приоритет — низкий FPS меню. Native249: поток EE/IOP/softwareGS почти
-занимает одно ядро; GS крупнейшая измеренная группа (~46% raw samples).
-Validated фикс sparse_dispatch.h отсекает PCs вне реальных sorted nonempty таблиц
-ядра И firmware до binary search, сохраняя exact hits и instruction verification.
-Synthetic boundary/holes/singleton/UINT_MAX/mutation tests, Python55 и actual
-Release/PCH PASS. Native251300s/1024M/frame600 watchdogtrue/exitnull: Start11 с
-SIO2 press/release, меню9600 GS640x511 просмотрено, ROI MAE0. Combined lookup
-141/1910=7.38% samples249 ->26/1906=1.36%251. Это не stacks/weightedETW/FPS.
-ICF объединял lower_bound kernel/firmware, поэтому baseline6.54% не kernel-only.
-Synthetic3.88x относится только к заданному workload поиска, не игре. Точные SHA
-и private work/menu-perf-251/{report,comparison,icf-proof} в верхнем handoff.
+Текущий приоритет — производительность меню. Sparse lookup fix bb4ba5b сохранён.
+Новый проверенный фикс: gs_bilinear.h считает RGBA bilinear вместе SSE2 с тем же
+порядком float и lround ties; не add0.5/truncate, не FMA. Scalar fallback nonSSE2.
+Координаты/текстуры/CLUT/TEXA/качество/таймеры/compilerflags не менялись. Overlay
+проверяет SHA полного прежнего math body; upstream/generated read-only.
 
-Следующий252 (проверь unused): профиль dominant GS sprite/texture/filter на том же
-меню, один безопасный fast path из реального draw state, synthetic pixel equality
-и bounded native до/после. Без снижения качества/пропуска IOP или таймеров/миграции
-renderer. Флаги unchanged: runner /Od, GS/runtime /O2; изменение оптимизации
-отдельным проверяемым опытом. Unique guest FPS пока не измерен. Startup helper
-запускай после появления pad-control.txt; один контроллер за раз. Следующие
-пункты про пролог — сохранённая игровая граница и отложенная задача после FPS.
+Public2,048,594 exact math comparisons, bootstrap13/13, Python55 и настоящий
+Release/PCH PASS. Private actual old/new raster416 paired synthetic draws, каждый
+раз все4MiB VRAM одинаковы. Synthetic128 T8linear256x128 sprites median0.301296s
+->0.254510s,15.53% меньше времени только на этот workload, не игра/FPS.
+Native252300s/1024M/frame600 watchdogtrue/exitnull, обычный Start11/SIO2 ACK,
+menu8400 GS640x511 просмотрено и весьRGB пиксельно совпал с251menu9600.
+В новом30s профиле math встроился в SampleTexture; lerp/ucrtbase IP не встретились,
+но это nearestMAP/RIP, не stacks/weightedETW и не измеренный whole-game speedup.
+Точные SHA/evidence/ограничения в верхнем handoff, work/gs-bilinear-252/report.md.
+
+Следующий253 (проверь unused): trustworthy guest GS frame/draw-production counter
+отдельно от UI callbacks и bounded indexed-texture/CLUT draw-state statistics на
+том же меню. После этого выбирай следующий fast path; cache требует CLUT/TEXA/
+state invalidation tests. Не снижай качество/не пропускай IOP/таймеры/не мигрируй
+renderer. Runner /Od, GS/runtime /O2 — unchanged, оптимизация flags отдельным опытом.
+Unique guest FPS пока не измерен. Startup helper только после pad-control.txt,
+один controller за раз. Ниже сохранена игровая граница, отложенная после FPS.
 
 Checkpoint: все3 truncated leaves297E44,29322C,297878 восстановлены по реальным
 инструкциям/epilogues. Map011/lift010,36resume labels сверены, fresh Ghidra
