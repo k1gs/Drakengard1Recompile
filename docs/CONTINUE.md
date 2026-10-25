@@ -1,62 +1,49 @@
 # Продолжение работы
 
-## Current checkpoint: Continue accepted; scene transition under investigation (2026-10-25)
+## Latest: closing fade completes; target delivery under observation (2026-10-25)
 
-User resumed work. No subagents/Computer Use/OS input. Menu FPS work remains
-postponed; continue real game progression. Earlier STOP and pending sections
-below are historical and superseded by this checkpoint and CURRENT_STATE.
+Runtime unchanged from83e1557; actual EXE SHA
+0d24cede033b00c545772545212b273d56994514e03b794834285d6c6db397f1.
+Native281 used the same300s/2048M/interval60/cap320/metricsOFF/watch4fbd30;
+all4input phases0,watchdogtrue/exitnull. No new explicit native/device refusal.
+A read-only owned-process observer verified unique EE RAM with the original ELF
+hash and3code probes; no WriteProcessMemory, debugger or thread suspension.
+Actual closing60->0:61observations,all60net decrements1,9.297wall seconds,
+10.140625process CPU seconds,median0.156s between decrements. This proves
+progress, not an exact trace of the341698a1 register. Target first1485718 and
+final1485920 CDVD reads were reached; no gameplay/world proof.
 
-Native278 repaired the private menu observer: fresh confirmed No6120 -> ordinary
-Left16 -> actual Yes6300 -> Cross17, with serial press/release ACKs. Classifier
-rejects fading/unknown images; at most3 Left retries, only on fresh confirmed No.
-Retry branch was not needed live. Offline all275 frames of277:0 false Yes.
+Critical source-analysis correction: original UI switch table566090 maps state4
+to2c6e80, not2c6930. It waits remaining48a434, calls2b02ac and clears503008 via
+2c6eac, while leaving state4 intact. Do not infer a stuck fade from UI4 alone.
+Earlier83e1557 notes attributing UI0x12 to state4 were incorrect and are corrected.
 
-Continue readiness is now NATIVE VERIFIED: briefing14880, real watch4fbd30
-state2->3, one Cross23/3000ms, then original consumer PC2c692c wrote3->4.
-This proves acceptance of Continue, not world/gameplay. Last278frame16140 black;
-300s watchdog,267 captures, no target789read, no new explicit runtime refusal.
-No dump: the post-read trigger was never reached. Startup/intro/menu0;
-progression1 at295s and observer1 are bounded observation limits.
+A separate read-only main GuestThread PC sample found3809samples/59.422s:
+27f4c4=1272,2fdd08=469. The dispatch target is set BEFORE scheduler safe-point/
+device work, so these are not host stack timings or proof those functions spin.
+Two initial PC locator attempts failed closed (guard page / narrow region cap);
+a fresh valid locator scanned74,469,376bytes in0.110s and verified one actual
+id1/entry120008/stack100000,size20000/GP572c70/context1648. All helpers stay ignored.
 
-Focused source changes: optional capture cap1..320/default32 unchanged; capture
-configuration log; shared fixed-size chunk P6 writer replaces per-pixel stream
-calls in all3 capture paths. Header, RGB bytes, alpha discard, existing selection
-and no-overwrite behavior preserved. No guest/timer/renderer arithmetic changes.
-Synthetic17/17 tests PASS including exact PPM bytes across4096pixel boundaries;
-actual Release build PASS. Synthetic /Od file benchmark:10x640x511 writes,
-3alternating pairs, median0.0967087s legacy vs0.0240027s current,981135bytes equal.
-This is diagnostic serialization overhead only, not measured game FPS.
-New runner SHA0d24cede033b00c545772545212b273d56994514e03b794834285d6c6db397f1.
-Native279 completed300s/2048M/interval60/cap320/metricsOFF/watch4fbd30:
-274periodic frames,last16560 black. Startup/intro/menu0,progression1(deadline295s),
-observer1/no dump. OneCross23 waitedUI3; actualPC2c692c again wrote3->4.
-No target789read or new explicit runtime refusal. No gameplay proof.
-Native280 completed same300s profile,watchdogtrue/exitnull,271captures,last16380
-still a darkened briefing (not a world). Startup/intro/menu0,progression1 at295s.
-OneCross23 accepted. Observer0 collected ONE owned-process snapshot after exact
-PC2c692c WRITE32 UI3->4:701889699bytes,794Memory64 regions structurally complete;
-collector exit1 recorded truthfully. Runtime byte offsets4032187->4045688.
-Snapshot shows UI4/enable1,fader current20,target255,remaining55 of60steps.
-IOP964931584; old resource slot status3/job19decimal,LSN867318/dest491c00/131072B,
-NOT target789. No target1485718/1485920read. This is still closing the briefing,
-not evidence of lost DMA or a failed scene load. Main PC2fdd08/RA28c0a8/SP11ff00;
-original2fdd08 is a VIF1DMA CHCR store launching work, not a spin-loop diagnosis.
-All native/collector processes stopped. Next281 unused (recheck before launch).
+Native282 completed300s watchdog/exitnull:274captures,last16560 black;
+startup/intro/menu0,progression1(deadline295s). First observer1 on early unmatched
+IOP; separate fresh read-only observer2 exited0, but NO targetread occurred.
+Payload attempts0,delivery_verifiedfalse,NO RAM/payload saved. Final actual UI4/
+enable0/fader255,255,0; old completedjob19/status3/LSN867382,dest4b1c00,131072B,
+IOP991711232. This independently confirms that UI4 persists after fade completion.
+No new native/device refusal; target CDVD->EE delivery remains unverified.
 
-Scene request273 remains the causal baseline: scene143194/state2 waits resource
-file789,LSN1485718,481792bytes,destb7db40, status3b2ea0=1/job35 at that snapshot.
-Its actual IOP1182076928 PRECEDED DMA1182375149. Old destination bytes therefore
-DO NOT prove lost DMA. After actual final targetread1485920, require fresh image
-and one owned-process read-only snapshot with runtime byte offsets and independent
-IOP counter. Job IDs are dynamic; older job19hex completion is not target proof.
-Private273/report-snapshot.py validates main context/BareCallState; revalidate
-layouts after toolchain changes. All dumps/frames/inputs/controllers stay ignored.
-Preserve unrelated .vscode/, native/Splash.png, upstream/generated/maps.
-Closing path reconfirmed from the verified original ELF:2c6900 ->2775e0 sets
-fader48a42c,target255,steps60. State4 at2c6930 calls341804 (lw8(a0)) and waits
-remaining48a434; zero advances UI0x12 at2c6950. A black frame may precede this
-completion. Snapshot280 confirmed remaining55, so the target scene request was not active yet.
-No success stubs, PC/RAM/ready/timer/movie patches or budget renewal.
+Next283 is ONLY A PREPARED DRAFT, NOT AUTHORIZED OR RUN. Current project limit
+is300s per native/reference experiment. Proposed ONE600s observation preserves
+sameEXE,original game clocks and fixed2048M without renewal. Private parser copy,
+frameinterval120/cap320,progression595s,observerchildbirth+599.5s are syntaxchecked.
+The draft refuses launch without explicit human600s approval; do not widen public
+launcher or run it until the user agrees. Original300s launcher remains unchanged.
+It will compare EEb7db40/481792bytes twice against ISO LSN1485718*2048, then save
+one private NONATOMIC liveRAM copy with before/after counters only on a match.
+No guest flags/PC/RAM/timers/movie changes, fake completions or budget renewal.
+All native/observer processes stopped. Menu-FPS work remains postponed; preserve
+unrelated .vscode/Splash, inputs/upstream/generated/maps and private evidence.
 
 Этот файл — постоянная точка входа для любого агента с доступом к репозиторию.
 Запрос «продолжи» означает: восстановить актуальное состояние из файлов и
@@ -152,12 +139,13 @@ Old maps/lifts сохраняй; сначала проверь новые име
 ## Следующий ограниченный прогон
 
 Номер сверяй с верхним checkpoint, каталогом work/ и реальными процессами.
-Пример ниже рассчитан на следующий281, если он ещё свободен;280 сначала прочитай до конца. После изменения
+Пример ниже — только обычный300s профиль; НЕ запускай вместо ожидающего
+разрешения600s draft283. Номер283 прежде сверь с каталогами. После изменения
 runtime сначала собери настоящий runner, проверь exit code и SHA-256; smoke.exe
 не заменяет ps2EntryRunner. Сборка при живом native процессе запрещена.
 
 ```powershell
-$nativeRun=281
+$nativeRun=283
 $env:DRAKENGARD_FRAME_INTERVAL="60"
 $env:DRAKENGARD_FRAME_LIMIT="320"
 python scripts/run_native.py --input-complete --run $nativeRun --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 2048 --ee-write-watch 0x4fbd30

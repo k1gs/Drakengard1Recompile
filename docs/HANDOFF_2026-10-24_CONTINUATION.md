@@ -1,6 +1,51 @@
 # Drakengard Europe continuation handoff
 
-## Current checkpoint: Continue accepted; scene transition under investigation (2026-10-25)
+## Latest: closing fade completes; target delivery under observation (2026-10-25)
+
+Runtime unchanged from83e1557; actual EXE SHA
+0d24cede033b00c545772545212b273d56994514e03b794834285d6c6db397f1.
+Native281 used the same300s/2048M/interval60/cap320/metricsOFF/watch4fbd30;
+all4input phases0,watchdogtrue/exitnull. No new explicit native/device refusal.
+A read-only owned-process observer verified unique EE RAM with the original ELF
+hash and3code probes; no WriteProcessMemory, debugger or thread suspension.
+Actual closing60->0:61observations,all60net decrements1,9.297wall seconds,
+10.140625process CPU seconds,median0.156s between decrements. This proves
+progress, not an exact trace of the341698a1 register. Target first1485718 and
+final1485920 CDVD reads were reached; no gameplay/world proof.
+
+Critical source-analysis correction: original UI switch table566090 maps state4
+to2c6e80, not2c6930. It waits remaining48a434, calls2b02ac and clears503008 via
+2c6eac, while leaving state4 intact. Do not infer a stuck fade from UI4 alone.
+Earlier83e1557 notes attributing UI0x12 to state4 were incorrect and are corrected.
+
+A separate read-only main GuestThread PC sample found3809samples/59.422s:
+27f4c4=1272,2fdd08=469. The dispatch target is set BEFORE scheduler safe-point/
+device work, so these are not host stack timings or proof those functions spin.
+Two initial PC locator attempts failed closed (guard page / narrow region cap);
+a fresh valid locator scanned74,469,376bytes in0.110s and verified one actual
+id1/entry120008/stack100000,size20000/GP572c70/context1648. All helpers stay ignored.
+
+Native282 completed300s watchdog/exitnull:274captures,last16560 black;
+startup/intro/menu0,progression1(deadline295s). First observer1 on early unmatched
+IOP; separate fresh read-only observer2 exited0, but NO targetread occurred.
+Payload attempts0,delivery_verifiedfalse,NO RAM/payload saved. Final actual UI4/
+enable0/fader255,255,0; old completedjob19/status3/LSN867382,dest4b1c00,131072B,
+IOP991711232. This independently confirms that UI4 persists after fade completion.
+No new native/device refusal; target CDVD->EE delivery remains unverified.
+
+Next283 is ONLY A PREPARED DRAFT, NOT AUTHORIZED OR RUN. Current project limit
+is300s per native/reference experiment. Proposed ONE600s observation preserves
+sameEXE,original game clocks and fixed2048M without renewal. Private parser copy,
+frameinterval120/cap320,progression595s,observerchildbirth+599.5s are syntaxchecked.
+The draft refuses launch without explicit human600s approval; do not widen public
+launcher or run it until the user agrees. Original300s launcher remains unchanged.
+It will compare EEb7db40/481792bytes twice against ISO LSN1485718*2048, then save
+one private NONATOMIC liveRAM copy with before/after counters only on a match.
+No guest flags/PC/RAM/timers/movie changes, fake completions or budget renewal.
+All native/observer processes stopped. Menu-FPS work remains postponed; preserve
+unrelated .vscode/Splash, inputs/upstream/generated/maps and private evidence.
+
+## Previous: Continue accepted; scene transition under investigation (2026-10-25)
 
 User resumed work. No subagents/Computer Use/OS input. Menu FPS work remains
 postponed; continue real game progression. Earlier STOP and pending sections
@@ -53,9 +98,11 @@ Private273/report-snapshot.py validates main context/BareCallState; revalidate
 layouts after toolchain changes. All dumps/frames/inputs/controllers stay ignored.
 Preserve unrelated .vscode/, native/Splash.png, upstream/generated/maps.
 Closing path reconfirmed from the verified original ELF:2c6900 ->2775e0 sets
-fader48a42c,target255,steps60. State4 at2c6930 calls341804 (lw8(a0)) and waits
-remaining48a434; zero advances UI0x12 at2c6950. A black frame may precede this
-completion. Snapshot280 confirmed remaining55, so the target scene request was not active yet.
+fader48a42c,target255,steps60. CORRECTION after281: original switch table566090
+maps state4 to2c6e80, which calls341804 and waits remaining48a434; zero calls
+2b02ac then clears enable503008 at2c6eac, leaving UI state4 unchanged.
+The previously attributed2c6930 ->UI0x12 branch is NOT state4. Snapshot280 still
+correctly showed an active closing fade; UI4 alone does not prove it remains active.
 No success stubs, PC/RAM/ready/timer/movie patches or budget renewal.
 
 ## Previous: scene request located; denser bounded observation in validation (2026-10-25)
