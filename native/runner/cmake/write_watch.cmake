@@ -1,18 +1,19 @@
 # Shared build-local runtime macro shadow. Keep the pinned source read-only;
-# instrument existing write traces and correct the reviewed COP1 compare domain.
+# instrument write traces and correct reviewed COP1 compare/conversion results.
 file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/include/ps2_runtime_macros.h" write_watch_source)
-set(write_watch_header "#pragma once\n#include \"${REPO_ROOT}/native/runner/ee_write_watch.h\"\n#include \"${REPO_ROOT}/native/runner/ee_fpu_compare.h\"\n")
+set(write_watch_header "#pragma once\n#include \"${REPO_ROOT}/native/runner/ee_write_watch.h\"\n#include \"${REPO_ROOT}/native/runner/ee_fpu_compare.h\"\n#include \"${REPO_ROOT}/native/runner/ee_fpu_convert.h\"\n")
 foreach(compare_pair IN ITEMS
     "#define FPU_C_EQ_S(a, b) ((float)(a) == (float)(b))@@#define FPU_C_EQ_S(a, b) drakengard::eeFpuEqual((a), (b))"
     "#define FPU_C_OLT_S(a, b) ((float)(a) < (float)(b))@@#define FPU_C_OLT_S(a, b) drakengard::eeFpuLess((a), (b))"
-    "#define FPU_C_OLE_S(a, b) ((float)(a) <= (float)(b))@@#define FPU_C_OLE_S(a, b) drakengard::eeFpuLessEqual((a), (b))")
+    "#define FPU_C_OLE_S(a, b) ((float)(a) <= (float)(b))@@#define FPU_C_OLE_S(a, b) drakengard::eeFpuLessEqual((a), (b))"
+    "#define FPU_CVT_W_S(a) ((int32_t)nearbyintf((float)(a)))@@#define FPU_CVT_W_S(a) drakengard::eeFpuConvertWord((a))")
     string(FIND "${compare_pair}" "@@" compare_separator)
     string(SUBSTRING "${compare_pair}" 0 ${compare_separator} compare_old)
     math(EXPR compare_new_start "${compare_separator}+2")
     string(SUBSTRING "${compare_pair}" ${compare_new_start} -1 compare_new)
     string(FIND "${write_watch_source}" "${compare_old}" compare_at)
     if(compare_at LESS 0)
-        message(FATAL_ERROR "Pinned scalar FPU comparison macro changed")
+        message(FATAL_ERROR "Pinned scalar FPU macro changed")
     endif()
     string(REPLACE "${compare_old}" "${compare_new}" write_watch_source "${write_watch_source}")
 endforeach()

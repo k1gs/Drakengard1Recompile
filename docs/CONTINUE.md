@@ -1,49 +1,51 @@
 # Продолжение работы
 
-## Latest: closing fade completes; target delivery under observation (2026-10-25)
+## Latest: CVT.W.S sort fixed and native verified; missing owner tail2ad344 (2026-10-25)
 
-Runtime unchanged from83e1557; actual EXE SHA
-0d24cede033b00c545772545212b273d56994514e03b794834285d6c6db397f1.
-Native281 used the same300s/2048M/interval60/cap320/metricsOFF/watch4fbd30;
-all4input phases0,watchdogtrue/exitnull. No new explicit native/device refusal.
-A read-only owned-process observer verified unique EE RAM with the original ELF
-hash and3code probes; no WriteProcessMemory, debugger or thread suspension.
-Actual closing60->0:61observations,all60net decrements1,9.297wall seconds,
-10.140625process CPU seconds,median0.156s between decrements. This proves
-progress, not an exact trace of the341698a1 register. Target first1485718 and
-final1485920 CDVD reads were reached; no gameplay/world proof.
+User approved600s diagnostic execution and delegated routine choices. Keep finite
+600s maximum for this validation profile and fixed2048M IOP without renewal;
+public launcher remains300s, private verified extended launcher stays ignored.
+Native283 on old0d24cede...EXE completed600s watchdog/exitnull, allinput phases0,
+observer0. Exact481792B file789 from ISO1485718*2048 matched EEb7db40 TWICE.
+SHA cbf01937e8b52bc842272646c53743ab4791cefb5b19e787dc0453396c46b5ba.
+IOP999749747->999756219 during reads; job34/status2 then actualstatus3/object6.
+Live RAM copy is NONATOMIC (IOP999768532->999932807), not a full-process snapshot.
+Next actual readLSN1482591/6402419B reached final1485664/54sectors; node48fd10
+was reused, so oldjob34/status3 must NOT be attributed to this later request.
+Late scene handler143194 at3b4c20 advanced substate+5c2->4. No rendered world.
 
-Critical source-analysis correction: original UI switch table566090 maps state4
-to2c6e80, not2c6930. It waits remaining48a434, calls2b02ac and clears503008 via
-2c6eac, while leaving state4 intact. Do not infer a stuck fade from UI4 alone.
-Earlier83e1557 notes attributing UI0x12 to state4 were incorrect and are corrected.
+Confirmed next defect: original comb-sort24e4d8 repeatedly has gap2/no swaps,
+51entries in scratchpad70000000. Constant56e8c0=1.2999999523162842. The emitted
+CVT.W.S24e50c called hostnearbyintf, giving2 for2/1.3; gap never reaches1 and
+original backedge24e584 never terminates. Source/runtime cause, no gap patch.
+Pinned PCSX2v2.8.2 CVT_W truncates towardzero and saturates by sign; recompiler
+usesCVTTSS2SI. Original ee_fpu_convert.h + shared macro/PCH overlay now implements
+that RESULT contract, independent of host rounding; no broader FCR31 flag model.
+Upstream/generated/gamecode unchanged.18/18 tests PASS:boundaries/all4rounding
+modes, fail-before nearbyint2/1.3=2, bounded synthetic51entry comb-sort termination.
+Actual fullPCH Release build PASS; newEXE SHA
+81886f391519c3acb95180d215c43d93e20e91b7e72a4ae658f2d5543b6f3583.
+Native284 VERIFIED advancement beyond the old sort: nativeexit5/timed_out=false,
+all4input phases0, same600s/2048M profile. Firstobserver1 on transient nullCIMpath;
+freshobserver2 waited for validpath, verified owned EE/IOP, exited0 and proved
+payload delivery again (two attempts, second matched). LiveRAM hash
+bcf501867cf345a8de911c553a84f994cad7f57914f2b2a3c035979d2a5cddfd.
+Reviewed final640x511 GS shows "Loading...", not a rendered world/gameplay.
+All native/observer processes stopped. Next285 unused (recheck).
 
-A separate read-only main GuestThread PC sample found3809samples/59.422s:
-27f4c4=1272,2fdd08=469. The dispatch target is set BEFORE scheduler safe-point/
-device work, so these are not host stack timings or proof those functions spin.
-Two initial PC locator attempts failed closed (guard page / narrow region cap);
-a fresh valid locator scanned74,469,376bytes in0.110s and verified one actual
-id1/entry120008/stack100000,size20000/GP572c70/context1648. All helpers stay ignored.
-
-Native282 completed300s watchdog/exitnull:274captures,last16560 black;
-startup/intro/menu0,progression1(deadline295s). First observer1 on early unmatched
-IOP; separate fresh read-only observer2 exited0, but NO targetread occurred.
-Payload attempts0,delivery_verifiedfalse,NO RAM/payload saved. Final actual UI4/
-enable0/fader255,255,0; old completedjob19/status3/LSN867382,dest4b1c00,131072B,
-IOP991711232. This independently confirms that UI4 persists after fade completion.
-No new native/device refusal; target CDVD->EE delivery remains unverified.
-
-Next283 is ONLY A PREPARED DRAFT, NOT AUTHORIZED OR RUN. Current project limit
-is300s per native/reference experiment. Proposed ONE600s observation preserves
-sameEXE,original game clocks and fixed2048M without renewal. Private parser copy,
-frameinterval120/cap320,progression595s,observerchildbirth+599.5s are syntaxchecked.
-The draft refuses launch without explicit human600s approval; do not widen public
-launcher or run it until the user agrees. Original300s launcher remains unchanged.
-It will compare EEb7db40/481792bytes twice against ISO LSN1485718*2048, then save
-one private NONATOMIC liveRAM copy with before/after counters only on a match.
-No guest flags/PC/RAM/timers/movie changes, fake completions or budget renewal.
-All native/observer processes stopped. Menu-FPS work remains postponed; preserve
-unrelated .vscode/Splash, inputs/upstream/generated/maps and private evidence.
+FIRST REMAINING BLOCKER: scheduler target2ad344,RA1a22d4,SP11f8d0,GP572c70.
+Owning exported function2aca3c has exclusive end2ad344, so the real instruction
+SRLa1,a1,1 at2ad344 is missing. BEQ2ad334 targets2ad340 (VNOP, also the delay
+slot of J2ad33c), then should execute2ad344 and BNEZ2ad348 back to2acc08.
+The export instead splits2ad348 into a separate owner which branches back inside
+2aca3c; registration omits2ad344. Recover the actual owning body/control-flow
+and resume set in original analysis/generator/overlay, preserve all3prior
+recoveries, use fresh map/lift and bounded native285. Do NOT add a success stub,
+blind alias, guestPC change or a second prologue. Original tail disassembly and
+before/after evidence are private chapter1-284; next cause is ownership/export,
+not a new DMA defect. No gameplay claim.
+No subagents/ComputerUse/OS input, gameclock/PC/RAM patches, fake completions or
+budget renewal. Preserve .vscode/Splash/upstream/generated/maps/private evidence.
 
 Этот файл — постоянная точка входа для любого агента с доступом к репозиторию.
 Запрос «продолжи» означает: восстановить актуальное состояние из файлов и
@@ -100,7 +102,7 @@ Start/Cross после проверки готовности; реальный c
 эквивалентное состояние owned reference, последовательно с native.
 
 Не форсируй ready/time/PC/RAM. Пройди следующую реальную сцену и проверь движение/
-бой прежде, чем заявлять gameplay. Каждый native/reference run максимум300s.
+бой прежде, чем заявлять gameplay. Обычный предел native/reference300s; текущий600s профиль явно одобрен пользователем.
 Private248 menu script accepts run ID; prologue script hardcodes248/output/seq14,
 поэтому используй новую копию с проверенными именами/sequence, не overwrite.
 Один controller за раз, actual GS state и SIO2 press/release; ACK не равен UI action.
@@ -139,13 +141,14 @@ Old maps/lifts сохраняй; сначала проверь новые име
 ## Следующий ограниченный прогон
 
 Номер сверяй с верхним checkpoint, каталогом work/ и реальными процессами.
-Пример ниже — только обычный300s профиль; НЕ запускай вместо ожидающего
-разрешения600s draft283. Номер283 прежде сверь с каталогами. После изменения
+Пример ниже показывает обычный publiclauncher300s. Для текущей600s проверки
+используй свежую копию последнего privateextendedlauncher/controllers, учитывая
+исправленный observe2 startup. Следующий285 прежде сверь с каталогами. После изменения
 runtime сначала собери настоящий runner, проверь exit code и SHA-256; smoke.exe
 не заменяет ps2EntryRunner. Сборка при живом native процессе запрещена.
 
 ```powershell
-$nativeRun=283
+$nativeRun=285
 $env:DRAKENGARD_FRAME_INTERVAL="60"
 $env:DRAKENGARD_FRAME_LIMIT="320"
 python scripts/run_native.py --input-complete --run $nativeRun --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 2048 --ee-write-watch 0x4fbd30
@@ -163,7 +166,7 @@ DRAKENGARD_FRAME_LIMIT1..320 — opt-in конечный cap, default32. Инт�
 измеряется в host UI observations, не игровых кадрах/FPS. Interval60 даёт более
 частое распознавание состояния и добавляет capture I/O overhead. Сохраняй actual
 config line, EXE hash и число файлов в evidence. Ни rawGS, ни metadata не заменяют
-проверку gameplay. Native/reference последовательно, каждый максимум300s.
+проверку gameplay. Native/reference последовательно: обычный300s, текущий одобренный профиль600s.
 
 ## Проверка и завершение этапа
 

@@ -1,63 +1,75 @@
 # Промпт продолжения
 
-Продолжи Drakengard1 Recompile, PS2 Europe, D:\proj\drakengard 1 recompile.
-Сначала AGENTS.md, docs/CONTINUE.md, latest CURRENT_STATE.md и самый верх
-HANDOFF_2026-10-24_CONTINUATION.md. Проверь actual HEAD/status/processes, fresh run
-number. Без субагентов/ComputerUse/OS input. FPS меню отложен; цель — дальше игру.
-Inputs ранее подтверждены complete, read-only. Сохрани unrelated .vscode/Splash,
-upstream/generated/maps и все private evidence. Только original source/synthetic
-tests/reviewed docs в Git, staged review и check_public_tree.py перед публикацией.
-Focused validated commit/normal push разрешены. Каждый native/reference <=300s,
-последовательно; без PC/RAM/ready/timer/movie patches, fake completions/renewal.
+Продолжи Drakengard1 PS2 Europe в D:\proj\drakengard 1 recompile.
+Прочитай AGENTS/CONTINUE/latestCURRENT_STATE/topHANDOFF и actualHEAD/status/processes.
+Без субагентов/ComputerUse/OS input. FPS меню отложен; inputs complete/read-only.
+Сохрани unrelated .vscode/Splash, upstream/generated/maps и весьprivate evidence.
+Пользователь одобрил600s профиль и дал «делай как знаешь»: для проверки сохраняй
+finite600s/fixed2048M/no renewal. Publiclauncher300s неизменён, extendedprivate.
+Не спрашивай повторно разрешение на уже одобренный bounded600s профиль.
 
-Runtime83e1557 не менялся; EXE SHA256
-0d24cede033b00c545772545212b273d56994514e03b794834285d6c6db397f1.
-Первый проверенный шаг281: UI readiness2->3, один обычный Cross принят,
-closing fader60->0 за9.297s;61observations,60decrements ровно1,CPU10.140625s,
-median0.156s. Это измерение counter cadence, НЕ прямой trace регистраa1.
-Все4input phases281exit0, nativewatchdog300s/exitnull; targetresource789
-LSN1485718 и final1485920 реально читались. Gameplay/world/audio/saves нет.
+## Latest: CVT.W.S sort fixed and native verified; missing owner tail2ad344 (2026-10-25)
 
-ВАЖНО: исправлена прежняя ошибка анализа83e1557. Switch table566090 maps
-UIstate4 to2c6e80, НЕ2c6930. State4 waits remaining48a434 via341804, calls2b02ac,
-then clears enable503008 at2c6eac and keeps UIstate4. Поэтому UI4/remaining0
-НЕ является зависанием. 2c6930->UI0x12 — другая ветка. Source contract281 private.
+User approved600s diagnostic execution and delegated routine choices. Keep finite
+600s maximum for this validation profile and fixed2048M IOP without renewal;
+public launcher remains300s, private verified extended launcher stays ignored.
+Native283 on old0d24cede...EXE completed600s watchdog/exitnull, allinput phases0,
+observer0. Exact481792B file789 from ISO1485718*2048 matched EEb7db40 TWICE.
+SHA cbf01937e8b52bc842272646c53743ab4791cefb5b19e787dc0453396c46b5ba.
+IOP999749747->999756219 during reads; job34/status2 then actualstatus3/object6.
+Live RAM copy is NONATOMIC (IOP999768532->999932807), not a full-process snapshot.
+Next actual readLSN1482591/6402419B reached final1485664/54sectors; node48fd10
+was reused, so oldjob34/status3 must NOT be attributed to this later request.
+Late scene handler143194 at3b4c20 advanced substate+5c2->4. No rendered world.
 
-281 read-only PC sampling:3809samples/59.422s,27f4c4=1272,2fdd08=469. Dispatch
-sets targetPC BEFORE scheduler/device safepoint; это НЕ host stack profile и
-НЕ доказательство spin-loop. Unique main GuestThread verified by id1/entry120008/
-stack100000,size20000/GP572c70/context1648. Guard/narrow-region failed attempts
-остались private, ничего не изменяли. Fader observer9248samples/0readerrors.
+Confirmed next defect: original comb-sort24e4d8 repeatedly has gap2/no swaps,
+51entries in scratchpad70000000. Constant56e8c0=1.2999999523162842. The emitted
+CVT.W.S24e50c called hostnearbyintf, giving2 for2/1.3; gap never reaches1 and
+original backedge24e584 never terminates. Source/runtime cause, no gap patch.
+Pinned PCSX2v2.8.2 CVT_W truncates towardzero and saturates by sign; recompiler
+usesCVTTSS2SI. Original ee_fpu_convert.h + shared macro/PCH overlay now implements
+that RESULT contract, independent of host rounding; no broader FCR31 flag model.
+Upstream/generated/gamecode unchanged.18/18 tests PASS:boundaries/all4rounding
+modes, fail-before nearbyint2/1.3=2, bounded synthetic51entry comb-sort termination.
+Actual fullPCH Release build PASS; newEXE SHA
+81886f391519c3acb95180d215c43d93e20e91b7e72a4ae658f2d5543b6f3583.
+Native284 VERIFIED advancement beyond the old sort: nativeexit5/timed_out=false,
+all4input phases0, same600s/2048M profile. Firstobserver1 on transient nullCIMpath;
+freshobserver2 waited for validpath, verified owned EE/IOP, exited0 and proved
+payload delivery again (two attempts, second matched). LiveRAM hash
+bcf501867cf345a8de911c553a84f994cad7f57914f2b2a3c035979d2a5cddfd.
+Reviewed final640x511 GS shows "Loading...", not a rendered world/gameplay.
+All native/observer processes stopped. Next285 unused (recheck).
 
-Последний282 завершён300s watchdog/exitnull;274captures,last16560black.
-Startup/intro/menu0,progression1 at295s. Firstobserver1 earlyIOPidentity0;
-свежий observe2exit0,но0payloadattempts/delivery_verifiedfalse: targetread не
-успел,никакой lateRAM/payload не сохранён. Actual UI4/enable0/fader255,255,0,
-IOP991711232,oldjob19/status3/LSN867382,dest4b1c00,131072B; это НЕ target789.
-Нет нового runtime/device fault; targetdelivery всё ещё не доказана.
+FIRST REMAINING BLOCKER: scheduler target2ad344,RA1a22d4,SP11f8d0,GP572c70.
+Owning exported function2aca3c has exclusive end2ad344, so the real instruction
+SRLa1,a1,1 at2ad344 is missing. BEQ2ad334 targets2ad340 (VNOP, also the delay
+slot of J2ad33c), then should execute2ad344 and BNEZ2ad348 back to2acc08.
+The export instead splits2ad348 into a separate owner which branches back inside
+2aca3c; registration omits2ad344. Recover the actual owning body/control-flow
+and resume set in original analysis/generator/overlay, preserve all3prior
+recoveries, use fresh map/lift and bounded native285. Do NOT add a success stub,
+blind alias, guestPC change or a second prologue. Original tail disassembly and
+before/after evidence are private chapter1-284; next cause is ownership/export,
+not a new DMA defect. No gameplay claim.
+No subagents/ComputerUse/OS input, gameclock/PC/RAM patches, fake completions or
+budget renewal. Preserve .vscode/Splash/upstream/generated/maps/private evidence.
 
-283 — ТОЛЬКО ПОДГОТОВЛЕННЫЙ, НЕЗАПУЩЕННЫЙ draft одного600s наблюдения.
-Текущее правило проекта <=300s сохранено, publiclauncher НЕ изменён.
-Требуется ЯВНОЕ разрешение пользователя на один600s прогон прежде запуска:
-тот жеEXE/gameclocks,IOP2048M безrenewal; screenshotinterval120/cap320 покрывает
-600s,progression595,observerchildbirth599.5. Синтаксис6privatehelpers PASS.
-Draftlaunch.py откажет без DRAKENGARD_USER_APPROVED_600=1; не выставляй его без
-прямого humanapproval. При отказе сохрани300s; не обходи правило копиейlauncher.
-Цель разрешённого600s: послеfinalread дважды сравнить actualEEb7db40/481792bytes
-с originalISO1485718*2048, expectedSHA
-cbf01937e8b52bc842272646c53743ab4791cefb5b19e787dc0453396c46b5ba.
-Только при полном совпадении сохранить privateNONATOMIC liveRAM с IOPcounters
-before/after; это НЕ atomicfullprocesssnapshot. Первое чтение слишком поздно
-для прежнего тяжёлого ProcDump; read-onlyVM_READ не приостанавливает потоки.
-Сейчас native/reference/observer процессов нет. Проверь actual state ещё раз.
 
-Если payload действительно совпал, CDVD->EEdelivery этого ресурса подтверждена;
-анализируй следующий consumer/scene state по lateRAM и источнику. Если mismatch
-или targetread не успел, это НЕ доказанная потеряDMA. Сохрани реальные counters,
-jobID/status/node+14LSN/+18destination/+1csize; jobs переиспользуются. Старый273
-snapshot предшествовал targetread, а job19/LSN867318 был другой завершённый запрос.
-Нельзя объявлять lostDMA по устаревшим байтам/общемуUIframecounter.
-Все3 recovered leaves/36resume labels уже исправлены; futureGhidraexport должен
-сохранять3recoveries из ANALYSIS_REGRESSIONS.md. Не регрессируйscheduler/IPU/SPRadapters.
-Обнови CURRENT_STATE/topHANDOFF/CONTINUE/этотprompt с доказанным итогом и следующим
-конкретным экспериментом. До настоящего мира/движения/боя gameplay не заявлять.
+Первое действие: проверь HEAD/status/processes и native284 finalresult, не
+запускай284повторно. Следующий285. Фокус — realowningbody2aca3c/2ad344 и ложное
+разделение2ad348: проверь hash-gatedoriginalELF, map011/Ghidrabody/recovery tools,
+realJR/stackrestore/borrowed-delay exits и registeredresumes. Не объявляй точную
+новуюграницу без оригинальных байтов. Сохрани3старыхrecoveries и синтетические
+ANALYSIS_REGRESSIONS.md проверки; freshmap/lift names, no edits oldgenerated.
+Public source changes сейчас CVTconverthelper +sharedCmakePCHmacro +synthetic
+regression.18/18bootstrap/fullactualRelease/native284 validation PASS for this
+fix; nextmissing-ownerblocker ещёНЕисправлен. CurrentEXE81886f..., old0d24...bad.
+Fresh285 controller recipe — copy284, но используй исправленный observe2startup
+waitforactualExecutablePath; не создавай конкурентные input/observer phases.
+Сохраниfinite600s/fixed2048M/no renewal и actualordinarypad/realreadiness gate.
+Deliveryfile789 уже доказана в283/284; node48fd10reused, oldjob34/36status3 нельзя
+приписывать следующему6.4MBзапросу. ВсеRAMcopies NONATOMIC, no fakegameplayproof.
+ОбновиCURRENT_STATE/topHANDOFF/CONTINUE/prompt, stagedreview/publictreegate,
+focusedsource/tests/docscommit+normalpush разрешены. Не публикуйgamebytes/BIOS/
+RAMPayload/frames/privatehelpers. Мир/движение/бой/audio/saves/recovery отдельно.
