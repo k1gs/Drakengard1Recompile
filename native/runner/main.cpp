@@ -3,6 +3,7 @@
 #include "iop_bridge.h"
 #include "firmware_functions.h"
 #include "guest_frame_capture.h"
+#include "gs_production_metrics.h"
 #include "host_pad_input.h"
 #include "runtime/ee_scheduler.h"
 #include "ee_write_watch.h"
@@ -45,6 +46,7 @@ int main(int argc, char** argv) {
                 auto& state = *static_cast<Diagnostics*>(data);
                 pollVirtualPadInput();
                 state.capture.observe(rt.gs());
+                drakengard::pollGsProductionMetrics();
                 auto& ticks = state.frames;
                 if (++ticks % 120 != 0) return;
                 const auto snapshot = rt.eeScheduler().snapshot();

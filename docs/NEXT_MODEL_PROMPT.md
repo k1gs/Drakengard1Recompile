@@ -4,29 +4,32 @@
 Прочитай AGENTS.md, docs/CONTINUE.md, последние CURRENT_STATE.md и верхний handoff;
 проверь HEAD/status/реальные процессы. Без субагентов; сохраняй .vscode/Splash.
 
-Текущий приоритет — производительность меню. Sparse lookup fix bb4ba5b сохранён.
-Новый проверенный фикс: gs_bilinear.h считает RGBA bilinear вместе SSE2 с тем же
-порядком float и lround ties; не add0.5/truncate, не FMA. Scalar fallback nonSSE2.
-Координаты/текстуры/CLUT/TEXA/качество/таймеры/compilerflags не менялись. Overlay
-проверяет SHA полного прежнего math body; upstream/generated read-only.
+Текущий приоритет — производительность меню. Предыдущие sparse lookup/SIMD bilinear
+fixes сохранены. Новый --gs-metrics default off: bounded private separate UIcalls,
+observedVBlankTicks, validlatchedcopies, RGBchanges, completeddraws/wall, CLUTloads,
+statebins. Семантика/keylayout в docs/GS_PRODUCTION_METRICS.md. Не называй все
+счётчики FPS: partial/missed/identical frames и overhead существенны.
 
-Public2,048,594 exact math comparisons, bootstrap13/13, Python55 и настоящий
-Release/PCH PASS. Private actual old/new raster416 paired synthetic draws, каждый
-раз все4MiB VRAM одинаковы. Synthetic128 T8linear256x128 sprites median0.301296s
-->0.254510s,15.53% меньше времени только на этот workload, не игра/FPS.
-Native252300s/1024M/frame600 watchdogtrue/exitnull, обычный Start11/SIO2 ACK,
-menu8400 GS640x511 просмотрено и весьRGB пиксельно совпал с251menu9600.
-В новом30s профиле math встроился в SampleTexture; lerp/ucrtbase IP не встретились,
-но это nearestMAP/RIP, не stacks/weightedETW и не измеренный whole-game speedup.
-Точные SHA/evidence/ограничения в верхнем handoff, work/gs-bilinear-252/report.md.
+253baseline/254fastpath по24 settled5s windows (~120s): UI59.22->58.82/с,
+observedticks/readbacks6.72788->7.15342/с (+6.325% в этой паре), RGB5.66->5.28/с
+(не FPS!). Rasterwall54.22%->51.60%. Count/time conservation PASS, overflow0.
+Главные два T8/CT32/CSA0 состояния были58.19% rasterwall. Новый narrow cache-free
+путь читает live CLUT два halfwords: обаCSM дают index, TEXA CT32 identity;
+allotherstates originalLookupCLUT. Никакой stale palette/cache или guest timing.
 
-Следующий253 (проверь unused): trustworthy guest GS frame/draw-production counter
-отдельно от UI callbacks и bounded indexed-texture/CLUT draw-state statistics на
-том же меню. После этого выбирай следующий fast path; cache требует CLUT/TEXA/
-state invalidation tests. Не снижай качество/не пропускай IOP/таймеры/не мигрируй
-renderer. Runner /Od, GS/runtime /O2 — unchanged, оптимизация flags отдельным опытом.
-Unique guest FPS пока не измерен. Startup helper только после pad-control.txt,
-один controller за раз. Ниже сохранена игровая граница, отложенная после FPS.
+464 actual-raster A/B syntheticdraws с полным4MiB VRAM равенством, в том числе
+палитра writes/TEXFLUSH/LoadClut повторно; synthetic T8batch17.27% меньше времени
+только на этот workload. Bootstrap14/14, Python56, actualRelease/PCH PASS.
+Native253/254300s/1024M/frame600/--gs-metrics watchdogtrue/exitnull. Обычный
+Start11/SIO2 pressrelease, menu640x511 просмотрено и pixel-identical к252.
+ТочныеSHA/privateevidence/limits в topHANDOFF, work/gs-clut-254/report.md/json.
+
+Следующий255 (проверь unused): profile remaining T8 texture/page-cache reads и
+per-pixel blending с этими counters, затем один safe fastpath с fullraster pixel
+equality и comparable native before/after. No palette cache без invalidation
+proof/quality/timer/IOP skipping. Runner /Od, GS/runtime /O2 unchanged. Startup
+helper после pad-control.txt, один controller за раз. Сохранённая игровая граница
+ниже отложена до performance; не возвращай старые scheduler blockers.
 
 Checkpoint: все3 truncated leaves297E44,29322C,297878 восстановлены по реальным
 инструкциям/epilogues. Map011/lift010,36resume labels сверены, fresh Ghidra

@@ -39,9 +39,22 @@ string(REPLACE "    const uint32_t entryPc = ctx->pc;\n    targetFn(rdram, ctx, 
 if(runtime_diagnostic STREQUAL runtime_fatal_devices)
     message(FATAL_ERROR "Pinned guest dispatch target invocation changed")
 endif()
+string(REPLACE "    const uint64_t currentTick = rt->eeScheduler().currentVSyncTick();"
+    "    const uint64_t currentTick = rt->eeScheduler().currentVSyncTick();\n    drakengard::observeGsUiTick(currentTick);"
+    runtime_tick_metric "${runtime_diagnostic}")
+if(runtime_tick_metric STREQUAL runtime_diagnostic)
+    message(FATAL_ERROR "Pinned UploadFrame guest-tick metric point changed")
+endif()
+set(presentation_metric_anchor "    PS2_IF_AGRESSIVE_LOGS({\n        static uint32_t s_uploadDebugCount = 0u;")
+string(REPLACE "${presentation_metric_anchor}"
+    "    drakengard::observeGsRgb(s_scratch, width, height);\n${presentation_metric_anchor}"
+    runtime_presentation_metric "${runtime_tick_metric}")
+if(runtime_presentation_metric STREQUAL runtime_tick_metric)
+    message(FATAL_ERROR "Pinned valid GS readback metric point changed")
+endif()
 set(runtime_file "${CMAKE_BINARY_DIR}/private_extended_Runtime.cpp")
 file(CONFIGURE OUTPUT "${runtime_file}"
-    CONTENT "#include <exception>\n#include \"kernel_functions.h\"\n#include \"firmware_functions.h\"\n#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"sif_transport.h\"\n#include \"ee_transfer_diagnostic.h\"\n${runtime_diagnostic}" @ONLY)
+    CONTENT "#include \"gs_production_metrics.h\"\n#include <exception>\n#include \"kernel_functions.h\"\n#include \"firmware_functions.h\"\n#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"sif_transport.h\"\n#include \"ee_transfer_diagnostic.h\"\n${runtime_presentation_metric}" @ONLY)
 set_source_files_properties("${runtime_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
 get_target_property(runtime_sources ps2_runtime SOURCES)

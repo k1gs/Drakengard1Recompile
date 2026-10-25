@@ -30,6 +30,7 @@ def main(argv=None):
     parser.add_argument("--iop-video-events", action="store_true", help="Forward shared EE VBlank events to strict IOP; experimental, SIO2 remains incomplete")
     parser.add_argument("--virtual-pad", action="store_true", help="Emulate DualShock2 port1 from keyboard/gamepad input; requires --iop-video-events")
     parser.add_argument("--pad-control", action="store_true", help="Use an explicit bounded host controller command file instead of window/keyboard input")
+    parser.add_argument("--gs-metrics", action="store_true", help="Record bounded GS production/state diagnostics; adds observation overhead, not a game FPS counter")
     parser.add_argument("--ee-write-watch", type=parse_int0, default=None,
                         help="Watch one aligned 8-byte EE RAM slot; requires --ee-firmware-entry")
     parser.add_argument("--ee-write-watch-arm-value", type=parse_int0, default=None,
@@ -106,6 +107,10 @@ def main(argv=None):
         environment.pop("DRAKENGARD_VIRTUAL_PAD", None)
         environment.pop("DRAKENGARD_PAD_CONTROL", None)
         environment.pop("DRAKENGARD_GS_COLOR_OUTPUT", None)
+        environment.pop("DRAKENGARD_GS_METRICS_OUTPUT", None)
+        result["gs_metrics_experiment"] = args.gs_metrics
+        if args.gs_metrics:
+            environment["DRAKENGARD_GS_METRICS_OUTPUT"] = str(run / "gs-metrics.jsonl")
         environment.pop("DRAKENGARD_IOP_RUNTIME_BUDGET", None)
         result["virtual_pad_experiment"] = args.virtual_pad
         result["pad_control_experiment"] = args.pad_control

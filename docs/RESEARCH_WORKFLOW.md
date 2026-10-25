@@ -149,3 +149,20 @@ real raster equivalence, synthetic timed workload and native menu are distinct
 validation layers. Timed synthetic sprites do not establish game FPS. Inlining
 moves costs into SampleTexture; disappearance of a symbol/DLL sample is not a
 precise whole-game speedup. Record exact binary/MAP proof and equivalent raw frames.
+
+
+## Production counters and live T8 CLUT specialization
+
+Use opt-in `--gs-metrics` for bounded draw-state/wall-time inventory and separate
+UI/scheduler/readback/RGB counts; see GS_PRODUCTION_METRICS.md.253/254 showed
+~59 UI calls/s but6.73->7.15 observed scheduler ticks/latched copies persecond.
+RGB changes fell despite faster progress: none of these alone proves complete
+game FPS. Compare fully settled equivalent states and equal window counts;
+validate bin+overflow conservation. Draw wall time is not CPU time.
+
+The measured T8/CT32/CSA0 path can read current CLUT halfword banks directly:
+both CSM modes compute clutIndex==index and TEXA leaves CT32 unchanged. It adds
+no cache. Preserve all other LookupCLUT states and palette loads. Private full
+raster regression includes repeated palette writes/TEXFLUSH/LoadClut and requires
+visible output changes, then full VRAM equality. Timed synthetic batches and one
+instrumented native pair support a local improvement, not a general FPS promise.

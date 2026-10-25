@@ -46,8 +46,29 @@ endif()
 string(REPLACE "${bilinear_channels}"
     "    return drakengard::filterGsBilinearRgba(c00, c10, c01, c11, fx, fy);"
     graphics_filtered "${graphics_diagnostic}")
+# The observed T8/CT32/CSA0 path indexes the already loaded CLUT directly.
+# Read both current halfword banks on every sample; no palette cache is added.
+set(clut_lookup_anchor "            return LookupCLUT(state, static_cast<u8>(out), tex.cpsm, tex.csm, tex.csa, tex.psm);")
+string(REPLACE "${clut_lookup_anchor}"
+    "            if (tex.psm == GS_PSM_T8 && tex.cpsm == GS_PSM_CT32 && tex.csa == 0u) {\n                const auto index = static_cast<u8>(out);\n                return uint32_t(m_clut[index]) | (uint32_t(m_clut[index + 256u]) << 16u);\n            }\n${clut_lookup_anchor}"
+    graphics_clut_fast "${graphics_filtered}")
+if(graphics_clut_fast STREQUAL graphics_filtered)
+    message(FATAL_ERROR "Pinned GS indexed texture sample point changed")
+endif()
+string(REPLACE "    DrawPrimitive(batch);"
+    "    const auto metricStart = drakengard::beginGsDrawMetric();\n    DrawPrimitive(batch);\n    drakengard::completeGsDrawMetric(metricStart, batch.state);"
+    graphics_measured "${graphics_clut_fast}")
+if(graphics_measured STREQUAL graphics_clut_fast)
+    message(FATAL_ERROR "Pinned GS completed-draw metric point changed")
+endif()
+string(REPLACE "void GSCpuBackend::LoadClutUnlocked(const GSTex0Reg &tex0, const GSTexClutReg &texclut)\n{"
+    "void GSCpuBackend::LoadClutUnlocked(const GSTex0Reg &tex0, const GSTexClutReg &texclut)\n{\n    drakengard::observeGsClutLoad();"
+    graphics_clut_measured "${graphics_measured}")
+if(graphics_clut_measured STREQUAL graphics_measured)
+    message(FATAL_ERROR "Pinned GS CLUT-load metric point changed")
+endif()
 file(CONFIGURE OUTPUT "${graphics_file}"
-    CONTENT "#include \"gs_bilinear.h\"\n#include \"gs_scanout.h\"\n#include \"gs_color_diagnostic.h\"\n${graphics_filtered}" @ONLY)
+    CONTENT "#include \"gs_production_metrics.h\"\n#include \"gs_bilinear.h\"\n#include \"gs_scanout.h\"\n#include \"gs_color_diagnostic.h\"\n${graphics_clut_measured}" @ONLY)
 set_source_files_properties("${graphics_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/gs")
 get_target_property(runtime_sources ps2_runtime SOURCES)

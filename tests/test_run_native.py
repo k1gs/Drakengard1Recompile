@@ -1,8 +1,11 @@
 """Reject unsafe launcher combinations before touching private input files."""
 import contextlib
 import io
+import json
 from pathlib import Path
 import sys
+import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -11,6 +14,31 @@ import run_native
 
 
 class NativeLaunchGuards(unittest.TestCase):
+    def test_gs_metrics_are_opt_in_and_confined_to_fresh_run(self):
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                disc = root / "synthetic.iso"
+                disc.write_bytes(b"synthetic launcher fixture; never executed")
+                (root / "work").mkdir()
+                def fingerprint(path):
+                    return {"size": 1, "sha256": run_native.ELF_SHA256 if path.name == "SLES_523.22" else "0" * 64}
+                with patch.object(run_native, "ROOT", root), patch.object(run_native, "fingerprint", side_effect=fingerprint), \
+                     patch.object(run_native.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as child, \
+                     patch.dict(run_native.os.environ, {"DRAKENGARD_GS_METRICS_OUTPUT": "unrelated-existing-file"}), \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    args = ["--input-complete", "--seconds", "1", "--disc", str(disc)]
+                    if enabled:
+                        args.append("--gs-metrics")
+                    self.assertEqual(run_native.main(args), 0)
+                environment = child.call_args.kwargs["env"]
+                if enabled:
+                    self.assertEqual(environment["DRAKENGARD_GS_METRICS_OUTPUT"], str(root / "work/native-run-001/gs-metrics.jsonl"))
+                else:
+                    self.assertNotIn("DRAKENGARD_GS_METRICS_OUTPUT", environment)
+                result = json.loads((root / "work/native-run-001/result.json").read_text())
+                self.assertEqual(result["gs_metrics_experiment"], enabled)
+
     def refuses_before_intake(self, arguments):
         with patch.object(run_native, "fingerprint") as fingerprint:
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:

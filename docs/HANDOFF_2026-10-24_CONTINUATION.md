@@ -1,6 +1,74 @@
 # Drakengard Europe continuation handoff
 
-## Latest: packed GS bilinear filtering preserves exact pixels (2026-10-25)
+## Latest: GS production measured; common T8 palette path verified (2026-10-25)
+
+Continued from4b9ee66. Added opt-in `--gs-metrics`, recording bounded private
+production/state counters. Source confirms UploadFrame usually reuses its image;
+UI frame count is not game FPS. Observe UI calls, positive scheduler VSyncTick
+deltas/regressions, valid copied latches, initial image/RGB changes/invalid images,
+completed DrawPrimitive count/wall time, LoadClutUnlocked calls and64 state bins.
+At most64 reports, minimum5s intervals; window bins clear, cumulative counters
+persist, overflow explicit. Alpha-only changes do not count as RGB changes.
+The hooks do not create frames, clocks or events. Default disabled. See
+`docs/GS_PRODUCTION_METRICS.md` for exact meanings and eight-word key layout.
+
+Bootstrap14/14 and Python56 PASS (new model/launcher opt-in/environment-isolation
+regressions). Actual Release/PCH build PASS. Native253/254 both300s/1024M/frame600
+with --gs-metrics, watchdogtrue/exitnull, no new explicit scheduler/device refusal.
+Ordinary startup1..10 then Start11/SIO2 press+release, no NewGame. Raw GS640x511
+menus privately inspected. 253menu9600 pixel-identical to252menu8400;
+254menu8400 pixel-identical to253menu9600, whole RGBMAE0/0/0, no resize/alignment.
+No final-on-exit capture for watchdog. Strongest game boundary remains prologue.
+
+Matched first24 fully settled5s windows perrun,120.2459551s vs120.2222523s:
+
+| Measurement | Native253 baseline | Native254 fast path |
+|---|---:|---:|
+| UploadFrame UI calls/s |59.2203|58.8161|
+| Observed guest VBlank ticks/s |6.72788|7.15342|
+| Valid latched GS copies/s |6.72788|7.15342|
+| Observed RGB changes/s |5.65508|5.28188|
+| DrawPrimitive wall time / interval wall time |54.2192%|51.6040%|
+
+Tick/readback rate is6.325% higher in this pair; NOT a claim of complete game FPS.
+RGB changes can fall when readback/draw phases differ; they omit identical redraws
+and may reflect partial/missed images. One instrumented run perbuild, with
+clock/mutex/RGB-comparison overhead; draw wall time is not thread CPU time.
+Every included window passed exact bin+overflow count/time conservation. Zero
+state overflow, tick regressions or invalid images. No whole-game guarantee.
+
+Two large T8/CT32/CSA0 linearFST blended texture states consumed58.1866% of baseline
+raster wall time. Their mean draw times12.26359->10.41889ms (triangle-strip) and
+22.42277->18.80587ms (sprite). Implemented a narrow LIVE-CLUT fast path:
+T8+CT32+CSA0 computes clutIndex==index for CSM0 AND CSM1; TEXA leaves CT32 unchanged.
+Read m_clut[index] and m_clut[index+256] on every sample, keeping current palette
+contents. No palette cache/invalidation change, filter/timing changes or aliases.
+All other states retain original LookupCLUT. Upstream/generated/input unchanged.
+
+Private actual-backend A/B464 paired synthetic draws, every4MiB VRAM byte equal
+after every draw. Includes416 prior format/wrap/filter/primitive cases plus48
+CSM0/1,nearest/linear,FST/STQ,sprite/triangle draws with repeated real palette
+writes/TEXFLUSH/LoadClut; reloads must change output.1,221,721 changed-byte witnesses.
+Synthetic128 T8CT32CSA0linear256x128sprite batches,3 alternating pairs:
+median0.254178s->0.210281s (17.270% less time for this workload, not game FPS).
+
+Native253 executable SHA256:
+2a33b2d8395e295ed6867c44c6f8253642bbd4aa64c5345865447fe5d377029c.
+Native254 final executable SHA256:
+9c9c22cd4ae7bdc7d38b38d8d60e29b2a3cd9e1ca0711343259b576c25b066b9.
+Evidence: work/gs-production-253 and work/gs-clut-254 include full/matched reports,
+comparison.json, private preserved baseline/raster drivers/build/results, input
+logs and raw-frame comparisons; work/native-run-{253,254}/gs-metrics.jsonl and
+result.json; work/spr-vu0-runN-menu.jsonl. No captures/register traces published.
+
+Next255 (verify unused/no active process): profile remaining T8 texture/page-cache
+reads and per-pixel blending with these counters, then select one bounded fast
+path with exact raster regression and comparable native before/after. Avoid
+palette caching without invalidation proof, quality/timer/IOP skipping and global
+compiler-flag changes. No new missing EE target; page advance/gameplay/audio/saves/
+recovery unverified. Preserve .vscode/Splash; splash remains deferred.
+
+## Previous: packed GS bilinear filtering preserves exact pixels (2026-10-25)
 
 Continued the low menu-FPS task frombb4ba5b. Prior251 identified scalar
 lerpChannel81/1906 raw samples, with124/1906 in unassigned ucrtbase work.
