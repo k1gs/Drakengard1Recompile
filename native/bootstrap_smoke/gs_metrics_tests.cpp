@@ -3,11 +3,14 @@
 #include <iostream>
 
 int main() {
-    if (parseGsCaptureLimit("1", 1, 64) != 1 || parseGsCaptureLimit("64", 1, 64) != 64 ||
+    if (parseGsCaptureLimit("1", 1, MaxGsPeriodicCaptures) != 1 ||
+        parseGsCaptureLimit("64", 1, MaxGsPeriodicCaptures) != 64 ||
+        parseGsCaptureLimit("65", 1, MaxGsPeriodicCaptures) != 65 ||
+        parseGsCaptureLimit("320", 1, MaxGsPeriodicCaptures) != 320 ||
         parseGsCaptureLimit("60", 60, 3600) != 60 || parseGsCaptureLimit("3600", 60, 3600) != 3600) return 8;
-    for (const char* invalid : {"", "0", "65", "-1", "64x", " 64", "4294967296"}) {
+    for (const char* invalid : {"", "0", "321", "-1", "320x", " 320", "4294967296"}) {
         bool rejected = false;
-        try { (void)parseGsCaptureLimit(invalid, 1, 64); }
+        try { (void)parseGsCaptureLimit(invalid, 1, MaxGsPeriodicCaptures); }
         catch (const std::runtime_error&) { rejected = true; }
         if (!rejected) return 9;
     }

@@ -8,6 +8,7 @@
 #include <charconv>
 #include <string_view>
 #include "gs_capture_limits.h"
+#include "gs_ppm.h"
 
 // Observe the GS presentation buffer, excluding host UI. A nonuniform capture
 // after a real GS draw is only a candidate until visually inspected.
@@ -24,8 +25,7 @@ class GuestFrameCapture {
         const auto target=output.parent_path()/("periodic-guest-frame-"+std::to_string(frameObservations)+".ppm");
         if (std::filesystem::exists(target)) throw std::runtime_error("Periodic GS output already exists");
         std::ofstream file(target,std::ios::binary);
-        file << "P6\n" << width << ' ' << height << "\n255\n";
-        for (size_t at=0;at<rgba.size();at+=4) file.write(reinterpret_cast<const char*>(rgba.data()+at),3);
+        writeGsPpm(file,width,height,rgba);
         if (!file) throw std::runtime_error("Could not save periodic GS frame");
         ++periodicSaved;
         std::cerr << "[guest-frame-periodic] observations=" << frameObservations << " path=" << target.string()
@@ -38,7 +38,10 @@ public:
             interval=parseGsCaptureLimit(value,60,3600);
         }
         if (const auto* value=std::getenv("DRAKENGARD_FRAME_LIMIT"))
-            periodicLimit=parseGsCaptureLimit(value,1,64);
+            periodicLimit=parseGsCaptureLimit(value,1,MaxGsPeriodicCaptures);
+        if (!output.empty() && interval)
+            std::cerr << "[guest-frame-capture-config] interval=" << interval
+                      << " limit=" << periodicLimit << '\n';
     }
     void enable(GS& gs) { if (!output.empty()) gs.setDebugHistoryPaused(false); }
     void saveFinal(GS& gs) {
@@ -49,8 +52,7 @@ public:
         const auto target=output.parent_path()/"last-guest-frame.ppm";
         if (std::filesystem::exists(target)) throw std::runtime_error("Final frame output already exists");
         std::ofstream file(target,std::ios::binary);
-        file << "P6\n" << width << ' ' << height << "\n255\n";
-        for (size_t at=0;at<rgba.size();at+=4) file.write(reinterpret_cast<const char*>(rgba.data()+at),3);
+        writeGsPpm(file,width,height,rgba);
         if (!file) throw std::runtime_error("Could not save final GS frame");
         std::cerr << "[guest-frame-final] actual latched GS pixels, visual review required\n";
     }
@@ -84,8 +86,7 @@ public:
         const auto target=saved ? output.parent_path()/"review-guest-frame.ppm" : output;
         if (std::filesystem::exists(target)) throw std::runtime_error("Frame candidate output already exists");
         std::ofstream file(target,std::ios::binary);
-        file << "P6\n" << width << ' ' << height << "\n255\n";
-        for (size_t at=0;at<rgba.size();at+=4) file.write(reinterpret_cast<const char*>(rgba.data()+at),3);
+        writeGsPpm(file,width,height,rgba);
         file.flush();
         if (!file) throw std::runtime_error("Could not save GS frame candidate");
         auto historyPath=target; historyPath.replace_extension(".gs.txt");

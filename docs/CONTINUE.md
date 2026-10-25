@@ -1,5 +1,63 @@
 # Продолжение работы
 
+## Current checkpoint: Continue accepted; scene transition under investigation (2026-10-25)
+
+User resumed work. No subagents/Computer Use/OS input. Menu FPS work remains
+postponed; continue real game progression. Earlier STOP and pending sections
+below are historical and superseded by this checkpoint and CURRENT_STATE.
+
+Native278 repaired the private menu observer: fresh confirmed No6120 -> ordinary
+Left16 -> actual Yes6300 -> Cross17, with serial press/release ACKs. Classifier
+rejects fading/unknown images; at most3 Left retries, only on fresh confirmed No.
+Retry branch was not needed live. Offline all275 frames of277:0 false Yes.
+
+Continue readiness is now NATIVE VERIFIED: briefing14880, real watch4fbd30
+state2->3, one Cross23/3000ms, then original consumer PC2c692c wrote3->4.
+This proves acceptance of Continue, not world/gameplay. Last278frame16140 black;
+300s watchdog,267 captures, no target789read, no new explicit runtime refusal.
+No dump: the post-read trigger was never reached. Startup/intro/menu0;
+progression1 at295s and observer1 are bounded observation limits.
+
+Focused source changes: optional capture cap1..320/default32 unchanged; capture
+configuration log; shared fixed-size chunk P6 writer replaces per-pixel stream
+calls in all3 capture paths. Header, RGB bytes, alpha discard, existing selection
+and no-overwrite behavior preserved. No guest/timer/renderer arithmetic changes.
+Synthetic17/17 tests PASS including exact PPM bytes across4096pixel boundaries;
+actual Release build PASS. Synthetic /Od file benchmark:10x640x511 writes,
+3alternating pairs, median0.0967087s legacy vs0.0240027s current,981135bytes equal.
+This is diagnostic serialization overhead only, not measured game FPS.
+New runner SHA0d24cede033b00c545772545212b273d56994514e03b794834285d6c6db397f1.
+Native279 completed300s/2048M/interval60/cap320/metricsOFF/watch4fbd30:
+274periodic frames,last16560 black. Startup/intro/menu0,progression1(deadline295s),
+observer1/no dump. OneCross23 waitedUI3; actualPC2c692c again wrote3->4.
+No target789read or new explicit runtime refusal. No gameplay proof.
+Native280 completed same300s profile,watchdogtrue/exitnull,271captures,last16380
+still a darkened briefing (not a world). Startup/intro/menu0,progression1 at295s.
+OneCross23 accepted. Observer0 collected ONE owned-process snapshot after exact
+PC2c692c WRITE32 UI3->4:701889699bytes,794Memory64 regions structurally complete;
+collector exit1 recorded truthfully. Runtime byte offsets4032187->4045688.
+Snapshot shows UI4/enable1,fader current20,target255,remaining55 of60steps.
+IOP964931584; old resource slot status3/job19decimal,LSN867318/dest491c00/131072B,
+NOT target789. No target1485718/1485920read. This is still closing the briefing,
+not evidence of lost DMA or a failed scene load. Main PC2fdd08/RA28c0a8/SP11ff00;
+original2fdd08 is a VIF1DMA CHCR store launching work, not a spin-loop diagnosis.
+All native/collector processes stopped. Next281 unused (recheck before launch).
+
+Scene request273 remains the causal baseline: scene143194/state2 waits resource
+file789,LSN1485718,481792bytes,destb7db40, status3b2ea0=1/job35 at that snapshot.
+Its actual IOP1182076928 PRECEDED DMA1182375149. Old destination bytes therefore
+DO NOT prove lost DMA. After actual final targetread1485920, require fresh image
+and one owned-process read-only snapshot with runtime byte offsets and independent
+IOP counter. Job IDs are dynamic; older job19hex completion is not target proof.
+Private273/report-snapshot.py validates main context/BareCallState; revalidate
+layouts after toolchain changes. All dumps/frames/inputs/controllers stay ignored.
+Preserve unrelated .vscode/, native/Splash.png, upstream/generated/maps.
+Closing path reconfirmed from the verified original ELF:2c6900 ->2775e0 sets
+fader48a42c,target255,steps60. State4 at2c6930 calls341804 (lw8(a0)) and waits
+remaining48a434; zero advances UI0x12 at2c6950. A black frame may precede this
+completion. Snapshot280 confirmed remaining55, so the target scene request was not active yet.
+No success stubs, PC/RAM/ready/timer/movie patches or budget renewal.
+
 Этот файл — постоянная точка входа для любого агента с доступом к репозиторию.
 Запрос «продолжи» означает: восстановить актуальное состояние из файлов и
 продолжить реализацию первого подтверждённого блокера с проверкой результата.
@@ -21,37 +79,6 @@
 Более новые результаты журнала и явные указания пользователя важнее checkpoint
 ниже. Не запускай старый номер эксперимента повторно и не перезаписывай evidence.
 
-## Актуальный checkpoint: ввод подтверждён, переход после задания, 2026-10-25
-
-Пользователь отложил FPS меню: продолжай ИГРУ без субагентов/ComputerUse.
-Прочитай верхний handoff: bounded pad-file sharing fix проверен actual269/271
-на EXE e6d326c29c3b00dd7d8c612d02e91187d879b3270c6a9761923385dba0436913.
-Bootstrap16/16/Python57 PASS. Сохрани любые существующие unrelated изменения.
-270 сорвался на startup controller race, до briefing НЕ дошёл. В271 контроллеры
-ждут pad-control.txt; menu только после intro0, progression ждёт menu.log marker.
-
-271 реально подтвердил Cross23/24 на Chapter1 Verse2: не только SIO2 ACK, но и
-CPU writes held346880=10 / pressed346884=10, затем отпускание. Start даёт50.
-Last15600 полностью чёрный после briefing; это переход, НЕ доказанный мир/бой.
-300s watchdog/exitnull, явного нового Native blocker нет. Не объявляй input
-fault или loading bug без следующего evidence. Late dump269 уже complete,
-collector exit1 не требует повторного dump; ранний EE_RAM_OUTPUT не late state.
-
-272 завершён:300s watchdog/exitnull, все4 контроллера0. Ранний ввод со
-startframe1200 проверен actual card prompt. Briefing13800/14100 Cross23/24,
-оба actual held10/pressed10 и SIO2 release. Затем black14700/15000,
-uniform RGB(125,118,101)15300/15600, final15900 снова black. Мира/боя нет.
-Нового explicit refusal нет; не называй это установленным loading bug.
-
-Следующий273 unused, проверь процессы/dirs заново. Reuse272/controllers.py в
-НОВОЙ273 папке, замени run IDs; профиль300s/2048M/frame300/cap64/metricsOFF/
-write-watch346880. Wait pad-control.txt, correct startup/intro/menu.log names,
-menu только после intro0. После fresh briefing ROI changed и остановки ввода
-сохрани ОДИН private read-only full snapshot проверенного owned native PID.
-Изучи поздний EE context/call stack и completion цепочку CDVD/SIF/DMA/scene.
-269 dump ещё briefing, early EE_RAM_OUTPUT ещё startup — это не late state.
-Один controller на фазу, без blind holds/PC/RAM/ready/timer/movie patches,
-unlimited budget/renewal; max300s. .vscode/Splash/input/upstream/private сохраняй.
 
 ## Сохранённый checkpoint пролога: 2026-10-25
 
@@ -124,43 +151,31 @@ Old maps/lifts сохраняй; сначала проверь новые име
 
 ## Следующий ограниченный прогон
 
-На момент checkpoint следующий ожидаемый номер —271. Сначала проверь, что каталог
-`work/native-run-271` свободен и другой native/reference процесс не работает.
-Если номер уже занят, выбери следующий свободный, сохрани прежние результаты.
-
-Настоящий executable: `build/native/ps2xRuntime/Release/ps2EntryRunner.exe`.
-`recomp_smoke.exe` не заменяет его. После изменения runtime собери настоящий
-runner, проверь exit code сборки и запиши SHA-256 проверяемого executable.
+Номер сверяй с верхним checkpoint, каталогом work/ и реальными процессами.
+Пример ниже рассчитан на следующий281, если он ещё свободен;280 сначала прочитай до конца. После изменения
+runtime сначала собери настоящий runner, проверь exit code и SHA-256; smoke.exe
+не заменяет ps2EntryRunner. Сборка при живом native процессе запрещена.
 
 ```powershell
-cmake --build build/native --config Release --target ps2EntryRunner --parallel 4
-$env:DRAKENGARD_FRAME_INTERVAL="300"
-$env:DRAKENGARD_FRAME_LIMIT="64"
-python scripts/run_native.py --input-complete --run 271 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 2048 --ee-write-watch 0x346880
+$nativeRun=281
+$env:DRAKENGARD_FRAME_INTERVAL="60"
+$env:DRAKENGARD_FRAME_LIMIT="320"
+python scripts/run_native.py --input-complete --run $nativeRun --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 2048 --ee-write-watch 0x4fbd30
 ```
 
-Пока launcher работает, дождись появления `work/native-run-271/pad-control.txt`,
-затем отдельным процессом запусти:
+Для обычного ввода используй новую private копию последнего controllers.py с
+правильным run ID. Не жди конца launcher: controller должен дождаться реального
+pad-control.txt и запустить native_start --timeout300 --attempts5 --after-frame1200.
+Последний1200 откалиброван actual271; более старые214–216 имели другое состояние.
+260/intro.py принимает run CLI;279/menu.py запускается ТОЛЬКО после intro0;
+279/progression.py принимает run CLI, ждёт menu.log completion marker и UI state3.
+Один controller на фазу; корректные startup.log/intro.log/menu.log обязательны.
 
-```powershell
-python scripts/native_start.py --run 271 --timeout 300 --attempts 5
-```
-
-Не жди завершения launcher перед запуском controller helper. Он проходит
-предупреждение обычными Left/Cross, подтверждает SIO2 press/release и прекращает
-стартовый ввод при первом IPU command. Это checkpoint-specific рецепт,
-не универсальное распознавание диалога. Frame1200 в214–216 ещё показывал
-Accessing; не возвращайся к старому слишком раннему вводу.
-В218 helper исчерпал default180s после пяти попыток, но runner позже достиг
-IPU и нового motion-code отказа; не выдавай exit2 helper за успех. Поэтому
-здесь указан разрешённый предел300s; runner по-прежнему ограничен300s.
-
-При необходимости перед запуском launcher установи
-`DRAKENGARD_FRAME_INTERVAL=600`: это opt-in прямые GS-снимки с default-пределом32 файла. Opt-in `DRAKENGARD_FRAME_LIMIT=1..64`
-задаёт другой конечный предел; для этого эксперимента выше указаны300/64.
-Запиши диагностическую опцию в evidence. Не выдавай GS-снимок за независимую
-проверку окна. Native и reference запускай последовательно, каждый native
-эксперимент ограничивай максимум300 секундами.
+DRAKENGARD_FRAME_LIMIT1..320 — opt-in конечный cap, default32. Интервал60..3600
+измеряется в host UI observations, не игровых кадрах/FPS. Interval60 даёт более
+частое распознавание состояния и добавляет capture I/O overhead. Сохраняй actual
+config line, EXE hash и число файлов в evidence. Ни rawGS, ни metadata не заменяют
+проверку gameplay. Native/reference последовательно, каждый максимум300s.
 
 ## Проверка и завершение этапа
 

@@ -1,6 +1,116 @@
 # Drakengard Europe continuation handoff
 
-## Latest: application Cross edges verified; post-briefing black frame (2026-10-25)
+## Current checkpoint: Continue accepted; scene transition under investigation (2026-10-25)
+
+User resumed work. No subagents/Computer Use/OS input. Menu FPS work remains
+postponed; continue real game progression. Earlier STOP and pending sections
+below are historical and superseded by this checkpoint and CURRENT_STATE.
+
+Native278 repaired the private menu observer: fresh confirmed No6120 -> ordinary
+Left16 -> actual Yes6300 -> Cross17, with serial press/release ACKs. Classifier
+rejects fading/unknown images; at most3 Left retries, only on fresh confirmed No.
+Retry branch was not needed live. Offline all275 frames of277:0 false Yes.
+
+Continue readiness is now NATIVE VERIFIED: briefing14880, real watch4fbd30
+state2->3, one Cross23/3000ms, then original consumer PC2c692c wrote3->4.
+This proves acceptance of Continue, not world/gameplay. Last278frame16140 black;
+300s watchdog,267 captures, no target789read, no new explicit runtime refusal.
+No dump: the post-read trigger was never reached. Startup/intro/menu0;
+progression1 at295s and observer1 are bounded observation limits.
+
+Focused source changes: optional capture cap1..320/default32 unchanged; capture
+configuration log; shared fixed-size chunk P6 writer replaces per-pixel stream
+calls in all3 capture paths. Header, RGB bytes, alpha discard, existing selection
+and no-overwrite behavior preserved. No guest/timer/renderer arithmetic changes.
+Synthetic17/17 tests PASS including exact PPM bytes across4096pixel boundaries;
+actual Release build PASS. Synthetic /Od file benchmark:10x640x511 writes,
+3alternating pairs, median0.0967087s legacy vs0.0240027s current,981135bytes equal.
+This is diagnostic serialization overhead only, not measured game FPS.
+New runner SHA0d24cede033b00c545772545212b273d56994514e03b794834285d6c6db397f1.
+Native279 completed300s/2048M/interval60/cap320/metricsOFF/watch4fbd30:
+274periodic frames,last16560 black. Startup/intro/menu0,progression1(deadline295s),
+observer1/no dump. OneCross23 waitedUI3; actualPC2c692c again wrote3->4.
+No target789read or new explicit runtime refusal. No gameplay proof.
+Native280 completed same300s profile,watchdogtrue/exitnull,271captures,last16380
+still a darkened briefing (not a world). Startup/intro/menu0,progression1 at295s.
+OneCross23 accepted. Observer0 collected ONE owned-process snapshot after exact
+PC2c692c WRITE32 UI3->4:701889699bytes,794Memory64 regions structurally complete;
+collector exit1 recorded truthfully. Runtime byte offsets4032187->4045688.
+Snapshot shows UI4/enable1,fader current20,target255,remaining55 of60steps.
+IOP964931584; old resource slot status3/job19decimal,LSN867318/dest491c00/131072B,
+NOT target789. No target1485718/1485920read. This is still closing the briefing,
+not evidence of lost DMA or a failed scene load. Main PC2fdd08/RA28c0a8/SP11ff00;
+original2fdd08 is a VIF1DMA CHCR store launching work, not a spin-loop diagnosis.
+All native/collector processes stopped. Next281 unused (recheck before launch).
+
+Scene request273 remains the causal baseline: scene143194/state2 waits resource
+file789,LSN1485718,481792bytes,destb7db40, status3b2ea0=1/job35 at that snapshot.
+Its actual IOP1182076928 PRECEDED DMA1182375149. Old destination bytes therefore
+DO NOT prove lost DMA. After actual final targetread1485920, require fresh image
+and one owned-process read-only snapshot with runtime byte offsets and independent
+IOP counter. Job IDs are dynamic; older job19hex completion is not target proof.
+Private273/report-snapshot.py validates main context/BareCallState; revalidate
+layouts after toolchain changes. All dumps/frames/inputs/controllers stay ignored.
+Preserve unrelated .vscode/, native/Splash.png, upstream/generated/maps.
+Closing path reconfirmed from the verified original ELF:2c6900 ->2775e0 sets
+fader48a42c,target255,steps60. State4 at2c6930 calls341804 (lw8(a0)) and waits
+remaining48a434; zero advances UI0x12 at2c6950. A black frame may precede this
+completion. Snapshot280 confirmed remaining55, so the target scene request was not active yet.
+No success stubs, PC/RAM/ready/timer/movie patches or budget renewal.
+
+## Previous: scene request located; denser bounded observation in validation (2026-10-25)
+
+Current implementation adds explicit DRAKENGARD_FRAME_LIMIT1..320; default32 and
+previous1..64 remain accepted. Interval range60..3600 is unchanged. This permits
+one capture per60 UI observations throughout a finite300s experiment, reducing
+state-observer latency without changing guest speed, input masks, render math,
+IOP budgets or completion flags. Constructor reports selected interval/limit.
+Boundary regression and bootstrap16/16 PASS; real Release runner build PASS.
+New actual executable SHA256:
+cc93779b5a1b034ef19bdfca6b7752b04c0e71b4bbb66ca99efac22031f7189c.
+At that checkpoint276 was running300s/2048M/interval60/cap320/metricsOFF/watch3b2ea0. The actual
+binary printed interval60/limit320. Read its completed outcome before next launch.
+
+Native273 on the previous e6d326c... runner completed300s watchdog/exitnull,
+all4controllers0. Cross23/24 acknowledged, changed15300/final15600 ALL BLACK.
+One verified owned-process full snapshot completed707113204 bytes/803Memory64
+regions; collector exit1 retained, structure independently validated. Unique32MiB
+EE RAM verified using original Europe ELF signatures1274c8/27f118/entry120008,
+SHA c25c6f654d1aba983f012f93135dd938a70a6c9b2db3711c7e546def7b558796.
+All dumps/RAM/frames/helper scripts remain private chapter1-273/native-run-273.
+
+Actual main GuestThread id1 has entry120008/stack100000/size20000/GP572c70 and
+PC27f4c4/RA27f290/SP11ff90. The context-shaped host stack copy is not another
+thread. Declaration-derived context size1648 cross-checked against these fields.
+Frame flag48eec0=1: snapshot is past the busy frame wait and swapping buffers,
+not proof of permanent27f1b8/Timer1 failure.
+
+Specific transition boundary: task3b4af0 ->144310/1441e4/1408a0. State3b4c20
+handler143194/substate2(+5c) awaits object3b2e70 via133608/1335e0 state>=6.
+Object state3(+3c) polls130168: resource I/O state2(+8) waits completion3 at
+3b2ea0. Actual pending job35(23hex), node48fd10, archive slot0 file789(315hex),
+LSN1485718,481792 bytes,destinationb7db40. Requests are reused; match job id too.
+
+IMPORTANT:273's old destination bytes DO NOT establish lost DMA. Its unique
+BareCallState sampled1182076928 retired IOP instructions, BEFORE matching DVD
+DMA start1182375149. Both operations share preceding host UI marker15240, which
+is too coarse to order them. Native274's observer additionally requires final
+readLSN1485920 and a fresh frame after page change, with logfile byte boundaries
+before/after collection. No CDVD/SIF/IRQ/timer/guest-state fix is justified yet.
+
+274 and275 both completed300s watchdog on old e6d326c..., startup/intro/menu0,
+progression1 at295s during their first late briefing Cross23; serial BFFF/FFFF
+verified independently, latest16500/15900 respectively still briefing. Observer1,
+NO new dump and NO file789 read. Write-watch3b2ea0 showed earlier job19hex1->2->3;
+that is NOT completion proof for later23hex. No new explicit device refusal.
+These missed observation windows motivated interval60/cap320, not blind holds.
+
+276 reuses275 controller/capture phases (owned parent/path checks, one controller
+per phase, wait pad file, menu after intro0, no input after changed-ROI marker).
+No subagents/ComputerUse/OS input. Preserve .vscode/Splash/input/upstream/lift/map
+and all private evidence. The then-next number277 is now historical; see top.
+
+## Previous: application Cross edges verified; post-briefing black frame (2026-10-25)
 
 Native270 did NOT reach briefing: startup helper raced pad-control.txt creation,
 exited2; intro/progression1, no menu launched. It was300s watchdog with no useful

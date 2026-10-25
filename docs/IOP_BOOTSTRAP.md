@@ -1514,3 +1514,52 @@ are distinct from a particular UI consumer accepting Continue.272 confirms page
 removal followed by black/flat125,118,101/black captures, not rendered gameplay.
 A late scene snapshot is required to investigate that boundary; neither early
 EE_RAM_OUTPUT nor269's briefing snapshot represents the post-Continue state.
+
+## Scene-resource request and observation latency (2026-10-25)
+
+Native273's post-briefing snapshot identifies scene handler143194 state2 waiting
+object3b2e70 via133608/130168 for job35(23hex), status3b2ea0=1. The request is
+archive slot0 file789, LSN1485718,481792 bytes to b7db40. Main EE context is past
+the frame wait. The snapshot's actual IOP retired1182076928 precedes the matching
+DVD DMA1182375149; unchanged destination bytes are not a transfer-failure proof.
+274/275's earlier job19hex1->2->3 does not verify the later request. Both reached
+the briefing too late for the target observation within300s; no new device
+failure was established. Keep scene acceptance separate from scheduler progress.
+
+The finite optional periodic-capture cap is now1..320 (default32 unchanged),
+allowing interval60 throughout this diagnostic profile. Interval counts host UI
+observations, not game FPS. This reduces state-recognition latency without
+changing IOP clock/budget, guest input flags or GS render arithmetic. Boundary
+regression covers old limits/65/320 and rejects321/invalid values; bootstrap16/16
+and actual Release build PASS. Native276 exercises interval60/cap320; its final
+outcome, EXE hash and native evidence are maintained in the top handoff.
+
+## Continue readiness and diagnostic PPM writes (2026-10-25)
+
+Native278: fresh No6120 ->Left16 ->Yes6300 ->Cross17; SIO2 ACKs verified.
+At briefing14880, actual UI state4fbd30 changed2->3 BEFORE one normal Cross23,
+then original PC2c692c wrote3->4. Continue accepted; last16140 black, watchdog300s,
+no target789read or late dump. No rendered world/gameplay/audio/save proof.
+Private278 menu observer rejects unknown/fading images and confirms Yes before
+Cross; finite Left retry branch was not needed live. Preserve phase ownership.
+
+Diagnostic P6 serialization now batches4096pixels with the same header/RGB bytes
+and alpha discard. Three capture paths share it, preserving existing frame
+selection/no-overwrite behavior. No guest/device/timer/render math changes.
+Synthetic17/17 including binary-equivalence at chunk boundaries PASS, Release
+build PASS. /Od synthetic10image batch median0.0967087s legacy/0.0240027s new,
+981135bytes equal; this is file-write overhead, NOT game FPS measurement.
+Optional cap1..320/default32, interval60..3600; actual config logged.
+Current runner SHA0d24cede033b00c545772545212b273d56994514e03b794834285d6c6db397f1.
+Latest native outcomes and next experiment are kept in top HANDOFF/CURRENT_STATE.
+
+Native279 repeated UI3->4 acceptance; last16560 black,watchdog300s,no targetread.
+Native280 collected a complete owned-process snapshot immediately after original
+PC2c692c UI3->4 (701889699bytes/794Memory64,collector1,observer0,offsets4032187->
+4045688). Actual UI4/enable1,fader current20,target255,remaining55/60: still closing
+briefing. Old completed slot status3/job19decimal/LSN867318 is NOT target789.
+IOP964931584, no targetread. PC2fdd08 is an original VIF1DMA CHCR launch store,
+not proof of a stuck DMA. Final16380 is darkened briefing; no world/gameplay.
+Next experiment: measure actual closing-fader update cadence and host execution
+cost within300s, preserving original timing, fixed budgets and deferred menu-FPS
+scope. Do not repeat an unreachable post-read trigger or invent a DMA failure.
