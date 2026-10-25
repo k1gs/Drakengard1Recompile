@@ -1,4 +1,4 @@
-#include "gs_ppm.h"
+#include "capture/gs_ppm.h"
 #include <iostream>
 #include <sstream>
 #include <vector>

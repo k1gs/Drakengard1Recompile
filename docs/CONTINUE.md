@@ -1,5 +1,11 @@
 # Продолжение работы
 
+Layout-only refactor: see [source map](NATIVE_LAYOUT.md). FPU helpers now live
+in `native/runner/fpu/`, capture helpers in `native/runner/capture/`.18/18 smoke
+tests and normalized macro-output equivalence PASS. The last native executable
+is still the pre-layout81886f... build; full runner rebuild was deliberately not
+run for this cleanup. Reconfigure/build before the next native experiment.
+
 ## Latest: CVT.W.S sort fixed and native verified; missing owner tail2ad344 (2026-10-25)
 
 User approved600s diagnostic execution and delegated routine choices. Keep finite

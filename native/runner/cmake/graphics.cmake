@@ -68,7 +68,7 @@ if(graphics_clut_measured STREQUAL graphics_measured)
     message(FATAL_ERROR "Pinned GS CLUT-load metric point changed")
 endif()
 file(CONFIGURE OUTPUT "${graphics_file}"
-    CONTENT "#include \"gs_production_metrics.h\"\n#include \"gs_bilinear.h\"\n#include \"gs_scanout.h\"\n#include \"gs_color_diagnostic.h\"\n${graphics_clut_measured}" @ONLY)
+    CONTENT "#include \"gs_production_metrics.h\"\n#include \"gs_bilinear.h\"\n#include \"gs_scanout.h\"\n#include \"capture/gs_color_diagnostic.h\"\n${graphics_clut_measured}" @ONLY)
 set_source_files_properties("${graphics_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/gs")
 get_target_property(runtime_sources ps2_runtime SOURCES)

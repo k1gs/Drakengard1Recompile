@@ -1,5 +1,9 @@
 # Промпт продолжения
 
+После layout-refactor см. docs/NATIVE_LAYOUT.md: FPU в runner/fpu/, захват в
+runner/capture/.18/18 smoke и эквивалентность макросов PASS; fullrunner после
+переносов не пересобирался. EXE81886f... — последний native284 до рефактора.
+
 Продолжи Drakengard1 PS2 Europe в D:\proj\drakengard 1 recompile.
 Прочитай AGENTS/CONTINUE/latestCURRENT_STATE/topHANDOFF и actualHEAD/status/processes.
 Без субагентов/ComputerUse/OS input. FPS меню отложен; inputs complete/read-only.
