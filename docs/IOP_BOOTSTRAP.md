@@ -1477,3 +1477,23 @@ and actual mission briefing "Chapter1 Verse2" at16200. These runs do not establi
 world gameplay. SIO2 press/release confirms serial reports, not application
 consumption; native257's accepted prologue Start did not visibly advance its page.
 See top handoff for latest run, actual input sequence and remaining boundary.
+
+## Host/UI exception ownership before the mission boundary
+
+A real host error must not be mistaken for an unsupported guest device. The UI
+loop previously owned a joinable std::thread without an unwind guard. Controlled
+native265 replaced only its private host-pad command after actual callback120;
+the original malformed-command exception was masked by Windows0xC0000409.
+
+GameThreadJoinGuard now requests stop and joins on exceptional unwind. The pinned
+overlay leaves normal explicit join and strict-device error propagation intact.
+Native266 repeats the same fault on rebuilt runner
+f926bb78f868c4da72f16c6a979fb02bb6a4c432c8e931cac2b14bdb6dcedd00:
+worker completion, final GS and window cleanup precede the original
+Native blocker: invalid pad command prefix, exit6 without watchdog. Bootstrap15/
+Python57/actual Release build PASS. This establishes this failure-path repair,
+not the cause or resolution of every spontaneous C0000409.
+
+Ordinary267 reaches the mission briefing on the rebuilt runner, but latest16500
+still shows that page after late3000ms Cross presses.263 previously reached a gray
+post-briefing frame; neither run proves a rendered world or movement/combat.

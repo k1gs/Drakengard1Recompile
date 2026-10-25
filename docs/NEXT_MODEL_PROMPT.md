@@ -19,35 +19,36 @@ static guard, all-preset/invalid/renewal regression, bootstrap14/14, Python57 PA
 256 с2048M прошёл прежнюю границу,300s watchdogtrue/exitnull, no new explicit
 scheduler/device refusal. Ни один неподдержанный сервис не подменён success.
 
-Реально проверенный EXE106577eb... не менялся с a4aa639; exact SHA в handoff.
-257/258 сохранили53/54 periodic captures: native FRAME_LIMIT64 уже проверен.
-Briefing observer bound10 в260 ошибочно остановился на SAME странице с MAE10.2009.
-Private261/progression.py меняет bound на12: actual positives проходят,
-negative menu29.716/prologue42.195/chapter60.948/black67.158/gray70.676 отвергнуты.
-Syntax/throwaway behavioral calibration PASS. Не называй ROI change новой сценой.
+После ec9325d исправлен подтверждённый host/UI exception lifetime bug.
+Контрольный265: invalid HOST command после реального UI frame120 →0xC0000409:
+исключение разрушало joinable game thread раньше внешнего Native blocker.
+GameThreadJoinGuard теперь stop/join при unwind, сохраняет исходную ошибку.
+Контрольный266: тот же fault →exit6, invalid pad command prefix, final GS,
+окно закрыто. Это не доказывает причину всех спонтанных C0000409.
+Bootstrap15/15, Python57, настоящий Release runner PASS. Точный текущий SHA:
+f926bb78f868c4da72f16c6a979fb02bb6a4c432c8e931cac2b14bdb6dcedd00.
+Исходный upstream и старые generated/maps не менялись.
 
-261 завершился до меню Windows0xC0000409, timed_outfalse, без явного Native blocker.
-Такой код был219/226; причина неизвестна, одинаковая причина не доказана.
-262 ЗАВЕРШЁН под ProcDump12.02: watchdog300s/exitnull, observer выполнил два
-briefing Cross23/24 с SIO2 press/release, но final16500 всё ещё briefing.
-Collector0, дампа нет; отсутствие сбоя под debugger НЕ означает исправление.
-Явного нового unsupported/device/budget отказа нет. Данные/логи private.
+263 с700ms Start и3000ms briefing Cross: два реальных press/release, затем
+last15600 серый без briefing, но мира нет.264 оборвалсяC0000409 до input phase.
+267 normal на новом runner с3000ms game-phase Start/Cross завершён watchdog300s.
+Briefing15900 Cross23 ACK, same16200 Cross24; реальные BFFF/FFFF видны в runtime
+78768/79980, хотя helper дошёл295s раньше собственного ACK24. Last16500 всё ещё
+briefing; явного нового device/unsupported/budget отказа нет. Не объявляй
+ускорение от долгих Start или успех gameplay по этим данным.
 
-Следующий263 проверен unused. Обычный runner без debugger, максимум300s/
-фиксированный2048M/frame300/cap64/metricsOFF. Создай fresh263 progression на основе
-261/progression.py; измени ТОЛЬКО briefing Cross hold на3000ms, остальные700ms.
-Сохрани максимум2 Cross и свежую ту же страницу/ROI12. Это гипотеза о hold/sampling,
-не диагноз и не FPS-работа. Если не поможет — trace actual application pad input.
-native_start --attempts5;260/intro.py263;257/menu.py263 ТОЛЬКО после intro0;
-новый263 progression ждёт actual menu finish. Каждая кнопка требует actual SIO2
-press/release, но такой ACK не доказывает application consumption.
-
-Цель: подтвердить Continue на экране задания и получить реальную сцену миссии
-либо установить точный следующий blocker. Затем проверить движение/бой.
-Не меняй timer/ready/PC/RAM, не патчь пропуск фильмов, не делай unlimited/renewable
-budgets. Повтор27f1b8/Timer1 getter не подтверждает timer fault: callback127068 —
-исходный JRRA/NOP. Если обычный ввод не продвинет сцену, установи actual
-application/input/progress contract, а не добавляй успешную заглушку.
+Следующий268 проверен unused, профиль максимум300s/фиксированный2048M/
+frame300/cap64/metricsOFF. Reuse263 progression: Start700ms, briefing Cross3000ms,
+max2 Cross/свежая та же страница/ROI12. native_start --attempts5;260/intro.py268;
+257/menu.py268 ТОЛЬКО после intro0;263/progression.py268 ждёт menu finish.
+Нужен actual application input contract, не ещё одно слепое время удержания.
+После первого briefing Cross ACK возьми ОДИН private full snapshot своего
+native PID существующим ProcDump -ma <PID> <ignored output> (проверь свободное
+место), не длительный -e debugger. Следи за GS до300s, исследуй EE context/
+pad-consumption read-only. Ранний EE_RAM_OUTPUT не есть поздний briefing dump.
+Не меняй timer/ready/PC/RAM, не патчь пропуск фильмов, не продлевай бюджеты.
+Цель: первая настоящая сцена миссии и затем движение/бой. Не выдавай ACK/серый
+кадр/отсутствие краша за gameplay или полное исправление спонтанного сбоя.
 
 Map011/lift010/все3 recovered leaves и36resume labels сохранены. Будущий Ghidra
 export должен повторить ВСЕ3 verified recoveries из ANALYSIS_REGRESSIONS.md.

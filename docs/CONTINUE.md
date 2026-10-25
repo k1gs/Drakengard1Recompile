@@ -23,39 +23,42 @@
 
 ## Актуальный checkpoint: продолжение главы I, 2026-10-25
 
-Пользователь отложил FPS меню: продолжай ИГРУ. После обычного Start15 на первой
-странице пролога255/256 реально отрисован "Chapter I - Beginnings",640x511.
-Это новая граница, ещё не движение/бой/полный gameplay/audio/saves/recovery.
-Старые missing EE targets исправлены; Timer1 bug не установлен.
+Пользователь отложил FPS меню: продолжай ИГРУ, без субагентов/ComputerUse.
+Подтверждён экран задания "Chapter1 Verse2" с Weapon/Continue,640x511.
+Мир миссии, движение/бой/audio/saves/recovery пока НЕ подтверждены.
 
-255 exit6 до300s: исчерпан точно фиксированный1024M IOP allowance, а не найден
-новый device fault. Добавлен явный2048M пресет (default256,512/1024 сохранены),
-монотонный и без продления.32-bit overflow guard, bootstrap14/14, Python57 и
-actual Release PASS.256 с2048M прошёл прежний предел и завершён watchdog300s,
-exitnull. Поздний Cross16 на ChapterI имел SIO2 ACK, эффект сцены не проверен.
+263: только briefing Cross увеличен700→3000ms. Обе реальные SIO2 press/release
+подтверждены; после них last15600 — серый кадр, уже без страницы briefing.
+Это смена изображения, не доказательство загрузки мира.264 с более долгими
+Start оборвался Windows0xC0000409 до проверки игровой фазы.
 
-257–260 выполнены на EXE106577eb...: настройка300/64 имеет native proof
-(257 сохранил53,258 —54 кадра).258 после Start на титуле отрисовал настоящий
-экран задания "Chapter1 Verse2",640x511, с Weapon/Continue. Это ещё не gameplay.
-260 дошёл до того же экрана раньше через обычные Start на логотипах; Cross23
-имел SIO2 press/release, но страница осталась. Bound10 ошибочно принял вариант
-того же изображения с error10.2009 за смену сцены и остановил дальнейший ввод.
+Найден и исправлен конкретный host/UI failure path: исключение из оконного
+цикла разрушало joinable std::thread и вызывало terminate раньше Native blocker.
+Контрольный265: invalid HOST pad command после actual UI frame120 →0xC0000409.
+Новый GameThreadJoinGuard останавливает/join поток при unwind, не глотает ошибку.
+Контрольный266 с тем же input fault →exit6, исходный invalid pad command prefix,
+final GS и нормальное закрытие окна. Это НЕ доказательство причины всех
+прежних спонтанных C0000409. Upstream/generated/maps/input не менялись.
 
-Private work/chapter1-261/progression.py исправляет только observer bound12.
-В262 он действительно выполнил Cross23 и повтор24 на briefing; оба имеют SIO2
-press/release, но последний actual16500 всё ещё показывает тот же экран задания.
-262 завершён watchdog300s/exitnull, без явного device/unsupported отказа.
-261 ранее завершился Windows0xC0000409 до меню. В262 ProcDump12.02 был реально
-подключён: такого сбоя/дампа нет, но это НЕ доказательство исправления причины.
+Bootstrap15/15, Python57 и настоящий Release runner PASS. Проверенный266/267 EXE:
+f926bb78f868c4da72f16c6a979fb02bb6a4c432c8e931cac2b14bdb6dcedd00.
+267 normal300s/2048M/frame300/cap64/metricsOFF: снова briefing15900, Cross23/24
+по3000ms; оба SIO2 press/release подтверждены, но last16500 всё ещё briefing.
+Helper закончил295s во время позднего24; release отдельно найден в runtime.
+Долгие Start в267 не доказали ускорения; новый явный device отказ не найден.
 
-Следующий263: обычный runner без debugger, тот же конечный профиль. Скопируй
-261/progression.py в fresh work/chapter1-263/ и измени ТОЛЬКО длительность
-briefing Cross на3000ms, остальные кнопки700ms; по-прежнему максимум2 Cross
-и только на свежей той же странице. Проверь application effect, не один ACK.
-Это проверка гипотезы о host-wall hold/EE sampling, не установленная причина.
-Если не поможет — исследуй actual application pad-consumption, не timer flags.
-260/intro.py263;257/menu.py263 ТОЛЬКО после intro exit0; fresh263 progression
-ждёт actual menu finish. Все исходные257–262 artifacts сохраняй.
+Следующий268: обычный профиль300s/2048M/frame300/cap64/metricsOFF.
+Private `python work/chapter1-263/progression.py 268`: Start700ms, briefing Cross3000ms.
+Используй `python work/chapter1-260/intro.py 268`, затем
+`python work/chapter1-257/menu.py 268` ТОЛЬКО после intro exit0;
+progression ждёт actual menu finish.
+Не подбирай ещё одно время удержания вслепую: установи actual application input
+contract. На briefing после первого Cross ACK сохрани ОДИН full snapshot только
+своего native PID: tools/procdump-motion/procdump64.exe -ma <PID> <ignored output>.
+Это разовый snapshot, не длительный -e debugger; проверь свободное место.
+Продолжай наблюдать GS до300s, исследуй EE context/pad consumption read-only.
+Ранний DRAKENGARD_EE_RAM_OUTPUT не является снимком позднего briefing.
+268 пока unused; старые263–267 artifacts и исходники контроллеров сохраняй.
 
 Один контроллер на фазу, actual SIO2 press/release. Каждый run максимум300s.
 Никаких timer/ready/PC/RAM/movie patches, unlimited budget или auto-renewal.
@@ -133,8 +136,8 @@ Old maps/lifts сохраняй; сначала проверь новые име
 
 ## Следующий ограниченный прогон
 
-На момент checkpoint следующий номер —263. Сначала проверь, что каталог
-`work/native-run-263` свободен и другой native/reference процесс не работает.
+На момент checkpoint следующий номер —268. Сначала проверь, что каталог
+`work/native-run-268` свободен и другой native/reference процесс не работает.
 Если номер уже занят, выбери следующий свободный, сохрани прежние результаты.
 
 Настоящий executable: `build/native/ps2xRuntime/Release/ps2EntryRunner.exe`.
@@ -145,14 +148,14 @@ runner, проверь exit code сборки и запиши SHA-256 прове
 cmake --build build/native --config Release --target ps2EntryRunner --parallel 4
 $env:DRAKENGARD_FRAME_INTERVAL="300"
 $env:DRAKENGARD_FRAME_LIMIT="64"
-python scripts/run_native.py --input-complete --run 263 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 2048
+python scripts/run_native.py --input-complete --run 268 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 2048
 ```
 
-Пока launcher работает, дождись появления `work/native-run-263/pad-control.txt`,
+Пока launcher работает, дождись появления `work/native-run-268/pad-control.txt`,
 затем отдельным процессом запусти:
 
 ```powershell
-python scripts/native_start.py --run 263 --timeout 300 --attempts 5
+python scripts/native_start.py --run 268 --timeout 300 --attempts 5
 ```
 
 Не жди завершения launcher перед запуском controller helper. Он проходит
@@ -166,7 +169,7 @@ IPU и нового motion-code отказа; не выдавай exit2 helper �
 
 При необходимости перед запуском launcher установи
 `DRAKENGARD_FRAME_INTERVAL=600`: это opt-in прямые GS-снимки с default-пределом32 файла. Opt-in `DRAKENGARD_FRAME_LIMIT=1..64`
-задаёт другой конечный предел; для следующего263 выше указаны300/64.
+задаёт другой конечный предел; для этого эксперимента выше указаны300/64.
 Запиши диагностическую опцию в evidence. Не выдавай GS-снимок за независимую
 проверку окна. Native и reference запускай последовательно, каждый native
 эксперимент ограничивай максимум300 секундами.

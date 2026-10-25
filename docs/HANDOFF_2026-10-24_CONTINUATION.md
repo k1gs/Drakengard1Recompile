@@ -1,6 +1,57 @@
 # Drakengard Europe continuation handoff
 
-## Latest: mission briefing reached; preserve host-crash evidence (2026-10-25)
+## Latest: UI exception lifetime repaired; mission world not yet verified (2026-10-25)
+
+Continued from ec9325d, no subagents/ComputerUse or menu FPS optimization.
+NEW real runner SHA256, tested by controlled266 and ordinary267:
+f926bb78f868c4da72f16c6a979fb02bb6a4c432c8e931cac2b14bdb6dcedd00.
+Do not confuse it with the old106577eb... runner used through265.
+
+Native263 on old runner used ONLY briefing Cross3000ms instead of700, other
+buttons unchanged. Briefing14700 Cross23 and same15000 Cross24 both had actual
+SIO2 press/release. Last15600 is uniform gray after the page disappeared, not
+world/gameplay.300s watchdog, all helpers0. Longer game-phase Start experiment264
+ended0xC0000409 before prologue; it did NOT exercise that input change.
+
+Confirmed host defect: PS2Runtime::run owned a joinable std::thread while the
+UI loop could throw; unwinding destroyed the thread and terminated before main's
+Native blocker catch. Controlled real265, max60s, injected a synthetic INVALID
+HOST pad command after actual UI callback120: old runner exited0xC0000409.
+No original game input, guest RAM/PC/ready flags or device behavior was patched.
+
+Original native/runner/game_thread_guard.h now requests stop/joins on unwind;
+cmake/thread_failure.cmake installs it immediately after worker construction,
+dispatch.cmake supplies the include. Normal explicit join and strict device
+error propagation remain unchanged. No retry/neutral/success fallback.
+New real-worker regression covers original-error propagation after stop/join and
+no duplicate stop after normal join. Bootstrap15/15 and Python57 PASS; real
+ps2EntryRunner Release/PCH build PASS (MSBuild17.11.9+a69bbaaf5).
+Controlled266 SAME host fault after callback120: exit6/timed_outfalse, worker
+returned, final GS, window/audio cleanup, Native blocker: invalid pad command prefix.
+This fixes a demonstrated exception-masking path, NOT all spontaneous C0000409.
+
+Normal267 on rebuilt runner,300s/2048M/frame300/cap64/metricsOFF, no debugger:
+startup/intro/menu0; progression1 at295s during late Cross24. Game-phase Start
+and briefing Cross3000ms. Actual briefing15900 Cross23 ACK; same16200 Cross24
+has real BFFF/FFFF reports at runtime78768/79980 despite helper timeout.
+Last16500 actual raw640x511 remains briefing. No explicit device/unsupported/
+budget failure found. Longer Start did not establish a timing improvement.
+Private evidence: chapter1-263/264/267, host-ui-failure-265/266, native-run-263..267.
+Actual world, movement/combat, audio/saves/recovery remain UNVERIFIED.
+
+Next268 verified unused; no native/reference/collector running. Same finite
+profile, reuse263 progression (Start700ms/Cross3000ms),260 intro,257 menu with
+CLI268; menu ONLY after intro0, progression waits actual menu completion.
+Establish actual application input contract rather than more blind hold changes:
+take ONE private full snapshot of the OWNED native PID at briefing after first
+Cross ACK, e.g. existing ProcDump -ma <PID> <ignored output>, without prolonged
+-e debugger attachment. Check disk space; observe later GS until300s; inspect
+EE context/pad-consumption read-only. Existing early EE_RAM_OUTPUT is not a late
+briefing snapshot. Do not patch state/skip code/renew budgets. Keep original inputs,
+upstream, old generated/maps, .vscode/Splash and all captures/dumps private.
+README mission-briefing wording and the approved old menu images remain accurate.
+
+## Previous: mission briefing reached; preserve host-crash evidence (2026-10-25)
 
 Runtime source checkpoint a4aa639 is unchanged in257–261. Actual runner SHA256:
 106577eb7f987d369f17ff01c283dc1933e4e10cb7ab286f8d74561d49ec3272.

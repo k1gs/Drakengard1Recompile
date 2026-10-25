@@ -186,3 +186,19 @@ frames.258 then reached the mission briefing after ChapterI Start: intermediate
 black/gray frames alone were not a diagnosed hang. Review rawGS; normalized ROI
 change is only an observation trigger, never gameplay proof. No ready/PC/timer
 patch or instruction-budget renewal is justified by these observations.
+
+## Distinguish a host unwind abort from the original failure
+
+Windows0xC0000409 alone does not identify a guest device or even the original host
+exception. Controlled265 injected a malformed private HOST pad command only after
+actual UI callback120: a live std::thread was destroyed during UI unwind, masking
+the parser error. GameThreadJoinGuard now stops/joins before propagation;266
+returns the original diagnostic with exit6 and normal window cleanup. A real-worker
+regression plus the before/after native experiment cover the lifetime contract.
+This is not evidence that all prior spontaneous aborts had the same trigger.
+
+Briefing input remains an application-consumption investigation: serial reports
+and gray frames are insufficient. An early one-shot EE_RAM_OUTPUT dump is not
+state from a later mission page. Capture late private state read-only from the
+owned process when required; a full dump includes game data and must never enter
+Git. Preserve the300s wall limit and fixed IOP budget during capture.
