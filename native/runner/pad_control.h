@@ -1,6 +1,7 @@
 #pragma once
 
 #include <charconv>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
@@ -43,10 +44,11 @@ class PadControl {
     }
 
 public:
+    static constexpr std::size_t MaxCommandBytes = 128;
     // Accepts exactly: D1PAD1 <uint64 decimal> <four hex digits> <hold ms>\n.
     // Buttons are active-low. A duplicate sequence never extends its deadline.
     uint16_t sample(std::string_view text, uint64_t monotonicMilliseconds) {
-        if (text.size() > 128 || text.size() < 8 || text.back() != '\n')
+        if (text.size() > MaxCommandBytes || text.size() < 8 || text.back() != '\n')
             throw std::runtime_error("invalid pad command framing");
         if (haveTime && monotonicMilliseconds < lastTime)
             throw std::runtime_error("pad clock moved backwards");

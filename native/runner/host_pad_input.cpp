@@ -7,8 +7,7 @@
 #include <array>
 #include <iostream>
 #include <chrono>
-#include <fstream>
-#include "pad_control.h"
+#include "pad_control_file.h"
 
 // UI thread samples raylib; bridge serializes immutable snapshots to the IOP owner.
 // Keyboard is an explicit virtual device, even without a physical gamepad.
@@ -30,15 +29,13 @@ void pollVirtualPadInput() {
         }
         // Explicit diagnostic controller source. This feeds the existing host
         // snapshot/SIO2 path, never guest memory or a Windows input API.
-        std::ifstream file(commandPath,std::ios::binary);
-        std::array<char,129> bytes{};
-        file.read(bytes.data(),bytes.size());
-        if (!file.eof() || file.bad()) throw std::runtime_error("Cannot read bounded pad control command");
+        drakengard::PadControlFileBuffer bytes;
+        const auto size=drakengard::readPadControlFile(commandPath,bytes);
         static drakengard::PadControl controller;
         const auto now=std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
         VirtualPadInput input; input.connected=true;
-        input.buttons=controller.sample({bytes.data(),static_cast<size_t>(file.gcount())},now);
+        input.buttons=controller.sample({bytes.data(),size},now);
         constexpr unsigned pressureBits[]{5,7,4,6,12,13,14,15,10,11,8,9};
         for (unsigned i=0;i<12;++i) input.pressure[i]=(input.buttons&(1u<<pressureBits[i]))?0:255;
         static uint16_t previous=0xffff;

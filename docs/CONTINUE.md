@@ -21,49 +21,37 @@
 Более новые результаты журнала и явные указания пользователя важнее checkpoint
 ниже. Не запускай старый номер эксперимента повторно и не перезаписывай evidence.
 
-## Актуальный checkpoint: продолжение главы I, 2026-10-25
+## Актуальный checkpoint: ввод подтверждён, переход после задания, 2026-10-25
 
-Пользователь отложил FPS меню: продолжай ИГРУ, без субагентов/ComputerUse.
-Подтверждён экран задания "Chapter1 Verse2" с Weapon/Continue,640x511.
-Мир миссии, движение/бой/audio/saves/recovery пока НЕ подтверждены.
+Пользователь отложил FPS меню: продолжай ИГРУ без субагентов/ComputerUse.
+Прочитай верхний handoff: bounded pad-file sharing fix проверен actual269/271
+на EXE e6d326c29c3b00dd7d8c612d02e91187d879b3270c6a9761923385dba0436913.
+Bootstrap16/16/Python57 PASS. Сохрани любые существующие unrelated изменения.
+270 сорвался на startup controller race, до briefing НЕ дошёл. В271 контроллеры
+ждут pad-control.txt; menu только после intro0, progression ждёт menu.log marker.
 
-263: только briefing Cross увеличен700→3000ms. Обе реальные SIO2 press/release
-подтверждены; после них last15600 — серый кадр, уже без страницы briefing.
-Это смена изображения, не доказательство загрузки мира.264 с более долгими
-Start оборвался Windows0xC0000409 до проверки игровой фазы.
+271 реально подтвердил Cross23/24 на Chapter1 Verse2: не только SIO2 ACK, но и
+CPU writes held346880=10 / pressed346884=10, затем отпускание. Start даёт50.
+Last15600 полностью чёрный после briefing; это переход, НЕ доказанный мир/бой.
+300s watchdog/exitnull, явного нового Native blocker нет. Не объявляй input
+fault или loading bug без следующего evidence. Late dump269 уже complete,
+collector exit1 не требует повторного dump; ранний EE_RAM_OUTPUT не late state.
 
-Найден и исправлен конкретный host/UI failure path: исключение из оконного
-цикла разрушало joinable std::thread и вызывало terminate раньше Native blocker.
-Контрольный265: invalid HOST pad command после actual UI frame120 →0xC0000409.
-Новый GameThreadJoinGuard останавливает/join поток при unwind, не глотает ошибку.
-Контрольный266 с тем же input fault →exit6, исходный invalid pad command prefix,
-final GS и нормальное закрытие окна. Это НЕ доказательство причины всех
-прежних спонтанных C0000409. Upstream/generated/maps/input не менялись.
+272 завершён:300s watchdog/exitnull, все4 контроллера0. Ранний ввод со
+startframe1200 проверен actual card prompt. Briefing13800/14100 Cross23/24,
+оба actual held10/pressed10 и SIO2 release. Затем black14700/15000,
+uniform RGB(125,118,101)15300/15600, final15900 снова black. Мира/боя нет.
+Нового explicit refusal нет; не называй это установленным loading bug.
 
-Bootstrap15/15, Python57 и настоящий Release runner PASS. Проверенный266/267 EXE:
-f926bb78f868c4da72f16c6a979fb02bb6a4c432c8e931cac2b14bdb6dcedd00.
-267 normal300s/2048M/frame300/cap64/metricsOFF: снова briefing15900, Cross23/24
-по3000ms; оба SIO2 press/release подтверждены, но last16500 всё ещё briefing.
-Helper закончил295s во время позднего24; release отдельно найден в runtime.
-Долгие Start в267 не доказали ускорения; новый явный device отказ не найден.
-
-Следующий268: обычный профиль300s/2048M/frame300/cap64/metricsOFF.
-Private `python work/chapter1-263/progression.py 268`: Start700ms, briefing Cross3000ms.
-Используй `python work/chapter1-260/intro.py 268`, затем
-`python work/chapter1-257/menu.py 268` ТОЛЬКО после intro exit0;
-progression ждёт actual menu finish.
-Не подбирай ещё одно время удержания вслепую: установи actual application input
-contract. На briefing после первого Cross ACK сохрани ОДИН full snapshot только
-своего native PID: tools/procdump-motion/procdump64.exe -ma <PID> <ignored output>.
-Это разовый snapshot, не длительный -e debugger; проверь свободное место.
-Продолжай наблюдать GS до300s, исследуй EE context/pad consumption read-only.
-Ранний DRAKENGARD_EE_RAM_OUTPUT не является снимком позднего briefing.
-268 пока unused; старые263–267 artifacts и исходники контроллеров сохраняй.
-
-Один контроллер на фазу, actual SIO2 press/release. Каждый run максимум300s.
-Никаких timer/ready/PC/RAM/movie patches, unlimited budget или auto-renewal.
-Дойди до следующей реальной сцены/первого подтверждённого blocker; performance
-сейчас отложен. .vscode/Splash сохраняй. См. верхний handoff и NEXT_MODEL_PROMPT.
+Следующий273 unused, проверь процессы/dirs заново. Reuse272/controllers.py в
+НОВОЙ273 папке, замени run IDs; профиль300s/2048M/frame300/cap64/metricsOFF/
+write-watch346880. Wait pad-control.txt, correct startup/intro/menu.log names,
+menu только после intro0. После fresh briefing ROI changed и остановки ввода
+сохрани ОДИН private read-only full snapshot проверенного owned native PID.
+Изучи поздний EE context/call stack и completion цепочку CDVD/SIF/DMA/scene.
+269 dump ещё briefing, early EE_RAM_OUTPUT ещё startup — это не late state.
+Один controller на фазу, без blind holds/PC/RAM/ready/timer/movie patches,
+unlimited budget/renewal; max300s. .vscode/Splash/input/upstream/private сохраняй.
 
 ## Сохранённый checkpoint пролога: 2026-10-25
 
@@ -136,8 +124,8 @@ Old maps/lifts сохраняй; сначала проверь новые име
 
 ## Следующий ограниченный прогон
 
-На момент checkpoint следующий номер —268. Сначала проверь, что каталог
-`work/native-run-268` свободен и другой native/reference процесс не работает.
+На момент checkpoint следующий ожидаемый номер —271. Сначала проверь, что каталог
+`work/native-run-271` свободен и другой native/reference процесс не работает.
 Если номер уже занят, выбери следующий свободный, сохрани прежние результаты.
 
 Настоящий executable: `build/native/ps2xRuntime/Release/ps2EntryRunner.exe`.
@@ -148,14 +136,14 @@ runner, проверь exit code сборки и запиши SHA-256 прове
 cmake --build build/native --config Release --target ps2EntryRunner --parallel 4
 $env:DRAKENGARD_FRAME_INTERVAL="300"
 $env:DRAKENGARD_FRAME_LIMIT="64"
-python scripts/run_native.py --input-complete --run 268 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 2048
+python scripts/run_native.py --input-complete --run 271 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 2048 --ee-write-watch 0x346880
 ```
 
-Пока launcher работает, дождись появления `work/native-run-268/pad-control.txt`,
+Пока launcher работает, дождись появления `work/native-run-271/pad-control.txt`,
 затем отдельным процессом запусти:
 
 ```powershell
-python scripts/native_start.py --run 268 --timeout 300 --attempts 5
+python scripts/native_start.py --run 271 --timeout 300 --attempts 5
 ```
 
 Не жди завершения launcher перед запуском controller helper. Он проходит

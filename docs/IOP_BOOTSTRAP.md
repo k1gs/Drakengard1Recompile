@@ -1497,3 +1497,20 @@ not the cause or resolution of every spontaneous C0000409.
 Ordinary267 reaches the mission briefing on the rebuilt runner, but latest16500
 still shows that page after late3000ms Cross presses.263 previously reached a gray
 post-briefing frame; neither run proves a rendered world or movement/combat.
+
+## Atomic host-pad reads and actual application edges
+
+Native268 exposed a host Windows sharing failure on a valid command. The bounded
+reader shares READ/WRITE/DELETE with an atomic pathname replacement, reads one
+open version, rejects over128 bytes and preserves OS failures. No neutral/cache/
+retry fallback. Synthetic rename-ownership/boundary/error tests and actual269/271/
+272 exercise the rebuilt e6d326c... runner; bootstrap16/Python57 PASS.
+
+Native270 startup raced command-file creation: wait for pad-control.txt before
+controllers; retain correct phase log names and menu-after-intro0 ownership.
+271/272 prove briefing Cross writes actual game held346880=10 and fresh pressed
+346884=10, then release. Start sets50. Serial ACK and converted application edge
+are distinct from a particular UI consumer accepting Continue.272 confirms page
+removal followed by black/flat125,118,101/black captures, not rendered gameplay.
+A late scene snapshot is required to investigate that boundary; neither early
+EE_RAM_OUTPUT nor269's briefing snapshot represents the post-Continue state.

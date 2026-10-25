@@ -1,6 +1,101 @@
 # Drakengard Europe continuation handoff
 
-## Latest: UI exception lifetime repaired; mission world not yet verified (2026-10-25)
+## Latest: application Cross edges verified; post-briefing black frame (2026-10-25)
+
+Native270 did NOT reach briefing: startup helper raced pad-control.txt creation,
+exited2; intro/progression1, no menu launched. It was300s watchdog with no useful
+mission-input result. Preserve its logs; do not describe270 as a briefing run.
+
+Native271 fixes ONLY private controller startup/log coordination: wait for actual
+pad-control.txt, use startup.log/intro.log/menu.log phase markers, and launch menu
+only after intro0. Same real e6d326c29c3b00dd7d8c612d02e91187d879b3270c6a9761923385dba0436913
+runner; normal300s/2048M/frame300/cap64/metricsOFF, EE write-watch346880, no debugger.
+Startup/intro/menu0, progression1 at295s bound; native watchdogtrue/exitnull.
+Briefing14700 Cross23 at14:31:26.963440UTC and15000 Cross24 at14:31:32.150927UTC,
+3000ms each, both SIO2 press/release. CPU stores1227ec/122840 actually wrote
+held346880=10 and fresh pressed346884=10 for EACH briefing Cross, then cleared.
+This confirms game input conversion/edge production beyond serial delivery.
+Start actually produces50 (both10 and40); Cross produces10. No guest writes.
+
+Last saved15600 raw640x511 is ALL BLACK (all RGB extrema0), privately reviewed.
+The mission page disappeared after confirmation; which press its consumer used
+and the meaning of the black transition are not established. NO world/movement/
+combat/audio/saves/recovery; no explicit Native blocker/unsupported/exhaustion.
+No final-on-exit capture at watchdog. Evidence remains ignored chapter1-271 and
+native-run-271, including watch-summary.json with preceding UI frame/last serial
+report (context markers, not exact instruction timestamps). Watch stayed below128.
+Bootstrap16/16 and Python57 independently rerun PASS; current runner hash verified.
+
+Native272 COMPLETE on the same e6d326c... runner:300s watchdogtrue/exitnull,
+all four controllers0. Only startup changed to --after-frame1200 (actual prompt).
+Briefing13800 Cross23 at14:37:06.501960UTC and14100 Cross24 at14:37:11.549069UTC,
+both3000ms with real serial press/release AND held10/fresh pressed10 CPU writes.
+Watch count96, below128 cap. Actual raw frames14700/15000 ALL BLACK;
+15300/15600 uniform RGB(125,118,101); final15900 ALL BLACK, privately reviewed.
+No rendered world/movement/combat/audio/saves/recovery. No explicit new Native
+blocker/unsupported/exhaustion/pad-read failure; watchdog provides no final-on-exit
+GS. Starting at the already visible prompt left more observation time but does
+not establish a loading fix, expected transition duration or gameplay.
+
+Next unused273 verified at this checkpoint; no native/reference/ProcDump active.
+Reuse272/controllers.py in a fresh273 directory, replacing run IDs only; same
+finite300s/2048M/frame300/cap64/metricsOFF/write-watch346880. After progression
+reports fresh briefing ROI changed and stops input, capture ONE read-only full
+snapshot of the verified owned native PID into ignored chapter1-273. Observe GS
+until watchdog, then inspect actual EE context/call stack, pending CDVD/SIF/DMA
+completion and scene consumer from that LATE transition snapshot. Existing269
+snapshot is briefing, early EE_RAM_OUTPUT is startup; neither proves late state.
+This is a loading/scene-boundary investigation, not a diagnosed timer/ready fault.
+Preserve completed originals and all previous evidence; no guest-state patches.
+
+## Previous: Windows pad-file sharing repaired; application input located (2026-10-25)
+
+Continued from f8c6fbc without subagents/ComputerUse/FPS work. Actual new runner:
+e6d326c29c3b00dd7d8c612d02e91187d879b3270c6a9761923385dba0436913.
+Native268 exposed the underlying host fault: exit6 at65.9s, valid command still
+present, "Cannot read bounded pad control command"; no briefing snapshot.
+
+Deterministic synthetic probe reproduced Windows ERROR_SHARING_VIOLATION32:
+a valid command with an existing DELETE-access rename handle cannot be read by
+the old std::ifstream. Windows requires compatible sharing in BOTH directions:
+https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew
+New original pad_control_file reader uses FILE_SHARE_READ|WRITE|DELETE and a
+bounded129-byte stack buffer, consumes one open immutable version, rejects
+over128 bytes, and preserves actual OS errors. No cached/neutral/retry fallback.
+Host input/build overlay migrated. Behavioral test covers the actual DELETE
+overlap, atomic replacement/release,128-byte boundary, oversize/missing/malformed.
+Bootstrap16/16, Python57 and actual Release ps2EntryRunner build PASS.
+
+Native269 on this binary completed300s watchdog/exitnull/launcher124, fixed2048M,
+frame300/cap64/metricsOFF. Startup/intro/menu0, intro89.094s; progression1 at295s.
+Briefing15300 Cross23/3000ms and same15600 Cross24 had actual SIO2 ACKs.
+Last16200 remains "Chapter1 Verse2"; no explicit unsupported/device/exhaustion/
+pad-read error. No world/movement/combat/audio/saves/recovery established.
+
+One owned-process full snapshot after first briefing Cross ACK really completed:
+PID8892/parent23124 verified; ProcDump12.02 wrote686MiB in3.3s. Collector exit1
+made the private observer report failure; DO NOT claim observer0. Independent
+MDMP validation proved all803 Memory64 payload regions complete in702232359 bytes.
+Unique32MiB RDRAM identified with multiple code signatures from verified original
+ELF065a94591d295bb936a8dca92e722c3bd72cd05848c7274b26d572b0f782e918.
+Private extracted RAM SHA8971c115970c24ecd3c5d9ace22b8f60ce5bd9b4ff3663722ea3c72874eec3a2.
+Evidence: ignored native-run-268/269, chapter1-268/269, pad-read-contract-268.
+No dump/ELF/game bytes/screenshots/private helper is public source.
+
+Original-code input chain:1274c8 updates objects346850/3468f0 via1287f0 ->
+122988 ->122bec driver selection ->122f58 -> SDK2fe738/selector2fe688.
+Primary raw packet346860 matches actual latest double buffer571c00 (state6).
+Global56eec4 points LAST selected driver1, not proof active controller is absent.
+Converter12284c maps Cross OR Start to internal0x10;1227e4 writes held at346880,
+fresh pressed edge at346884, repeat-inclusive edge at346888. No guest writes made.
+Native270 is the finite300s observation of slot346880 using EXISTING EE write
+watch, same profile/controllers, no debugger. Its result must be recorded below
+before choosing the next experiment; do not launch a duplicate270.
+
+README briefing wording/old approved menu images remain accurate. Keep .vscode/
+Splash, original inputs/upstream, old maps/generated and every capture private.
+
+## Previous: UI exception lifetime repaired; mission world not yet verified (2026-10-25)
 
 Continued from ec9325d, no subagents/ComputerUse or menu FPS optimization.
 NEW real runner SHA256, tested by controlled266 and ordinary267:
