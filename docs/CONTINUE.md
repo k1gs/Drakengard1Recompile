@@ -21,7 +21,30 @@
 Более новые результаты журнала и явные указания пользователя важнее checkpoint
 ниже. Не запускай старый номер эксперимента повторно и не перезаписывай evidence.
 
-## Актуальный checkpoint: 2026-10-25
+## Актуальный checkpoint: производительность меню, 2026-10-25
+
+Продолжай снижение затрат CPU в меню по последнему запросу пользователя.
+Первый фикс уже проверен: sparse_dispatch.h отсекает адреса вне реальных
+sorted nonempty таблиц ядра/BIOS до binary search, точность и проверки исходных
+инструкций при dispatch сохранены. Guest clocks/качество рендера не менялись.
+
+Synthetic sparse/boundary/singleton/UINT_MAX/mutation checks, Python55 и настоящий
+Release PASS. Native251: обычный Start11/SIO2 ACK, главное меню9600 GS640x511
+просмотрено, ROI MAE0;300s watchdog/exitnull, без нового явного device/scheduler
+отказа. Combined lookup7.38% raw samples249 ->1.36%251. Это не FPS/weightedETW:
+nearest MAP/RIP без stacks; ICF объединял kernel/firmware lower_bound, поэтому
+baseline6.54% нельзя приписывать только kernel. Верхний handoff содержит SHA,
+evidence, синтетический benchmark и ограничения замера.
+
+Следующий252 (проверь unused): измерить dominant software GS sprite/texture/filter
+на том же меню, выбрать один безопасный fast path по реальному draw state,
+проверить synthetic pixel equality и bounded native до/после. GS был крупнейшей
+именованной группой (~46% samples249). Не понижай качество/не пропускай device
+работу/таймеры и не меняй все compiler flags сразу. Runner Release /Od, GS/runtime
+/O2; флаги не менялись, это отдельный будущий опыт. Unique guest FPS не измерен.
+Последняя игровая граница остаётся первой страницей пролога ниже.
+
+## Сохранённый checkpoint пролога: 2026-10-25
 
 - Все три подтверждённых truncated leaves восстановлены:297E44..2983E8,
   29322C..2937D0,297878..297E44. Последний имеет реальный JR297E3C/SP+60
@@ -44,9 +67,9 @@
 - Точные hashes/ограничения/evidence — верхний handoff. Source input/upstream/
   old generated/maps не менялись. .vscode/Splash сохрани; сплешскрин отложен.
 
-## Следующий эксперимент
+## Отложено: продолжение пролога
 
-Следующий249 (проверь unused). Текущая граница проверки — первая страница пролога,
+После performance-этапа используй новый свободный номер. Игровая граница проверки — первая страница пролога,
 а НЕ missing scheduler297BB0. Установи ожидаемое поведение страницы: ordinary
 Start/Cross после проверки готовности; реальный callback/input handler и, при
 необходимости, read-only Timer1 COUNT/MODE/софт-прогресс. Повторяющийся PC27F1B8
@@ -92,8 +115,8 @@ Old maps/lifts сохраняй; сначала проверь новые име
 
 ## Следующий ограниченный прогон
 
-На момент checkpoint следующий номер —249. Сначала проверь, что каталог
-`work/native-run-249` свободен и другой native/reference процесс не работает.
+На момент checkpoint следующий номер —252. Сначала проверь, что каталог
+`work/native-run-252` свободен и другой native/reference процесс не работает.
 Если номер уже занят, выбери следующий свободный, сохрани прежние результаты.
 
 Настоящий executable: `build/native/ps2xRuntime/Release/ps2EntryRunner.exe`.
@@ -102,13 +125,14 @@ runner, проверь exit code сборки и запиши SHA-256 прове
 
 ```powershell
 cmake --build build/native --config Release --target ps2EntryRunner --parallel 4
-python scripts/run_native.py --input-complete --run 249 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 1024
+python scripts/run_native.py --input-complete --run 252 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 1024
 ```
 
-Пока launcher работает, отдельным процессом запусти:
+Пока launcher работает, дождись появления `work/native-run-252/pad-control.txt`,
+затем отдельным процессом запусти:
 
 ```powershell
-python scripts/native_start.py --run 249 --timeout 300
+python scripts/native_start.py --run 252 --timeout 300
 ```
 
 Не жди завершения launcher перед запуском controller helper. Он проходит

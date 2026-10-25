@@ -1,6 +1,58 @@
 # Drakengard Europe continuation handoff
 
-## Latest: all three recovered leaves pass; textual prologue reached
+## Latest: main-menu sparse dispatch overhead reduced (2026-10-25)
+
+The current user priority is low main-menu FPS. Native249 identified a saturated
+execution thread (99.63% of one core), with software GS texture/pixel work the
+largest identified group (~46% of raw RIP samples). Combined kernel/firmware
+lookup accounted for141/1910 samples (7.38%). Exact MAP inspection corrects the
+old kernel-only interpretation: linker ICF merged KernelEntry and FirmwareEntry
+lower_bound instances at the same address; RIP samples cannot separate callers.
+
+Original sparse_dispatch.h now rejects addresses outside the actual sorted,
+nonempty prepared table before exact binary search. Both kernel and firmware
+lookup use it. No address aliases, instruction-verification cache, guest timing,
+render-quality, generated code or upstream edits. Real system dispatch retains
+copied-instruction checks. Synthetic sparse/unaligned/boundary/UINT_MAX/singleton
+lookups and mutation refusal after successful dispatch PASS; Python55 PASS and
+real Release/PCH runner build PASS. Runner Release /Od versus GS/runtime /O2 was
+confirmed; compiler flags were deliberately unchanged for this comparison.
+
+Native250 tested kernel-only bounds:83/1906 lookup samples (4.35%). Native251
+final combined fix:26/1906 (1.36%),30.0117s interval; hot thread99.34% of one core.
+No binary-search RIP sample in the final interval is not proof of zero calls.
+One sampled interval per build, nearest MAP symbols, no stacks/CPU-weighted ETW;
+these percentages are not unique guest FPS or measured whole-game speedup.
+Synthetic37-entry /Od benchmark99%miss/1%hit gave16.6475ns ->4.2896ns medians,
+3 alternating pairs:3.88x for this lookup workload ONLY, not game FPS.
+
+Native251 ordinary startup Left/Cross then title Start11 (actual SIO2 press and
+release); main menu9600 at640x511 privately inspected, control ROI MAE0 against
+baseline. No NewGame input in these performance runs. Native250/251 each300s,
+1024M/frame600, watchdog timed_out=true/exit_code=null. No new explicit
+scheduler/device refusal. 250's first startup helper raced command-file creation
+and exited without input; a later helper succeeded. Boot times are not comparable.
+251 waits for the command file first. All helpers and captures remain private.
+
+Final executable SHA256:
+7d329c1d8dad3e29385c590a051aa2b5b51d5e2aabaeaddd9d2ccf28c41bdd18.
+Exact private MAP relink executable code/layout matched .text SHA256:
+3823b62e5f092266c375964baa8d20b47115f4c68b49c38c5e042afc990cd754.
+Evidence: work/menu-perf-249 baseline; work/menu-perf-250 partial/profile/benchmark;
+work/menu-perf-251 report.md/json, comparison.json, icf-proof.json, samples-b.json,
+modules.json, binary-proof.json, menu-review.png; work/native-run-250/251 and
+work/spr-vu0-run{250,251}-menu.jsonl. No OS input, Computer Use or reference run.
+
+Next252 (verify unused and no active process): measure the dominant software GS
+sprite/texture/filter path at the same menu. Choose one correctness-preserving
+fast path from actual draw state, compare synthetic pixel results and native menu
+before/after. Do not migrate renderers, lower filtering quality, skip device/timer
+work or change all compiler flags as an unmeasured shortcut. Global unique-frame
+FPS still needs a separate trustworthy counter. The saved gameplay boundary is
+still first textual prologue below, not movement/combat/audio/saves/recovery.
+Splash/.vscode are preserved; no new game captures are approved for publication.
+
+## Previous: all three recovered leaves pass; textual prologue reached
 
 Entry7e548a0 fixed owner29322C. Native245 then exposed truncated owner297878 at
 297BB0. Verified original ELF SHA065a94591d295bb936a8dca92e722c3bd72cd05848c7274b26d572b0f782e918:

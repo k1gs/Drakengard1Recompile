@@ -1,4 +1,5 @@
 #include "firmware_functions.h"
+#include "sparse_dispatch.h"
 #include "iop_bridge.h"
 #include "verify_input.h"
 #include "strict_device_error.h"
@@ -15,18 +16,13 @@ struct FirmwareCode { uint32_t address; const uint8_t* bytes; size_t size; };
 #include <firmware_bindings.h>
 void dispatchFirmware(uint8_t* ram, R5900Context* ctx, PS2Runtime* runtime) {
     verifyFirmwareInstructions(ram, ctx->pc);
-    auto last = std::end(firmwareEntries);
-    auto entry = std::lower_bound(std::begin(firmwareEntries), last, ctx->pc,
-        [](const FirmwareEntry& item, uint32_t pc) { return item.address < pc; });
-    if (entry == last || entry->address != ctx->pc) throw std::runtime_error("Unknown firmware entry");
+    const auto* entry = drakengard::findExactSparseEntry(firmwareEntries, ctx->pc);
+    if (!entry) throw std::runtime_error("Unknown firmware entry");
     entry->function(ram, ctx, runtime);
 }
 }
 PS2Runtime::RecompiledFunction lookupFirmwareFunction(uint32_t address) {
-    auto last = std::end(firmwareEntries);
-    auto entry = std::lower_bound(std::begin(firmwareEntries), last, address,
-        [](const FirmwareEntry& item, uint32_t pc) { return item.address < pc; });
-    return entry != last && entry->address == address ? &dispatchFirmware : nullptr;
+    return drakengard::findExactSparseEntry(firmwareEntries, address) ? &dispatchFirmware : nullptr;
 }
 void verifyFirmwareInstructions(const uint8_t* ram, uint32_t address) {
     if (!ram || address < 0x80000000 || address >= 0x80000000u + FirmwareSize)

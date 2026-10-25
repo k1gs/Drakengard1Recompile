@@ -22,7 +22,9 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/fixture/kernel_recompiled_functions.h" [
 inline void syntheticKernel(uint8_t*, R5900Context* ctx, PS2Runtime*) { ctx->result = 42; }
 ]=])
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/fixture/kernel_bindings.h" [=[
-const KernelEntry kernelEntries[] = {{0x80001000u, syntheticKernel}};
+const KernelEntry kernelEntries[] = {{0x80001000u, syntheticKernel},
+                                    {0x80001020u, syntheticKernel},
+                                    {0x80002000u, syntheticKernel}};
 const uint8_t syntheticCode[] = {0x2a, 0, 2, 0x24, 8, 0, 0xe0, 3};
 const KernelCode kernelCode[] = {{0x80001000u, syntheticCode, sizeof(syntheticCode)},
                                {0x80002000u, syntheticCode, sizeof(syntheticCode)}};

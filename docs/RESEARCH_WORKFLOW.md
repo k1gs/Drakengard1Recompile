@@ -112,3 +112,22 @@ SIO2 press/release proves serial input delivery, not that a fading UI accepted a
 action. Native247's valid dialog differed from the old RGB oracle before a later
 match; keep helper deadline/recognition failures separate from guest device faults.
 Use one controller at a time and review its JSONL/ACKs before manual intervention.
+
+
+## Targeted menu performance measurements (2026-10-25)
+
+Before changing device timing or rendering quality, separate execution and UI
+threads.249/250/251 used target-only suspended RIP samples with independent thread
+CPU times at verified ordinary main-menu states. Private MAP relinks used current
+objects; compare executable code bytes and layout before attribution. Keep raw
+samples, modules, binary proof, input ACK/ROI and timeout results private.
+
+Nearest MAP attribution is not a stack or weighted ETW. Inspect same-address
+aliases: ICF merged kernel and firmware lower_bound in249/250; the apparent
+kernel-only hotspot was shared search code. One interval per build suggests
+direction, not exact whole-game speedup. Host observations are not unique guest
+frames. Synthetic lookup speedups apply only to their stated workload. Compare
+one change and record compiler flags. New results/next experiment are in handoff.
+
+The bounded sparse helper rejects only PCs outside actual sorted table extremes;
+holes inside still need exact search. Real dispatch retains mutation checks.

@@ -1,4 +1,5 @@
 #include "kernel_functions.h"
+#include "sparse_dispatch.h"
 #include "runtime/ps2_memory.h"
 #include <algorithm>
 #include <cstring>
@@ -21,10 +22,8 @@ struct KernelRegion { uint32_t start; uint32_t end; };
 #include <kernel_bindings.h>
 
 PS2Runtime::RecompiledFunction lookupRaw(uint32_t address) {
-    const auto* last = std::end(kernelEntries);
-    const auto* entry = std::lower_bound(std::begin(kernelEntries), last, address,
-        [](const KernelEntry& item, uint32_t pc) { return item.address < pc; });
-    return entry != last && entry->address == address ? entry->function : nullptr;
+    const auto* entry = drakengard::findExactSparseEntry(kernelEntries, address);
+    return entry ? entry->function : nullptr;
 }
 
 void dispatchKernel(uint8_t* ram, R5900Context* ctx, PS2Runtime* runtime) {
