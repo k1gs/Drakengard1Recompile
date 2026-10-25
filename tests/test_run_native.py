@@ -71,9 +71,15 @@ class NativeLaunchGuards(unittest.TestCase):
         self.refuses_before_intake(["--input-complete", "--pad-control"])
 
     def test_nondefault_runtime_budget_requires_entry(self):
-        for preset in ("512", "1024"):
+        for preset in ("512", "1024", "2048"):
             with self.subTest(preset=preset):
                 self.refuses_before_intake(["--input-complete", "--iop-runtime-millions", preset])
+
+    def test_runtime_budget_rejects_unreviewed_presets(self):
+        for preset in ("0", "1025", "2049", "4295"):
+            with self.subTest(preset=preset):
+                self.refuses_before_intake(["--input-complete", "--iop-bootstrap", "--ee-firmware-entry",
+                                           "--iop-runtime-millions", preset])
 
     def test_write_watch_requires_firmware_entry(self):
         self.refuses_before_intake(["--input-complete", "--ee-write-watch", "0x11fe70"])

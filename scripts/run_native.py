@@ -35,7 +35,7 @@ def main(argv=None):
                         help="Watch one aligned 8-byte EE RAM slot; requires --ee-firmware-entry")
     parser.add_argument("--ee-write-watch-arm-value", type=parse_int0, default=None,
                         help="Optional 32-bit arm value for --ee-write-watch")
-    parser.add_argument("--iop-runtime-millions", type=int, choices=(256, 512, 1024), default=256,
+    parser.add_argument("--iop-runtime-millions", type=int, choices=(256, 512, 1024, 2048), default=256,
                         help="Finite post-reboot IOP budget in millions; larger presets require --ee-firmware-entry")
     parser.add_argument("--disc", type=Path, default=ROOT / "game/Drakengard (Europe) (En,Fr,De,Es,It).iso")
     args = parser.parse_args(argv)

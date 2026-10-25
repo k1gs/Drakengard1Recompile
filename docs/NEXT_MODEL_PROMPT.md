@@ -1,62 +1,47 @@
 # Промпт продолжения
 
 Продолжи Drakengard1 Recompile, PS2 Europe, D:\proj\drakengard 1 recompile.
-Прочитай AGENTS.md, docs/CONTINUE.md, последние CURRENT_STATE.md и верхний handoff;
-проверь HEAD/status/реальные процессы. Без субагентов; сохраняй .vscode/Splash.
+Прочитай AGENTS.md, docs/CONTINUE.md, последние CURRENT_STATE.md и верхний handoff.
+Проверь git HEAD/status и реальные процессы. Без субагентов/ComputerUse/OS input.
+Сохраняй .vscode/Splash и все старые private artifacts. Inputs ранее подтверждены
+как полные; исходники игры/BIOS/upstream/generated/maps read-only.
 
-Текущий приоритет — производительность меню. Предыдущие sparse lookup/SIMD bilinear
-fixes сохранены. Новый --gs-metrics default off: bounded private separate UIcalls,
-observedVBlankTicks, validlatchedcopies, RGBchanges, completeddraws/wall, CLUTloads,
-statebins. Семантика/keylayout в docs/GS_PRODUCTION_METRICS.md. Не называй все
-счётчики FPS: partial/missed/identical frames и overhead существенны.
+Пользователь ЯВНО отложил FPS меню — сейчас продолжать ИГРУ, не оптимизацию.
+255/256: после обычного Start15 на подтверждённой первой странице пролога
+отрисован "Chapter I - Beginnings", GS640x511, приватно просмотрен. Это не
+movement/combat/gameplay/audio/saves/recovery. Cross16 на256 принят SIO2 почти в
+конце300s; его эффект не проверен. Не объявляй зависание/успех по одному PC/ACK.
 
-253baseline/254fastpath по24 settled5s windows (~120s): UI59.22->58.82/с,
-observedticks/readbacks6.72788->7.15342/с (+6.325% в этой паре), RGB5.66->5.28/с
-(не FPS!). Rasterwall54.22%->51.60%. Count/time conservation PASS, overflow0.
-Главные два T8/CT32/CSA0 состояния были58.19% rasterwall. Новый narrow cache-free
-путь читает live CLUT два halfwords: обаCSM дают index, TEXA CT32 identity;
-allotherstates originalLookupCLUT. Никакой stale palette/cache или guest timing.
+255 упёрся в глобальный1024M IOP allowance (total1038404316), exit6/no timeout,
+IOPpcbb9c Jself idle. Добавлен ЯВНЫЙ фиксированный2048M пресет, default256 и
+512/1024 сохранены; no poll/idle renewal. Worst deadline2,063,999,999 fits32bits,
+static guard, all-preset/invalid/renewal regression, bootstrap14/14, Python57 PASS.
+256 с2048M прошёл прежнюю границу,300s watchdogtrue/exitnull, no new explicit
+scheduler/device refusal. Ни один неподдержанный сервис не подменён success.
 
-464 actual-raster A/B syntheticdraws с полным4MiB VRAM равенством, в том числе
-палитра writes/TEXFLUSH/LoadClut повторно; synthetic T8batch17.27% меньше времени
-только на этот workload. Bootstrap14/14, Python56, actualRelease/PCH PASS.
-Native253/254300s/1024M/frame600/--gs-metrics watchdogtrue/exitnull. Обычный
-Start11/SIO2 pressrelease, menu640x511 просмотрено и pixel-identical к252.
-ТочныеSHA/privateevidence/limits в topHANDOFF, work/gs-clut-254/report.md/json.
+Пользователь попросил плавно остановиться до257. Последний native-tested256 EXE
+c312c31d...; текущий rebuilt106577eb... НЕ запускался. Новый opt-in capturelimit
+DRAKENGARD_FRAME_LIMIT1..64 (default32), parser/test/realbuild PASS, native64ещё
+не проверен. Exact SHA/артефакты и ограничения — верхний handoff/локальный журнал.
 
-Следующий255 (проверь unused): profile remaining T8 texture/page-cache reads и
-per-pixel blending с этими counters, затем один safe fastpath с fullraster pixel
-equality и comparable native before/after. No palette cache без invalidation
-proof/quality/timer/IOP skipping. Runner /Od, GS/runtime /O2 unchanged. Startup
-helper после pad-control.txt, один controller за раз. Сохранённая игровая граница
-ниже отложена до performance; не возвращай старые scheduler blockers.
+Следующий257 ещё unused:300s/2048M, FRAME_INTERVAL300,FRAME_LIMIT64, metricsOFF.
+Команда/порядок запуска в docs/CONTINUE.md. Готовы private work/chapter1-257/
+menu.py (arg257), start-prologue.py и chapter-input.py, только py_compile checked.
+Startup helper после pad-control.txt; menu/prologue/chapter helpers ждут завершения
+предыдущей фазы, один input controller за раз. Chapter helper распознаёт свежий
+титул (ROI bound8, positive6.83/negatives24+), Cross, затем Start только если тот же
+титул после600 UI observations. Если ROI изменился — визуально проверь actualGS,
+не объявляй новую сцену по нормализованному crop. Проверяй SIO2 press/release.
 
-Checkpoint: все3 truncated leaves297E44,29322C,297878 восстановлены по реальным
-инструкциям/epilogues. Map011/lift010,36resume labels сверены, fresh Ghidra
-regression/full native Release PASS. Native246/247/248 прошли старые missing targets;
-нового явного scheduler/device отказа нет. После New Game реально отрисована первая
-текстовая страница предыстории (GS640x511). Это не gameplay/audio/saves/recovery.
+Цель: пройти дальше титула главы I, найти первый реальный blocker или отрисовать
+следующую сцену, затем фактическое движение/бой. Не меняй timer/ready/PC/RAM,
+не патчь пропуск фильмов, не делай unlimited/renewable budgets. Повтор27f1b8 и
+Timer1 getter не подтверждают timer fault: наблюдавшийся callback127068 есть
+исходный JRRA/NOP. Отдельно установи actual application/input/progress contract,
+если обычный ввод не продвинет сцену.
 
-Все runs300s/1024M; watchdog timed_out=true,exit=null. В248 на подтверждённой странице
-Cross15 принят/отпущен SIO2, но следующий кадр показывает тот же текст. Пиксели
-меняются; не объявляй зависание или успешное перелистывание. Exact evidence/hashes
-в верхнем handoff/work/leaf297878-contract-246.json.
-
-После performance-этапа используй свежий номер: установи ожидаемый способ продолжения пролога,
-обычным Start/Cross в готовом GS-состоянии. Проследи actual callback/input handler;
-если нужно, read-only Timer1 COUNT/MODE и software progress. RepeatedPC27F1B8/
-getter1215F4(10000800) не доказывают timer defect. При необходимости последовательно
-сравни эквивалентное owned reference состояние. Цель — следующая реальная сцена,
-затем движение/бой; не исправляй предполагаемую причину до её наблюдения.
-
-Private menu observer248 калиброван на просмотренных GS-состояниях; prologue script
-hardcodes248/output/sequence14. Для нового run сделай свежую проверенную копию,
-один controller за раз и actual SIO2 press/release. ACK не означает UI принятие.
-Не делай OS input/Computer Use, timer/ready/PC/RAM patches, skip stubs/aliases.
-Input/upstream/old generated read-only. Будущий полный Ghidra export должен
-повторить ВСЕ3 verified recoveries из docs/ANALYSIS_REGRESSIONS.md.
-
-Реализуй/проверь подтверждённый контракт, а не только план. Обнови CURRENT_STATE,
-CONTINUE/top handoff/промпт. Focused validated commits/normal push разрешены по
-AGENTS после staged review и check_public_tree.py. Private maps/lifts/BIOS/game/
-frames не публикуй. Сплешскрин остаётся отложенным.
+Map011/lift010/все3 recovered leaves и36resume labels сохранены. Будущий Ghidra
+export должен повторить ВСЕ3 verified recoveries из ANALYSIS_REGRESSIONS.md.
+Обновляй CURRENT_STATE/CONTINUE/topHANDOFF/промпт. Focused validated commit/push
+разрешены после staged review/check_public_tree.py. Game/BIOS/frames/private
+traces/helpers не публикуй; только originalsource/synthetic/revieweddocs.

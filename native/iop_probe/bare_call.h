@@ -118,5 +118,7 @@ inline BareCallResult bareCall(ps2x::iop::detail::IopMemory& memory, uint32_t en
     }
     if (cpu.pc == ReturnBoundary) return {cpu.gpr[2], state.instructions};
     if (state.instructions < state.budget.deadline()) return {0, state.instructions, false};
+    std::cerr << "[iop-budget-exhausted] phase=" << (state.budget.inRuntime() ? "runtime" : state.budget.inReboot() ? "reboot" : "boot")
+              << " instructions=" << state.instructions << " deadline=" << state.budget.deadline() << '\n';
     iop_diagnostics::exhaustedBudget(memory, cpu, devices.cache ? devices.cache->isolatedStores : 0);
 }

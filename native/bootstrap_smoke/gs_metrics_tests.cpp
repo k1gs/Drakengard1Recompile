@@ -1,7 +1,16 @@
 #include "gs_production_metrics.h"
+#include "gs_capture_limits.h"
 #include <iostream>
 
 int main() {
+    if (parseGsCaptureLimit("1", 1, 64) != 1 || parseGsCaptureLimit("64", 1, 64) != 64 ||
+        parseGsCaptureLimit("60", 60, 3600) != 60 || parseGsCaptureLimit("3600", 60, 3600) != 3600) return 8;
+    for (const char* invalid : {"", "0", "65", "-1", "64x", " 64", "4294967296"}) {
+        bool rejected = false;
+        try { (void)parseGsCaptureLimit(invalid, 1, 64); }
+        catch (const std::runtime_error&) { rejected = true; }
+        if (!rejected) return 9;
+    }
     drakengard::GsProductionCounters c;
     c.ui(10); c.ui(10); c.ui(13); c.ui(12); c.ui(14);
     if (c.uiCalls != 5 || c.observedTicks != 5 || c.tickRegressions != 1) return 1;

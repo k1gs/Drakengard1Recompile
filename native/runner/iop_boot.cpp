@@ -68,7 +68,7 @@ void IopBoot::enableEntryDevices() {
         const std::string_view text(value);
         const auto parsed = std::from_chars(text.data(), text.data() + text.size(), millions);
         if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() ||
-            (millions != 256 && millions != 512 && millions != 1024))
+            (millions != 256 && millions != 512 && millions != 1024 && millions != 2048))
             throw StrictDeviceError("Invalid DRAKENGARD_IOP_RUNTIME_BUDGET preset");
         runtimeLimit = millions * 1000000u;
     }

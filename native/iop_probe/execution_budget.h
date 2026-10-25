@@ -14,14 +14,15 @@ public:
     // Post-boot guest services now execute continuously during EE spin loops.
     // Keep a finite diagnostic run allowance; idle loops cannot renew it.
     static constexpr uint32_t RuntimeLimit = 256000000;
-    static constexpr uint32_t MaxRuntimeLimit = 1024000000;
+    static constexpr uint32_t MaxRuntimeLimit = 2048000000;
+    static_assert(MaxRuntimeLimit <= UINT32_MAX - 2u * PhaseLimit);
     uint32_t deadline() const { return end; }
     bool inReboot() const { return rebootStarted && !runtimeStarted; }
     bool inRuntime() const { return runtimeStarted; }
     void configureRuntimeLimit(uint32_t limit) {
         if (runtimeConfigured || rebootStarted || runtimeStarted)
             throw std::runtime_error("IOP runtime budget requires one configuration before reboot entry");
-        if (limit != RuntimeLimit && limit != 512000000 && limit != MaxRuntimeLimit)
+        if (limit != RuntimeLimit && limit != 512000000 && limit != 1024000000 && limit != MaxRuntimeLimit)
             throw std::runtime_error("Unsupported finite IOP runtime budget");
         runtimeLimit = limit;
         runtimeConfigured=true;

@@ -53,6 +53,23 @@ int main() {
             IopExecutionBudget edge; edge.enableGuestReboot();
             require(edge.retiredRebootEntry(8000000) && edge.deadline() == 15999999);
             edge.retiredRebootCompletion(15999999); require(edge.deadline() == 271999999);
+            for (uint32_t limit : {256000000u, 512000000u, 1024000000u, 2048000000u}) {
+                IopExecutionBudget configured;
+                configured.configureRuntimeLimit(limit);
+                require(configured.deadline() == 8000000);
+                refuses([&] { configured.configureRuntimeLimit(limit); });
+                configured.enableGuestReboot();
+                require(configured.retiredRebootEntry(8000000));
+                configured.retiredRebootCompletion(15999999);
+                const auto deadline = configured.deadline();
+                require(deadline == 15999999u + limit && deadline > limit && deadline <= 2063999999u);
+                refuses([&] { configured.retiredRebootEntry(8000000); });
+                refuses([&] { configured.retiredRebootCompletion(15999999); });
+                refuses([&] { configured.configureRuntimeLimit(limit); });
+                require(configured.deadline() == deadline);
+            }
+            for (uint32_t invalid : {0u, 1u, 1024000001u, 2048000001u, UINT32_MAX})
+                refuses([&] { IopExecutionBudget invalidBudget; invalidBudget.configureRuntimeLimit(invalid); });
         }
         refuses([] { ReadOnlyRom wrong(std::vector<uint8_t>(16)); });
         std::vector<uint8_t> bytes(0x400000);

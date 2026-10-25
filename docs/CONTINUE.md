@@ -21,35 +21,36 @@
 Более новые результаты журнала и явные указания пользователя важнее checkpoint
 ниже. Не запускай старый номер эксперимента повторно и не перезаписывай evidence.
 
-## Актуальный checkpoint: GS production и T8 CLUT, 2026-10-25
+## Актуальный checkpoint: продолжение главы I, 2026-10-25
 
-Добавлен opt-in --gs-metrics: отдельные UI/tick/readback/RGB/draw/CLUT counters,
-bounded64 bins/5s windows/64reports. Метрики пишутся только в свежий private run;
-default off. UI≈59/с не означал игровой FPS. Точная семантика и key-layout:
-docs/GS_PRODUCTION_METRICS.md; счётчики не генерируют guest events/frames.
+Пользователь отложил FPS меню: продолжай ИГРУ. После обычного Start15 на первой
+странице пролога255/256 реально отрисован "Chapter I - Beginnings",640x511.
+Это новая граница, ещё не движение/бой/полный gameplay/audio/saves/recovery.
+Старые missing EE targets исправлены; Timer1 bug не установлен.
 
-253baseline/254after, по24 settled5s windows (~120s): observed guest ticks И
-valid GS readbacks6.72788 ->7.15342/с (+6.325% в этой паре), UI59.22->58.82/с.
-Это не complete gameFPS: identical/partial/missed frames и diagnostic overhead.
-RGB changes даже снизились5.66->5.28/с; этот показатель тоже не FPS.
-Raster wall54.22%->51.60%; bin+overflow conservation PASS, overflow/regressions0.
+255 exit6 до300s: исчерпан точно фиксированный1024M IOP allowance, а не найден
+новый device fault. Добавлен явный2048M пресет (default256,512/1024 сохранены),
+монотонный и без продления.32-bit overflow guard, bootstrap14/14, Python57 и
+actual Release PASS.256 с2048M прошёл прежний предел и завершён watchdog300s,
+exitnull. Поздний Cross16 на ChapterI имел SIO2 ACK, эффект сцены не проверен.
 
-Измеренные T8/CT32/CSA0 забирали58.19% raster wall. Новый короткий путь читает
-ЖИВЫЕ m_clut[index]/[index+256], без кеша. При этих условиях обаCSM дают index,
-TEXA CT32 не меняет цвет. Остальное использует прежний LookupCLUT. Фильтрация,
-палитровые загрузки/инвалидация/таймеры/flags не менялись; прежние fixes сохранены.
+Следующий257 пока НЕ запускался: 300s/2048M, FRAME_INTERVAL300/FRAME_LIMIT64,
+metricsOFF. Capturelimit — opt-in1..64, default32; parser/test/build проверены,
+новая настройка64 native-проверки ещё не имеет. Текущий rebuilt EXE106577eb...
+не запускался; последний реально проверенный256 был c312c31d.... Exact SHA в handoff.
 
-464 paired actual-raster synthetic draws: каждый раз4MiB VRAM равны, включая
-реальные изменения палитры/TEXFLUSH/LoadClut. Synthetic batch17.27% меньше времени
-на свой workload, не вся игра. Bootstrap14/14, Python56, actual Release/PCH PASS.
-Native253/254300s watchdogtrue/exitnull; clean Start11/SIO2 ACK, main menu640x511
-просмотрено и pixel-identical к252. Нового явного device/scheduler отказа нет.
-Точные SHA/команды/evidence/ограничения в верхнем handoff и локальном журнале.
+Подготовлены private work/chapter1-257/{menu.py,start-prologue.py,chapter-input.py},
+только syntax checked. Запусти startup helper после pad-control; остальные могут
+ждать своей фазы параллельными процессами: menu257 проходит NewGame; prologue
+ждёт menu finish и посылает Start на странице; chapter ждёт prologue finish,
+посылает Cross на проверенном ChapterI и затем один Start, только если тот же
+титул остаётся после600 UI observations. При смене ROI — остановка ввода и
+визуальная проверка нового сырого кадра. ROI change/ACK не доказывают gameplay.
 
-Следующий255 (проверь unused): профиль оставшихся T8 page-cache/texture reads и
-per-pixel blend, затем один fast path с exact raster и native before/after.
-Без непроверенного кеша палитры/снижения качества/пропуска device/таймеров.
-Граница игры остаётся первой страницей пролога; Splash отложен.
+Один контроллер на фазу, actual SIO2 press/release. Каждый run максимум300s.
+Никаких timer/ready/PC/RAM/movie patches, unlimited budget или auto-renewal.
+Дойди до следующей реальной сцены/первого подтверждённого blocker; performance
+сейчас отложен. .vscode/Splash сохраняй. См. верхний handoff и NEXT_MODEL_PROMPT.
 
 ## Сохранённый checkpoint пролога: 2026-10-25
 
@@ -74,9 +75,9 @@ per-pixel blend, затем один fast path с exact raster и native before/
 - Точные hashes/ограничения/evidence — верхний handoff. Source input/upstream/
   old generated/maps не менялись. .vscode/Splash сохрани; сплешскрин отложен.
 
-## Отложено: продолжение пролога
+## История: прежняя граница пролога
 
-После performance-этапа используй новый свободный номер. Игровая граница проверки — первая страница пролога,
+Исторически границей была первая страница пролога; теперь продолжай главу I выше,
 а НЕ missing scheduler297BB0. Установи ожидаемое поведение страницы: ordinary
 Start/Cross после проверки готовности; реальный callback/input handler и, при
 необходимости, read-only Timer1 COUNT/MODE/софт-прогресс. Повторяющийся PC27F1B8
@@ -122,8 +123,8 @@ Old maps/lifts сохраняй; сначала проверь новые име
 
 ## Следующий ограниченный прогон
 
-На момент checkpoint следующий номер —255. Сначала проверь, что каталог
-`work/native-run-255` свободен и другой native/reference процесс не работает.
+На момент checkpoint следующий номер —257. Сначала проверь, что каталог
+`work/native-run-257` свободен и другой native/reference процесс не работает.
 Если номер уже занят, выбери следующий свободный, сохрани прежние результаты.
 
 Настоящий executable: `build/native/ps2xRuntime/Release/ps2EntryRunner.exe`.
@@ -132,14 +133,16 @@ runner, проверь exit code сборки и запиши SHA-256 прове
 
 ```powershell
 cmake --build build/native --config Release --target ps2EntryRunner --parallel 4
-python scripts/run_native.py --input-complete --run 255 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 1024 --gs-metrics
+$env:DRAKENGARD_FRAME_INTERVAL="300"
+$env:DRAKENGARD_FRAME_LIMIT="64"
+python scripts/run_native.py --input-complete --run 257 --seconds 300 --iop-bootstrap --ee-firmware-entry --iop-video-events --virtual-pad --pad-control --iop-runtime-millions 2048
 ```
 
-Пока launcher работает, дождись появления `work/native-run-255/pad-control.txt`,
+Пока launcher работает, дождись появления `work/native-run-257/pad-control.txt`,
 затем отдельным процессом запусти:
 
 ```powershell
-python scripts/native_start.py --run 255 --timeout 300
+python scripts/native_start.py --run 257 --timeout 300
 ```
 
 Не жди завершения launcher перед запуском controller helper. Он проходит
@@ -152,7 +155,8 @@ IPU и нового motion-code отказа; не выдавай exit2 helper �
 здесь указан разрешённый предел300s; runner по-прежнему ограничен300s.
 
 При необходимости перед запуском launcher установи
-`DRAKENGARD_FRAME_INTERVAL=600`: это opt-in прямые GS-снимки с пределом32 файла.
+`DRAKENGARD_FRAME_INTERVAL=600`: это opt-in прямые GS-снимки с default-пределом32 файла. Opt-in `DRAKENGARD_FRAME_LIMIT=1..64`
+задаёт другой конечный предел; для следующего257 выше указаны300/64.
 Запиши диагностическую опцию в evidence. Не выдавай GS-снимок за независимую
 проверку окна. Native и reference запускай последовательно, каждый native
 эксперимент ограничивай максимум300 секундами.

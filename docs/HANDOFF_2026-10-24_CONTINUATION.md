@@ -1,6 +1,70 @@
 # Drakengard Europe continuation handoff
 
-## Latest: GS production measured; common T8 palette path verified (2026-10-25)
+## Latest: Chapter I title reached; gameplay continuation is the priority (2026-10-25)
+
+User explicitly postponed menu performance. Continue GAME progression, preserve
+existing renderer/lookup fixes, do not resume optimization. Native255 ordinary
+NewGame inputs11Start/12Cross/13Left/14Cross all had SIO2 press/release. First
+prologue page12000 matched prior24615600, normalizedROI MAE0; Start15/700ms at
+07:38:25.176683UTC was acknowledged. GS13200 and final capture show
+"Chapter I - Beginnings",640x511, privately inspected. This is semantic progress
+beyond the first prologue page, not movement/combat/gameplay/audio/save acceptance.
+
+255 used executable9c9c22cd4ae7bdc7d38b38d8d60e29b2a3cd9e1ca0711343259b576c25b066b9,
+300s/1024M/frame600, but exited6 BEFORE watchdog. First blocker was the exact
+finite post-reboot IOP instruction ceiling: begin14404316/deadline1038404316.
+IOP atbb9c,08002ee7 Jself/NOP idle; no newly identified device failure. Terminal
+EEpc310e38 is a failure checkpoint, not a missing lifted-function diagnosis.
+
+Added explicit2048M diagnostic preset; default256 and512/1024 preserved. Counters
+stay monotonic, no poll/idle renewal. Worst valid boot/reboot end15,999,999 plus
+2,048,000,000 =2,063,999,999 fits32-bit bounds; static overflow guard and all-preset/
+invalid/reconfigure/reboot-renewal tests PASS. Per-run wall limit remains300s.
+Budget exhaustion now logs phase/steps/deadline before the existing closed failure.
+Bootstrap14/14, Python57 and real Release/PCH PASS.
+
+Native256 on actual executable
+c312c31db95d3d9fc88937b6b4e1cdda052623bb14221a8b0d828cf76431cb67,
+2048M/300s/frame600/metricsOFF, confirms begin14404316/deadline2062404316 and
+passes the old ceiling. Same clean menus and Start15 at07:46:09.819959UTC on
+firstpage12000, ACK. ChapterI visible13800/14400/15600. Initial chapter oracle
+bound3 refused a real title at normalizedROI MAE6.82868 BEFORE sending input.
+After visual inspection a fresh bound8 helper was calibrated against known
+negative prologue36.44/menu88.37/dialog24.26, then Cross16 at07:47:16.931606UTC
+was actually pressed/released. It was near the300s end; its application effect is
+UNVERIFIED.256 watchdogtrue/exitnull, no new explicit device/scheduler refusal,
+no final-on-exit capture. Last periodic15600 still ChapterI title. No gameplay.
+
+To reduce observation/input delay, capture adds opt-in DRAKENGARD_FRAME_LIMIT1..64,
+default32 unchanged. Interval still60..3600, disabled by default. Next planned
+run uses interval300/limit64, covering the300s run with~5s captures instead of~10s.
+Bounds parser/header tests and real build PASS. This NEWcapture setting has NOT
+been exercised natively: user requested a smooth stop before257. Current freshly
+built executable SHA256 (not run):
+106577eb7f987d369f17ff01c283dc1933e4e10cb7ab286f8d74561d49ec3272.
+Do not call it the tested256 binary.
+
+Next257 (native-run-257 still unused; no active native/reference process at stop):
+300s/2048M, DRAKENGARD_FRAME_INTERVAL=300,DRAKENGARD_FRAME_LIMIT=64, metricsOFF.
+Private scripts in work/chapter1-257 are PREPARED and py_compile-checked ONLY:
+menu.py257, start-prologue.py, chapter-input.py. Startup helper after pad file;
+menu does NewGame, prologue waits for menu finish and sends Start on actual page;
+chapter helper waits for prologue finish, matches fresh ChapterI ROI bound8, sends
+Cross, and ONLY if the same title remains after600 UI observations sends one Start.
+It stops if the title ROI changes; inspect fresh raw frames rather than claiming
+page/scene/gameplay from ROI change alone. One controller per phase, ACK required.
+No timer/ready/PC/RAM/movie patches or instruction-budget auto-renewal.
+
+Read-only investigation also narrowed the old timer suspicion: prior248 RAM maps
+vtable53e148+78 callback at53e1c4 to127068. Original words03e00008/00000000 are
+JRRA/NOP and ignore the Timer1 argument. Repeated27f1b8/getter1215f4 is not a
+confirmed timer bug or the actual prologue input-handler diagnosis.
+Evidence: work/prologue-255 (contract/input/controller/logs/review images),
+work/native-run-255 (real final GS exists), work/chapter1-256 and native-run-256,
+work/chapter1-257 (build/tests/prepared scripts, NO native257 execution). All private.
+No new screenshots approved for Git; .vscode/Splash preserved, splash deferred.
+
+## Previous: GS production measured; common T8 palette path verified (2026-10-25)
 
 Continued from4b9ee66. Added opt-in `--gs-metrics`, recording bounded private
 production/state counters. Source confirms UploadFrame usually reuses its image;

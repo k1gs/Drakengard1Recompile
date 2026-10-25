@@ -166,3 +166,15 @@ no cache. Preserve all other LookupCLUT states and palette loads. Private full
 raster regression includes repeated palette writes/TEXFLUSH/LoadClut and requires
 visible output changes, then full VRAM equality. Timed synthetic batches and one
 instrumented native pair support a local improvement, not a general FPS promise.
+
+
+## Chapter continuation after a diagnostic ceiling
+
+Do not treat a fixed instruction allowance as a device contract violation.255
+reached ChapterI before the exact1024M ceiling; an explicit finite2048M preset
+kept monotonic counters and closed exhaustion.256 passed that ceiling, but late
+Cross near300s did not establish a scene transition. Faster observation, not a
+ready/PC/timer patch, is the next experiment. Optional DRAKENGARD_FRAME_LIMIT1..64
+(default32), paired with interval300, permits bounded~5s captures through300s.
+Parser/build checks do not prove native execution of the new capture option;
+257 was deliberately not launched after the user's stop request.

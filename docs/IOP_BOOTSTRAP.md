@@ -1458,3 +1458,16 @@ One real Cross on248 page has SIO2 press/release, but semantic page advance is
 unproven. No gameplay/audio/saves/recovery acceptance. Next249 observes ordinary
 page continuation and actual callback/timer/input behavior; no invented timer or
 ready fix. See top handoff for exact input-oracle calibration and evidence limits.
+
+
+## Fixed2048M allowance for Chapter I investigation
+
+Native255 reached the ChapterI title after ordinary prologue Start, then exhausted
+the exact fixed1024M runtime allowance at total1038404316. This was a harness
+ceiling, not a newly diagnosed device failure. Added an explicit2048M preset;
+default256 and512/1024 remain. Counters never reset/renew on idle or polls; the
+300s wall limit remains. Maximum valid phase end plus allowance2,063,999,999 fits
+32-bit bounds, covered by all-preset/reconfiguration/invalid/overflow checks.
+Native256 passed the old ceiling and reached300s watchdog without a new explicit
+refusal; still ChapterI title, not gameplay. Capture/readiness changes prepared
+for257 have unit/build verification only. See top handoff for actual binary SHAs.

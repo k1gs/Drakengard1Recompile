@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <charconv>
 #include <string_view>
+#include "gs_capture_limits.h"
 
 // Observe the GS presentation buffer, excluding host UI. A nonuniform capture
 // after a real GS draw is only a candidate until visually inspected.
@@ -15,7 +16,7 @@ class GuestFrameCapture {
     bool drawn{}, saved{}, followupSaved{};
     unsigned framesAfterFirst{};
     unsigned observations{};
-    unsigned interval{},frameObservations{},periodicSaved{};
+    unsigned interval{},frameObservations{},periodicSaved{},periodicLimit{32};
     void savePeriodic(GS& gs) {
         std::vector<uint8_t> rgba; uint32_t width{},height{};
         if (!gs.copyLatchedHostPresentationFrame(rgba,width,height) || !width || !height ||
@@ -34,11 +35,10 @@ public:
     GuestFrameCapture() {
         if (const auto* path=std::getenv("DRAKENGARD_FRAME_OUTPUT")) output=path;
         if (const auto* value=std::getenv("DRAKENGARD_FRAME_INTERVAL")) {
-            const std::string_view text(value);
-            const auto parsed=std::from_chars(text.data(),text.data()+text.size(),interval);
-            if (parsed.ec!=std::errc{} || parsed.ptr!=text.data()+text.size() || interval<60 || interval>3600)
-                throw std::runtime_error("GS capture interval must be 60..3600 observations");
+            interval=parseGsCaptureLimit(value,60,3600);
         }
+        if (const auto* value=std::getenv("DRAKENGARD_FRAME_LIMIT"))
+            periodicLimit=parseGsCaptureLimit(value,1,64);
     }
     void enable(GS& gs) { if (!output.empty()) gs.setDebugHistoryPaused(false); }
     void saveFinal(GS& gs) {
@@ -56,7 +56,7 @@ public:
     }
     void observe(GS& gs) {
         if (output.empty()) return;
-        if (interval && ++frameObservations%interval==0 && periodicSaved<32) savePeriodic(gs);
+        if (interval && ++frameObservations%interval==0 && periodicSaved<periodicLimit) savePeriodic(gs);
         if (followupSaved) return;
         if (saved && ++framesAfterFirst<120) return;
         if (!drawn) for (const auto& event:gs.getDebugHistory())
