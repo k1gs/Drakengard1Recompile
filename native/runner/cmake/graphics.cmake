@@ -75,3 +75,34 @@ get_target_property(runtime_sources ps2_runtime SOURCES)
 list(FILTER runtime_sources EXCLUDE REGEX "/gs_cpu_backend[.]cpp$")
 set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
 target_sources(ps2_runtime PRIVATE "${graphics_file}")
+
+# Observe the original XYZ packets immediately before vertexKick; preserve all decoding.
+include("${CMAKE_CURRENT_LIST_DIR}/pinned_patch.cmake")
+file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/gs/gs_frontend.cpp" frontend_source)
+drakengard_replace_pinned(frontend_source
+    "        vtx.fog = f;\n        vertexKick(!adk);"
+    "        vtx.fog = f;\n        drakengard::observeGsRawVertex(0x104u,lo,hi);\n        vertexKick(!adk);" "packed XYZF2 sample")
+drakengard_replace_pinned(frontend_source
+    "        vtx.fog = m_curFog;\n        vertexKick(!adk);"
+    "        vtx.fog = m_curFog;\n        drakengard::observeGsRawVertex(0x105u,lo,hi);\n        vertexKick(!adk);" "packed XYZ2 sample")
+drakengard_replace_pinned(frontend_source
+    "        vtx.fog = static_cast<uint8_t>((hi >> 36) & 0xFF);\n        vertexKick(false);"
+    "        vtx.fog = static_cast<uint8_t>((hi >> 36) & 0xFF);\n        drakengard::observeGsRawVertex(0x10cu,lo,hi);\n        vertexKick(false);" "packed XYZF3 sample")
+drakengard_replace_pinned(frontend_source
+    "        vtx.fog = m_curFog;\n        vertexKick(false);"
+    "        vtx.fog = m_curFog;\n        drakengard::observeGsRawVertex(0x10du,lo,hi);\n        vertexKick(false);" "packed XYZ3 sample")
+foreach(vertex_register IN ITEMS XYZF2 XYZ2)
+    drakengard_replace_pinned(frontend_source
+        "        vertexKick(regAddr == GS_REG_${vertex_register});"
+        "        drakengard::observeGsRawVertex(0x200u|regAddr,value,0);\n        vertexKick(regAddr == GS_REG_${vertex_register});"
+        "register ${vertex_register} sample")
+endforeach()
+set(frontend_file "${CMAKE_BINARY_DIR}/private_sampled_GsFrontend.cpp")
+file(CONFIGURE OUTPUT "${frontend_file}"
+    CONTENT "#include \"gs_production_metrics.h\"\n${frontend_source}" @ONLY)
+set_source_files_properties("${frontend_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
+    INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/gs")
+get_target_property(runtime_sources ps2_runtime SOURCES)
+list(FILTER runtime_sources EXCLUDE REGEX "/gs_frontend[.]cpp$")
+set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
+target_sources(ps2_runtime PRIVATE "${frontend_file}")

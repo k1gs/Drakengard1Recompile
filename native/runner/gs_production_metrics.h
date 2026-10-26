@@ -1,5 +1,6 @@
 #pragma once
 #include "capture/gs_capture_limits.h"
+#include "gs_triangle_samples.h"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -121,10 +122,14 @@ inline const char* gsMetricPath() {
     static const GsMetricGate gate(GsMetricClock::now(), gsMetricStartDelay());
     return gate.active(GsMetricClock::now()) ? path : nullptr;
 }
+inline void observeGsRawVertex(uint64_t encoding, uint64_t lo, uint64_t hi) {
+    if (gsMetricPath()) gsRawVertexWindow.add(encoding, lo, hi);
+}
 struct GsMetricStore {
     std::mutex mutex;
     GsProductionCounters counters;
     GsObservedRgb image;
+    GsTriangleSamples triangles;
     GsMetricClock::time_point origin = GsMetricClock::now(), lastReport = origin;
     unsigned reports{};
 };
@@ -156,6 +161,7 @@ template<class Batch> void completeGsDrawMetric(GsMetricClock::time_point start,
     auto& store = gsMetricStore(); std::lock_guard lock(store.mutex);
     store.counters.draw(key, uint64_t(elapsed));
     store.counters.geometry.observe(batch);
+    store.triangles.observe(batch, key.words, store.counters.draws, gsRawVertexWindow);
 }
 inline void observeGsClutLoad() {
     if (!gsMetricPath()) return;
@@ -175,7 +181,9 @@ inline void pollGsProductionMetrics() {
     auto& store = gsMetricStore(); const auto now = GsMetricClock::now();
     if (store.reports >= 64 || now - store.lastReport < std::chrono::seconds(5)) return;
     GsProductionCounters copy;
-    { std::lock_guard lock(store.mutex); copy = store.counters; store.counters.clearBins(); }
+    GsTriangleSamples samples;
+    { std::lock_guard lock(store.mutex); copy = store.counters; store.counters.clearBins();
+      samples = store.triangles; store.triangles.clear(); }
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - store.origin).count();
     std::ofstream file(path, std::ios::app);
     if (!file) throw std::runtime_error("Cannot open private GS metrics output");
@@ -207,7 +215,9 @@ inline void pollGsProductionMetrics() {
         }
         file << "],\"draws\":" << copy.bins[i].draws << ",\"wall_ns\":" << copy.bins[i].wallNs << '}';
     }
-    file << "]}\n"; file.flush();
+    file << "],\"triangle_samples\":";
+    samples.writeJson(file);
+    file << "}\n"; file.flush();
     if (!file) throw std::runtime_error("Cannot write private GS metrics output");
     ++store.reports; store.lastReport = now;
 }

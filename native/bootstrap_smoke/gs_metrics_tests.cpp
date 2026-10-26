@@ -2,13 +2,16 @@
 #include "capture/gs_capture_limits.h"
 #include <iostream>
 #include <limits>
+#include <sstream>
 
 struct GeometryFixture {
-    struct Vertex { float x{}, y{}; };
+    struct Vertex { float x{}, y{}; double z{}; float s{}, t{}, q{1};
+        uint16_t u{},v{}; uint8_t r{},g{},b{},a{},fog{}; };
     std::array<Vertex, 3> vertices{{{10, 10}, {20, 10}, {10, 20}}};
     unsigned vertexCount{3};
     struct State {
-        struct Prim { unsigned type{3}; } prim;
+        struct Prim { unsigned type{3},iip{},fge{},ctxt{}; } prim;
+        uint8_t fogR{},fogG{},fogB{};
         struct Context {
             struct Offset { unsigned ofx{}, ofy{}; } xyoffset;
             struct Scissor { unsigned x0{}, x1{640}, y0{}, y1{512}; } scissor;
@@ -17,6 +20,25 @@ struct GeometryFixture {
 };
 
 int main() {
+    drakengard::GsRawVertexWindow raw;
+    for (uint64_t i = 0; i < 6; ++i) raw.add(0x104,i,i+1);
+    if (raw.sequence != 6 || raw.entries[0].sequence != 5 || raw.entries[3].sequence != 4) return 13;
+    drakengard::GsTriangleSamples samples;
+    GeometryFixture sampleBatch;
+    for (unsigned i = 0; i < 100; ++i) samples.observe(sampleBatch,{},i,raw);
+    if (samples.size != 2 || samples.samples[0].category != 0) return 14;
+    sampleBatch.vertices[2] = sampleBatch.vertices[1];
+    samples.observe(sampleBatch,{},101,raw);
+    if (samples.size != 3 || samples.samples[2].category != 1) return 15;
+    sampleBatch.vertices[0].x = std::numeric_limits<float>::quiet_NaN();
+    samples.observe(sampleBatch,{},102,raw);
+    if (samples.size != 4 || samples.samples[3].category != 4 ||
+        samples.samples[3].vertices[0][0] != std::bit_cast<uint32_t>(sampleBatch.vertices[0].x)) return 16;
+    std::ostringstream json; samples.writeJson(json);
+    if (json.str().find("nan") != std::string::npos || json.str().find("recent_raw_xyz") == std::string::npos) return 17;
+    samples.clear();
+    samples.observe(GeometryFixture{}, {},103,raw);
+    if (samples.size != 1) return 18;
     const auto origin = drakengard::GsMetricClock::time_point{};
     drakengard::GsMetricGate gate(origin, 300);
     if (gate.active(origin + std::chrono::seconds(299)) ||
