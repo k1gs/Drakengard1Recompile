@@ -7,7 +7,8 @@ from kernel_image import translation_elf
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('kind', choices=['pointers', 'shared-epilogue', 'long-nop', 'delay-slot-exit'])
+    parser.add_argument('kind', choices=['pointers', 'shared-epilogue', 'long-nop', 'delay-slot-exit',
+                                        'call-slot-exit'])
     args = parser.parse_args()
     return42 = bytes.fromhex('2a0002240800e00300000000')
     if args.kind == 'pointers':
@@ -26,6 +27,15 @@ def main():
         # A real fallthrough through 64 original NOPs, beyond automatic cutoff.
         image = translation_elf([(0x1000, struct.pack('<I', 0x2402002a) + bytes(64 * 4) +
                                   struct.pack('<2I', 0x03e00008, 0))], 0x1000)
+    elif args.kind == 'call-slot-exit':
+        # A split caller with an alternate entry into a jump's delay slot,
+        # followed by a missing word and a real call outside its analysis bound.
+        words = (0x03e08021, 0x18800003, 0x2484ffff, 0, 0x08000401,
+                 0x24630001, 0x2402000a, 0x0c000800, 0x24630002,
+                 0x0200f821, 0x03e00008, 0x24420001)
+        callee = (0x24420014, 0x03e00008, 0x24630004)
+        image = translation_elf([(0x1000, struct.pack('<12I', *words)),
+                                 (0x2000, struct.pack('<3I', *callee))], 0x1000)
     else:
         # Exit branches directly into a backward jump's delay slot. That slot
         # must then fall through into the return, rather than end the function.
