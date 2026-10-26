@@ -1,4 +1,5 @@
 #pragma once
+#include "gs_dma_source.h"
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -12,6 +13,8 @@ struct GsGifPacketSummary {
     bool activeTagSeen{};
     uint32_t activeTagOffset{};
     uint64_t activeTagLo{}, activeTagHi{};
+    bool dmaKnown{},cpuKnown{},spanOverflow{};
+    uint32_t dmaTadr{},dmaChcr{},dmaPc{},dmaRa{},dmaSp{};
     std::array<uint64_t, 8> prefix{};
 };
 inline thread_local GsGifPacketSummary gsGifPacketContext;
@@ -70,6 +73,10 @@ inline void writeGsGifPacketJson(std::ostream& out, const GsGifPacketSummary& p)
         << ",\"active_tag_seen\":" << (p.activeTagSeen ? "true" : "false")
         << ",\"active_tag_offset\":" << p.activeTagOffset << ",\"active_tag_lo\":" << p.activeTagLo
         << ",\"active_tag_hi\":" << p.activeTagHi
+        << ",\"dma_known\":" << (p.dmaKnown?"true":"false") << ",\"cpu_known\":" << (p.cpuKnown?"true":"false")
+        << ",\"dma_tadr\":" << p.dmaTadr << ",\"dma_chcr\":" << p.dmaChcr
+        << ",\"dma_pc\":" << p.dmaPc << ",\"dma_ra\":" << p.dmaRa << ",\"dma_sp\":" << p.dmaSp
+        << ",\"source_span_overflow\":" << (p.spanOverflow?"true":"false")
         << ",\"prefix_words\":[";
     for (size_t i = 0; i < p.prefix.size(); ++i) { if (i) out << ','; out << p.prefix[i]; }
     out << "]}";

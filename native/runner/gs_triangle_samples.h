@@ -11,13 +11,16 @@ namespace drakengard {
 struct GsRawVertex {
     uint64_t sequence{}, encoding{}, lo{}, hi{};
     uint64_t packetId{}, path{};
+    uint64_t offset{}, sourceKnown{}, sourceAddress{}, sourceScratch{}, sourceTag{};
 };
 struct GsRawVertexWindow {
     std::array<GsRawVertex, 4> entries{};
     uint64_t sequence{};
     void add(uint64_t encoding, uint64_t lo, uint64_t hi) {
+        const auto source=resolveGsDmaAddress(gsCurrentDmaSource,gsCurrentGifDataOffset,encoding<0x200u?16u:8u);
         entries[sequence % entries.size()] = {sequence + 1, encoding, lo, hi,
-            gsGifPacketContext.id, gsGifPacketContext.path};
+            gsGifPacketContext.id, gsGifPacketContext.path,gsCurrentGifDataOffset,
+            source.known,source.address,source.scratch,source.tag};
         ++sequence;
     }
 };
@@ -99,7 +102,8 @@ struct GsTriangleSamples {
             for (uint64_t j = 0; j < count; ++j) {
                 if (j) out << ',';
                 const auto& r = s.raw.entries[(s.raw.sequence-count+j)%s.raw.entries.size()];
-                writeArray(out, std::array<uint64_t,6>{r.sequence,r.encoding,r.lo,r.hi,r.packetId,r.path});
+                writeArray(out, std::array<uint64_t,11>{r.sequence,r.encoding,r.lo,r.hi,r.packetId,r.path,
+                    r.offset,r.sourceKnown,r.sourceAddress,r.sourceScratch,r.sourceTag});
             }
             out << "],\"packet\":";
             writeGsGifPacketJson(out, s.packet);

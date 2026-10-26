@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
+#include <filesystem>
 #include <mutex>
 #include <optional>
 #include <stdexcept>
@@ -138,23 +139,77 @@ struct GsMetricStore {
 };
 inline GsMetricStore& gsMetricStore() { static GsMetricStore store; return store; }
 inline std::atomic<uint64_t> gsGifPacketSequence{};
+inline thread_local const uint8_t* gsCurrentGifData{};
+inline thread_local uint32_t gsCurrentGifBytes{};
+class GsDmaCpuScope {
+    std::optional<GsDmaCpuContext> previous;
+public:
+    GsDmaCpuScope(bool gifWrite,uint32_t pc,uint32_t ra,uint32_t sp,const uint8_t* ram,uint32_t size) {
+        if (!gifWrite || !gsMetricPath()) return;
+        previous=gsDmaCpuContext;
+        gsDmaCpuContext={}; gsDmaCpuContext.known=true;
+        gsDmaCpuContext.pc=pc; gsDmaCpuContext.ra=ra; gsDmaCpuContext.sp=sp;
+        if (ram && uint64_t(sp)+sizeof(gsDmaCpuContext.stack)<=size) {
+            std::memcpy(gsDmaCpuContext.stack.data(),ram+sp,sizeof(gsDmaCpuContext.stack));
+            gsDmaCpuContext.stackKnown=true;
+        }
+    }
+    ~GsDmaCpuScope() { if(previous)gsDmaCpuContext=*previous; }
+};
 class GsGifPacketScope {
     std::optional<GsGifPacketSummary> previous;
+    const GsDmaSource* previousSource{};
+    const uint8_t* previousData{};
+    uint32_t previousBytes{},previousOffset{};
+    GsDmaSource* source{};
 public:
     GsGifPacketScope(unsigned path, const uint8_t* data, uint32_t bytes) {
         if (!gsMetricPath()) return;
         previous = gsGifPacketContext;
+        previousSource=gsCurrentDmaSource; previousData=gsCurrentGifData;
+        previousBytes=gsCurrentGifBytes; previousOffset=gsCurrentGifDataOffset;
+        source=path==3?findGsDmaSource(data,bytes):nullptr;
+        gsCurrentDmaSource=source; gsCurrentGifData=data; gsCurrentGifBytes=bytes;
+        gsCurrentGifDataOffset=0;
         auto packet = inspectGsGifPacket(data, bytes);
         packet.id = gsGifPacketSequence.fetch_add(1, std::memory_order_relaxed) + 1;
         packet.path = path;
+        if(source) {
+            packet.dmaKnown=true; packet.cpuKnown=source->cpu.known; packet.spanOverflow=source->overflow;
+            packet.dmaTadr=source->tadr; packet.dmaChcr=source->chcr;
+            packet.dmaPc=source->cpu.pc; packet.dmaRa=source->cpu.ra; packet.dmaSp=source->cpu.sp;
+        }
         gsGifPacketContext = packet;
         auto& store = gsMetricStore(); std::lock_guard lock(store.mutex);
         store.gif.observe(packet);
     }
-    ~GsGifPacketScope() { if (previous) gsGifPacketContext = *previous; }
+    ~GsGifPacketScope() { if (previous) {
+        gsGifPacketContext=*previous; gsCurrentDmaSource=previousSource;
+        gsCurrentGifData=previousData; gsCurrentGifBytes=previousBytes; gsCurrentGifDataOffset=previousOffset;
+        if(source)source->active=false;
+    } }
     GsGifPacketScope(const GsGifPacketScope&) = delete;
     GsGifPacketScope& operator=(const GsGifPacketScope&) = delete;
 };
+template<class Batch> void captureGsZeroPacket(const Batch& batch) {
+    static const char* directory=std::getenv("DRAKENGARD_GIF_SOURCE_OUTPUT");
+    static unsigned saved{}; static uint64_t lastPacket{};
+    if (!directory || !*directory || saved>=2 || gsGifPacketContext.path!=3 ||
+        gsGifPacketContext.id==lastPacket || !gsCurrentDmaSource || !gsCurrentGifData || gsCurrentGifBytes>1024u*1024u ||
+        batch.vertexCount!=3 || unsigned(batch.state.prim.type)<3 || unsigned(batch.state.prim.type)>5) return;
+    for(const auto& v:batch.vertices) if(v.x!=0 || v.y!=0 || v.z!=0) return;
+    const auto base=std::filesystem::path(directory)/("packet-"+std::to_string(gsGifPacketContext.id));
+    const auto binary=base.string()+".bin", metadata=base.string()+".source.json";
+    if(std::filesystem::exists(binary)||std::filesystem::exists(metadata))
+        throw std::runtime_error("GIF source capture already exists");
+    std::ofstream data(binary,std::ios::binary); data.write(reinterpret_cast<const char*>(gsCurrentGifData),gsCurrentGifBytes);
+    std::ofstream sourceFile(metadata); sourceFile<<"{\"packet\":";
+    writeGsGifPacketJson(sourceFile,gsGifPacketContext); sourceFile<<",\"dma\":";
+    writeGsDmaSourceJson(sourceFile,gsCurrentDmaSource); sourceFile<<'}';
+    data.flush(); sourceFile.flush();
+    if(!data || !sourceFile)throw std::runtime_error("Cannot write bounded GIF source capture");
+    ++saved; lastPacket=gsGifPacketContext.id;
+}
 inline GsMetricClock::time_point beginGsDrawMetric() {
     return gsMetricPath() ? GsMetricClock::now() : GsMetricClock::time_point{};
 }
@@ -183,6 +238,7 @@ template<class Batch> void completeGsDrawMetric(GsMetricClock::time_point start,
     store.counters.draw(key, uint64_t(elapsed));
     store.counters.geometry.observe(batch);
     store.triangles.observe(batch, key.words, store.counters.draws, gsRawVertexWindow);
+    captureGsZeroPacket(batch);
 }
 inline void observeGsClutLoad() {
     if (!gsMetricPath()) return;

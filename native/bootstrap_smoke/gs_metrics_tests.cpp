@@ -20,6 +20,17 @@ struct GeometryFixture {
 };
 
 int main() {
+    std::array<uint8_t,64> original{},copied{};
+    drakengard::beginGsDmaSource(true,0x3000,0x105);
+    drakengard::markGsDmaTag(0x3000);
+    drakengard::appendGsDmaSource(0,0x5000,32,false);
+    drakengard::appendGsDmaSource(32,0x100,32,true);
+    drakengard::queueGsDmaSource(original.data(),64);
+    drakengard::relayGsDmaSource(original.data(),64,copied.data());
+    const auto* trace=drakengard::findGsDmaSource(copied.data(),64);
+    const auto address=drakengard::resolveGsDmaAddress(trace,40,8);
+    if(!address.known || !address.scratch || address.address!=0x108 || address.tag!=0x3000 ||
+       drakengard::resolveGsDmaAddress(trace,24,16).known || drakengard::findGsDmaSource(original.data(),64)) return 25;
     std::array<uint8_t,64> packet{};
     const auto setTag = [&](uint64_t tag) { std::memcpy(packet.data(), &tag, 8); };
     setTag(1ull | (2ull<<60)); // two packed registers

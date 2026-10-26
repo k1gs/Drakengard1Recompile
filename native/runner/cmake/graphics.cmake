@@ -101,6 +101,14 @@ drakengard_replace_pinned(frontend_source
     "        recordGifTagDebugEventUnlocked(sizeBytes, nloop, flg, nreg);"
     "        recordGifTagDebugEventUnlocked(sizeBytes, nloop, flg, nreg);\n        drakengard::observeGsGifTag(offset-16u,tagLo,tagHi);"
     "active GIF tag sample")
+drakengard_replace_pinned(frontend_source
+    "                    writeRegisterPacked(regs[r], lo, hi);"
+    "                    drakengard::gsCurrentGifDataOffset=offset-16u;\n                    writeRegisterPacked(regs[r], lo, hi);"
+    "packed GIF data offset")
+drakengard_replace_pinned(frontend_source
+    "                    writeRegisterUnlocked(regs[r], loadLE64(data + offset));"
+    "                    drakengard::gsCurrentGifDataOffset=offset;\n                    writeRegisterUnlocked(regs[r], loadLE64(data + offset));"
+    "register GIF data offset")
 set(frontend_file "${CMAKE_BINARY_DIR}/private_sampled_GsFrontend.cpp")
 file(CONFIGURE OUTPUT "${frontend_file}"
     CONTENT "#include \"gs_production_metrics.h\"\n${frontend_source}" @ONLY)
@@ -117,6 +125,10 @@ drakengard_replace_pinned(arbiter_source
     "            drakengard::GsGifPacketScope packetScope(unsigned(pkt.pathId),pkt.data.data(),static_cast<uint32_t>(pkt.data.size()));\n            m_processFn(pkt.data.data(), static_cast<uint32_t>(pkt.data.size()));"
     "GIF packet source scope")
 set(arbiter_file "${CMAKE_BINARY_DIR}/private_observed_GifArbiter.cpp")
+drakengard_replace_pinned(arbiter_source
+    "    m_queue.push_back(std::move(pkt));"
+    "    if(unsigned(pathId)==3u) drakengard::relayGsDmaSource(data,sizeBytes,pkt.data.data());\n    m_queue.push_back(std::move(pkt));"
+    "GIF source copied buffer identity")
 file(CONFIGURE OUTPUT "${arbiter_file}"
     CONTENT "#include \"gs_production_metrics.h\"\n${arbiter_source}" @ONLY)
 get_target_property(runtime_sources ps2_runtime SOURCES)

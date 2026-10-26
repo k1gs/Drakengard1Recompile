@@ -53,6 +53,15 @@ if(runtime_presentation_metric STREQUAL runtime_tick_metric)
     message(FATAL_ERROR "Pinned valid GS readback metric point changed")
 endif()
 set(runtime_file "${CMAKE_BINARY_DIR}/private_extended_Runtime.cpp")
+include("${CMAKE_CURRENT_LIST_DIR}/pinned_patch.cmake")
+drakengard_replace_pinned(runtime_presentation_metric
+    "void PS2Runtime::Store32(uint8_t *rdram, R5900Context *ctx, uint32_t vaddr, uint32_t value)\n{"
+    "void PS2Runtime::Store32(uint8_t *rdram, R5900Context *ctx, uint32_t vaddr, uint32_t value)\n{\n    drakengard::GsDmaCpuScope gifCpuScope((vaddr&0x1fffffffu)==0x1000a000u && (value&0x100u),ctx->pc,getRegU32(ctx,31),getRegU32(ctx,29),rdram,PS2_RAM_SIZE);"
+    "GIF CPU store scope")
+drakengard_replace_pinned(runtime_presentation_metric
+    "                                         uint32_t chcr)\n{"
+    "                                         uint32_t chcr)\n{\n    drakengard::GsDmaCpuScope gifCpuScope(true,ctx->pc,getRegU32(ctx,31),getRegU32(ctx,29),rdram,PS2_RAM_SIZE);"
+    "GIF CPU chain scope")
 file(CONFIGURE OUTPUT "${runtime_file}"
     CONTENT "#include \"gs_production_metrics.h\"\n#include <exception>\n#include \"game_thread_guard.h\"\n#include \"kernel_functions.h\"\n#include \"firmware_functions.h\"\n#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"sif_transport.h\"\n#include \"ee_transfer_diagnostic.h\"\n${runtime_presentation_metric}" @ONLY)
 set_source_files_properties("${runtime_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES

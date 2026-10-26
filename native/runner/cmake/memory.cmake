@@ -60,8 +60,25 @@ string(REPLACE "${dma_fake_read}" "                return m_ioRegisters[address]
 if(memory_real_status STREQUAL memory_pending)
     message(FATAL_ERROR "Pinned DMA STR read contract changed")
 endif()
+include("${CMAKE_CURRENT_LIST_DIR}/pinned_patch.cmake")
+drakengard_replace_pinned(memory_real_status
+    "                    std::vector<uint8_t> chainBuf;"
+    "                    std::vector<uint8_t> chainBuf;\n                    if(channelBase==0x1000a000u) drakengard::beginGsDmaSource(drakengard::gsMetricPath()!=nullptr,tagAddr,chcr);"
+    "GIF source chain entry")
+drakengard_replace_pinned(memory_real_status
+    "                            chainBuf.insert(chainBuf.end(), base2 + src, base2 + src + chunk);"
+    "                            if(channelBase==0x1000a000u) drakengard::appendGsDmaSource(chainBuf.size(),src,chunk,scratch);\n                            chainBuf.insert(chainBuf.end(), base2 + src, base2 + src + chunk);"
+    "GIF source chain span")
+drakengard_replace_pinned(memory_real_status
+    "                        ++tagsProcessed;"
+    "                        ++tagsProcessed;\n                        if(channelBase==0x1000a000u) drakengard::markGsDmaTag(currentTagAddr);"
+    "GIF source DMA tag")
+drakengard_replace_pinned(memory_real_status
+    "                            m_pendingGifTransfers.push_back(std::move(pt));"
+    "                            drakengard::queueGsDmaSource(pt.chainData.data(),pt.chainData.size());\n                            m_pendingGifTransfers.push_back(std::move(pt));"
+    "GIF source queue identity")
 file(CONFIGURE OUTPUT "${memory_file}"
-    CONTENT "#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"ipu_diagnostic.h\"\n#include \"iop_bridge.h\"\n#include \"empty_gif_chain.h\"\n${memory_real_status}" @ONLY)
+    CONTENT "#include \"gs_production_metrics.h\"\n#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"ipu_diagnostic.h\"\n#include \"iop_bridge.h\"\n#include \"empty_gif_chain.h\"\n${memory_real_status}" @ONLY)
 set_source_files_properties("${memory_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
 get_target_property(runtime_sources ps2_runtime SOURCES)
