@@ -1,10 +1,16 @@
 """Conservative tracked/index publication gate; not a substitute for diff review."""
 from pathlib import PurePosixPath
+import hashlib
 import subprocess
 import sys
 
-ROOT_FILES = {"README.md", "AGENTS.md", "LICENSE",
+ROOT_FILES = {"README.md", "LICENSE",
               ".gitignore", ".gitattributes"}
+# Explicitly requested, visually reviewed progress image; all other binaries stay closed.
+REVIEWED_IMAGES = {
+    "assets/progress/native-scene-hud.png":
+        "241db09b52f90e889b8fc9cd60066190120c8e4038d82a2e36e7f3bb2f4c78e3",
+}
 EXTENSIONS = {"scripts": {".py", ".java"}, "tests": {".py"},
               "native": {".cpp", ".h", ".cmake", ".txt"},
               ".github": {".yml", ".yaml", ".md"}}
@@ -12,12 +18,16 @@ EXTENSIONS = {"scripts": {".py", ".java"}, "tests": {".py"},
 
 def allowed_path(name):
     path = PurePosixPath(name)
-    return name in ROOT_FILES or (
+    return name in ROOT_FILES or name in REVIEWED_IMAGES or (
         len(path.parts) > 1 and path.parts[0] in EXTENSIONS
         and path.suffix in EXTENSIONS[path.parts[0]])
 
 
 def content_errors(name, data):
+    if name in REVIEWED_IMAGES:
+        if not data.startswith(b"\x89PNG\r\n\x1a\n") or hashlib.sha256(data).hexdigest() != REVIEWED_IMAGES[name]:
+            return [f"Reviewed image content changed: {name}"]
+        return []
     errors = []
     if len(data) > 256 * 1024 or b"\0" in data:
         errors.append(f"Oversized/binary file: {name}")

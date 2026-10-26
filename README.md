@@ -19,9 +19,9 @@ A source-only project working toward a native PC port of **Drakengard**.
 </div>
 
 > **Research in progress. No playable build is available.**
-> The native diagnostic runner reaches the **Chapter I mission briefing** after
-> the main menu and narrative prologue, using ordinary controller input.
-> In-world movement and combat are not yet verified.
+> The native diagnostic runner progresses beyond the **Chapter I mission briefing**
+> and draws an in-scene radar and message. Character and environment rendering,
+> in-world movement and combat are not yet verified.
 
 ## The project
 
@@ -41,11 +41,17 @@ revision or dump authenticity. Game-specific bindings require the verified ELF h
 | EE ↔ IOP | Guest-owned reboot, two actual BOOTEND stores and SIF transfers | Broader device and service coverage |
 | Guest modules & input | Original IOP modules execute; SIO2 accepts ordinary button presses/releases and menu selections | Broader controller coverage and in-game validation |
 | Disc services | 226 CDVD transfers and 5,997,856 bytes read from the verified ISO | Validate later disc operations |
-| Graphics & gameplay | Rendered main menu, prologue and Chapter I mission briefing | Verify in-world movement and combat |
+| Graphics & gameplay | Main menu, prologue, Chapter I briefing and in-scene radar/message | Restore visible character/environment; verify movement and combat |
 | Audio, saves & recovery | Not yet verified | Verify these in actual gameplay |
 
 Passing CI validates preparation tools and synthetic service contracts.
 It does **not** establish a working port.
+
+![Native runner: radar and in-scene message](assets/progress/native-scene-hud.png)
+
+*Actual GS output from the native runner. The radar and message are visible;
+the character and environment are not yet visible. This frame does not establish
+playable gameplay or independently verify the host window.*
 
 ## Getting started
 
@@ -73,12 +79,12 @@ For runtime reports, include the tool revision, input fingerprint, first blocker
 procedure. Keep game data, BIOS, generated guest code, saves and raw traces out of issues and patches.
 
 Unsupported behavior stops explicitly. Changes should demonstrate the real operation and its
-failure cases before extending coverage. See the [project rules](AGENTS.md).
+failure cases before extending coverage.
 
 ## Source-only & licensing
 
 This repository distributes original project source, synthetic tests, configuration templates
-and the project README. It includes
+and the project README, plus the reviewed progress image shown above. It includes
 **no game inputs, BIOS, original executables or generated game code**. Supply your own
 local inputs; keep them in ignored directories.
 
