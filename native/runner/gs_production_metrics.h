@@ -1,6 +1,9 @@
 #pragma once
+#include "capture/gs_capture_limits.h"
+#include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -11,14 +14,40 @@
 namespace drakengard {
 // Register-state inventory only; none of these values control rendering.
 struct GsDrawKey {
-    std::array<uint64_t, 8> words{};
+    std::array<uint64_t, 12> words{};
     bool operator==(const GsDrawKey&) const = default;
 };
 struct GsDrawBin { GsDrawKey key; uint64_t draws{}, wallNs{}; };
+struct GsGeometryCounters {
+    uint64_t triangles{}, malformed{}, nonfinite{}, degenerate{}, outsideScissor{};
+    template<class Batch> void observe(const Batch& batch) {
+        const auto type = uint32_t(batch.state.prim.type);
+        // GS PRIM types 3, 4 and 5 are triangle, strip and fan.
+        if (type < 3 || type > 5) return;
+        ++triangles;
+        if (batch.vertexCount != 3) { ++malformed; return; }
+        std::array<float, 3> x{}, y{};
+        const auto& ctx = batch.state.context;
+        for (size_t i = 0; i < 3; ++i) {
+            x[i] = batch.vertices[i].x - float(ctx.xyoffset.ofx >> 4);
+            y[i] = batch.vertices[i].y - float(ctx.xyoffset.ofy >> 4);
+            if (!std::isfinite(x[i]) || !std::isfinite(y[i])) { ++nonfinite; return; }
+        }
+        const float area = (y[1] - y[2]) * (x[0] - x[2]) + (x[2] - x[1]) * (y[0] - y[2]);
+        if (std::fabs(area) < 0.001f) ++degenerate;
+        if (*std::max_element(x.begin(), x.end()) < ctx.scissor.x0 ||
+            *std::min_element(x.begin(), x.end()) > ctx.scissor.x1 ||
+            *std::max_element(y.begin(), y.end()) < ctx.scissor.y0 ||
+            *std::min_element(y.begin(), y.end()) > ctx.scissor.y1) ++outsideScissor;
+    }
+};
 struct GsProductionCounters {
     uint64_t uiCalls{}, observedTicks{}, tickRegressions{}, lastTick{};
     uint64_t presentations{}, firstImages{}, rgbChanges{}, invalidImages{};
     uint64_t draws{}, drawWallNs{}, clutLoads{};
+    std::array<uint64_t, 8> primitiveDraws{};
+    uint64_t invalidPrimitiveDraws{};
+    GsGeometryCounters geometry;
     bool hasTick{};
     std::array<GsDrawBin, 64> bins{};
     size_t binCount{};
@@ -34,6 +63,9 @@ struct GsProductionCounters {
     }
     void draw(const GsDrawKey& key, uint64_t wallNs) {
         ++draws; drawWallNs += wallNs;
+        const auto primitive = key.words[0] & 0xffu;
+        if (primitive < primitiveDraws.size()) ++primitiveDraws[primitive];
+        else ++invalidPrimitiveDraws;
         for (size_t i = 0; i < binCount; ++i)
             if (bins[i].key == key) { ++bins[i].draws; bins[i].wallNs += wallNs; return; }
         if (binCount < bins.size()) bins[binCount++] = {key, 1, wallNs};
@@ -70,9 +102,24 @@ public:
 };
 
 using GsMetricClock = std::chrono::steady_clock;
+struct GsMetricGate {
+    GsMetricClock::time_point readyAt;
+    GsMetricGate(GsMetricClock::time_point origin, unsigned delaySeconds)
+        : readyAt(origin + std::chrono::seconds(delaySeconds)) {}
+    bool active(GsMetricClock::time_point now) const { return now >= readyAt; }
+};
+inline unsigned gsMetricStartDelay() {
+    static const unsigned seconds = [] {
+        const char* text = std::getenv("DRAKENGARD_GS_METRICS_START_SECONDS");
+        return text ? parseGsCaptureLimit(text, 0, 600) : 0u;
+    }();
+    return seconds;
+}
 inline const char* gsMetricPath() {
     static const char* path = std::getenv("DRAKENGARD_GS_METRICS_OUTPUT");
-    return path && *path ? path : nullptr;
+    if (!path || !*path) return nullptr;
+    static const GsMetricGate gate(GsMetricClock::now(), gsMetricStartDelay());
+    return gate.active(GsMetricClock::now()) ? path : nullptr;
 }
 struct GsMetricStore {
     std::mutex mutex;
@@ -85,8 +132,9 @@ inline GsMetricStore& gsMetricStore() { static GsMetricStore store; return store
 inline GsMetricClock::time_point beginGsDrawMetric() {
     return gsMetricPath() ? GsMetricClock::now() : GsMetricClock::time_point{};
 }
-template<class State> void completeGsDrawMetric(GsMetricClock::time_point start, const State& s) {
-    if (!gsMetricPath()) return;
+template<class Batch> void completeGsDrawMetric(GsMetricClock::time_point start, const Batch& batch) {
+    if (start == GsMetricClock::time_point{}) return;
+    const auto& s = batch.state;
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(GsMetricClock::now() - start).count();
     const auto& t = s.context.tex0;
     GsDrawKey key{{
@@ -99,9 +147,15 @@ template<class State> void completeGsDrawMetric(GsMetricClock::time_point start,
         uint64_t(s.texa.ta0) | (uint64_t(s.texa.ta1) << 8) | (uint64_t(s.texa.aem) << 16),
         s.context.clamp,
         uint64_t(s.texclut.cbw) | (uint64_t(s.texclut.cou) << 8) | (uint64_t(s.texclut.cov) << 16),
-        uint64_t(s.context.frame.psm) | (uint64_t(s.context.frame.fbp) << 8) | (uint64_t(s.prim.abe) << 40)}};
+        uint64_t(s.context.frame.psm) | (uint64_t(s.context.frame.fbp) << 8) | (uint64_t(s.prim.abe) << 40),
+        s.context.test,
+        uint64_t(s.context.zbuf.zbp) | (uint64_t(s.context.zbuf.psm) << 32) | (uint64_t(s.context.zbuf.zmask) << 40),
+        s.context.frame.fbmsk,
+        uint64_t(s.context.scissor.x0) | (uint64_t(s.context.scissor.x1) << 16) |
+            (uint64_t(s.context.scissor.y0) << 32) | (uint64_t(s.context.scissor.y1) << 48)}};
     auto& store = gsMetricStore(); std::lock_guard lock(store.mutex);
     store.counters.draw(key, uint64_t(elapsed));
+    store.counters.geometry.observe(batch);
 }
 inline void observeGsClutLoad() {
     if (!gsMetricPath()) return;
@@ -125,13 +179,25 @@ inline void pollGsProductionMetrics() {
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - store.origin).count();
     std::ofstream file(path, std::ios::app);
     if (!file) throw std::runtime_error("Cannot open private GS metrics output");
-    file << "{\"elapsed_ns\":" << elapsed << ",\"ui_calls\":" << copy.uiCalls
+    file << "{\"elapsed_ns\":" << elapsed << ",\"start_delay_seconds\":" << gsMetricStartDelay()
+         << ",\"ui_calls\":" << copy.uiCalls
          << ",\"observed_vblank_ticks\":" << copy.observedTicks << ",\"last_tick\":" << copy.lastTick
          << ",\"tick_regressions\":" << copy.tickRegressions << ",\"presentations\":" << copy.presentations
          << ",\"first_images\":" << copy.firstImages << ",\"rgb_changes\":" << copy.rgbChanges
          << ",\"invalid_images\":" << copy.invalidImages << ",\"draws\":" << copy.draws
          << ",\"draw_wall_ns\":" << copy.drawWallNs << ",\"clut_loads\":" << copy.clutLoads
          << ",\"overflow_draws\":" << copy.overflowDraws << ",\"overflow_wall_ns\":" << copy.overflowWallNs
+         << ",\"primitive_draws\":[";
+    for (size_t i = 0; i < copy.primitiveDraws.size(); ++i) {
+        if (i) file << ',';
+        file << copy.primitiveDraws[i];
+    }
+    file << "],\"invalid_primitive_draws\":" << copy.invalidPrimitiveDraws
+         << ",\"triangles\":" << copy.geometry.triangles
+         << ",\"malformed_triangles\":" << copy.geometry.malformed
+         << ",\"nonfinite_xy_triangles\":" << copy.geometry.nonfinite
+         << ",\"degenerate_triangles\":" << copy.geometry.degenerate
+         << ",\"outside_scissor_triangles\":" << copy.geometry.outsideScissor
          << ",\"states\":[";
     for (size_t i = 0; i < copy.binCount; ++i) {
         if (i) file << ',';

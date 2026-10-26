@@ -56,7 +56,7 @@ if(graphics_clut_fast STREQUAL graphics_filtered)
     message(FATAL_ERROR "Pinned GS indexed texture sample point changed")
 endif()
 string(REPLACE "    DrawPrimitive(batch);"
-    "    const auto metricStart = drakengard::beginGsDrawMetric();\n    DrawPrimitive(batch);\n    drakengard::completeGsDrawMetric(metricStart, batch.state);"
+    "    const auto metricStart = drakengard::beginGsDrawMetric();\n    DrawPrimitive(batch);\n    drakengard::completeGsDrawMetric(metricStart, batch);"
     graphics_measured "${graphics_clut_fast}")
 if(graphics_measured STREQUAL graphics_clut_fast)
     message(FATAL_ERROR "Pinned GS completed-draw metric point changed")
