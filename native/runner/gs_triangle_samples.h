@@ -1,4 +1,5 @@
 #pragma once
+#include "gs_gif_packet_diagnostic.h"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -9,12 +10,14 @@
 namespace drakengard {
 struct GsRawVertex {
     uint64_t sequence{}, encoding{}, lo{}, hi{};
+    uint64_t packetId{}, path{};
 };
 struct GsRawVertexWindow {
     std::array<GsRawVertex, 4> entries{};
     uint64_t sequence{};
     void add(uint64_t encoding, uint64_t lo, uint64_t hi) {
-        entries[sequence % entries.size()] = {sequence + 1, encoding, lo, hi};
+        entries[sequence % entries.size()] = {sequence + 1, encoding, lo, hi,
+            gsGifPacketContext.id, gsGifPacketContext.path};
         ++sequence;
     }
 };
@@ -31,6 +34,7 @@ struct GsTriangleSample {
     // X/Y float bits, Z double bits, S/T/Q float bits, UV, RGBA, FOG.
     std::array<std::array<uint64_t, 9>, 3> vertices{};
     GsRawVertexWindow raw;
+    GsGifPacketSummary packet;
 };
 struct GsTriangleSamples {
     // Two examples per independent degenerate/outside/nonfinite category per report.
@@ -73,6 +77,7 @@ struct GsTriangleSamples {
                 uint64_t(v.r) | (uint64_t(v.g)<<8) | (uint64_t(v.b)<<16) | (uint64_t(v.a)<<24), v.fog};
         }
         sample.raw = raw;
+        sample.packet = gsGifPacketContext;
     }
     template<class Array> static void writeArray(std::ostream& out, const Array& values) {
         out << '[';
@@ -94,9 +99,11 @@ struct GsTriangleSamples {
             for (uint64_t j = 0; j < count; ++j) {
                 if (j) out << ',';
                 const auto& r = s.raw.entries[(s.raw.sequence-count+j)%s.raw.entries.size()];
-                writeArray(out, std::array<uint64_t,4>{r.sequence,r.encoding,r.lo,r.hi});
+                writeArray(out, std::array<uint64_t,6>{r.sequence,r.encoding,r.lo,r.hi,r.packetId,r.path});
             }
-            out << "]}";
+            out << "],\"packet\":";
+            writeGsGifPacketJson(out, s.packet);
+            out << '}';
         }
         out << ']';
     }

@@ -97,6 +97,10 @@ foreach(vertex_register IN ITEMS XYZF2 XYZ2)
         "        drakengard::observeGsRawVertex(0x200u|regAddr,value,0);\n        vertexKick(regAddr == GS_REG_${vertex_register});"
         "register ${vertex_register} sample")
 endforeach()
+drakengard_replace_pinned(frontend_source
+    "        recordGifTagDebugEventUnlocked(sizeBytes, nloop, flg, nreg);"
+    "        recordGifTagDebugEventUnlocked(sizeBytes, nloop, flg, nreg);\n        drakengard::observeGsGifTag(offset-16u,tagLo,tagHi);"
+    "active GIF tag sample")
 set(frontend_file "${CMAKE_BINARY_DIR}/private_sampled_GsFrontend.cpp")
 file(CONFIGURE OUTPUT "${frontend_file}"
     CONTENT "#include \"gs_production_metrics.h\"\n${frontend_source}" @ONLY)
@@ -106,3 +110,16 @@ get_target_property(runtime_sources ps2_runtime SOURCES)
 list(FILTER runtime_sources EXCLUDE REGEX "/gs_frontend[.]cpp$")
 set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
 target_sources(ps2_runtime PRIVATE "${frontend_file}")
+
+file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/gs/ps2_gif_arbiter.cpp" arbiter_source)
+drakengard_replace_pinned(arbiter_source
+    "            m_processFn(pkt.data.data(), static_cast<uint32_t>(pkt.data.size()));"
+    "            drakengard::GsGifPacketScope packetScope(unsigned(pkt.pathId),pkt.data.data(),static_cast<uint32_t>(pkt.data.size()));\n            m_processFn(pkt.data.data(), static_cast<uint32_t>(pkt.data.size()));"
+    "GIF packet source scope")
+set(arbiter_file "${CMAKE_BINARY_DIR}/private_observed_GifArbiter.cpp")
+file(CONFIGURE OUTPUT "${arbiter_file}"
+    CONTENT "#include \"gs_production_metrics.h\"\n${arbiter_source}" @ONLY)
+get_target_property(runtime_sources ps2_runtime SOURCES)
+list(FILTER runtime_sources EXCLUDE REGEX "/ps2_gif_arbiter[.]cpp$")
+set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
+target_sources(ps2_runtime PRIVATE "${arbiter_file}")

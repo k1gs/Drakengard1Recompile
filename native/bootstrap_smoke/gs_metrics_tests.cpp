@@ -20,13 +20,32 @@ struct GeometryFixture {
 };
 
 int main() {
+    std::array<uint8_t,64> packet{};
+    const auto setTag = [&](uint64_t tag) { std::memcpy(packet.data(), &tag, 8); };
+    setTag(1ull | (2ull<<60)); // two packed registers
+    if (drakengard::inspectGsGifPacket(packet.data(),48).status != 0 ||
+        drakengard::inspectGsGifPacket(packet.data(),32).status != 2) return 19;
+    setTag(3ull | (1ull<<58) | (1ull<<60)); // odd REGLIST count padded to a quadword
+    if (drakengard::inspectGsGifPacket(packet.data(),48).status != 0 ||
+        drakengard::inspectGsGifPacket(packet.data(),40).status != 2) return 20;
+    setTag(1ull); // NREG=0 encodes sixteen registers
+    if (drakengard::inspectGsGifPacket(packet.data(),64).expectedEnd != 272) return 21;
+    setTag(2ull | (2ull<<58));
+    if (drakengard::inspectGsGifPacket(packet.data(),48).status != 0 ||
+        drakengard::inspectGsGifPacket(packet.data(),49).status != 1) return 22;
+    std::array<uint8_t,257*16> manyTags{};
+    if (drakengard::inspectGsGifPacket(manyTags.data(),manyTags.size()).status != 3) return 23;
+    drakengard::gsGifPacketContext.id = 7; drakengard::gsGifPacketContext.path = 2;
     drakengard::GsRawVertexWindow raw;
     for (uint64_t i = 0; i < 6; ++i) raw.add(0x104,i,i+1);
-    if (raw.sequence != 6 || raw.entries[0].sequence != 5 || raw.entries[3].sequence != 4) return 13;
+    if (raw.sequence != 6 || raw.entries[0].sequence != 5 || raw.entries[3].sequence != 4 ||
+        raw.entries[0].packetId != 7 || raw.entries[0].path != 2) return 13;
     drakengard::GsTriangleSamples samples;
     GeometryFixture sampleBatch;
     for (unsigned i = 0; i < 100; ++i) samples.observe(sampleBatch,{},i,raw);
     if (samples.size != 2 || samples.samples[0].category != 0) return 14;
+    if (samples.samples[0].packet.id != 7) return 24;
+    drakengard::gsGifPacketContext = {};
     sampleBatch.vertices[2] = sampleBatch.vertices[1];
     samples.observe(sampleBatch,{},101,raw);
     if (samples.size != 3 || samples.samples[2].category != 1) return 15;

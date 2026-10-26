@@ -2,6 +2,7 @@
 #include "capture/gs_capture_limits.h"
 #include "gs_triangle_samples.h"
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -9,6 +10,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -130,10 +132,29 @@ struct GsMetricStore {
     GsProductionCounters counters;
     GsObservedRgb image;
     GsTriangleSamples triangles;
+    GsGifPacketCounters gif;
     GsMetricClock::time_point origin = GsMetricClock::now(), lastReport = origin;
     unsigned reports{};
 };
 inline GsMetricStore& gsMetricStore() { static GsMetricStore store; return store; }
+inline std::atomic<uint64_t> gsGifPacketSequence{};
+class GsGifPacketScope {
+    std::optional<GsGifPacketSummary> previous;
+public:
+    GsGifPacketScope(unsigned path, const uint8_t* data, uint32_t bytes) {
+        if (!gsMetricPath()) return;
+        previous = gsGifPacketContext;
+        auto packet = inspectGsGifPacket(data, bytes);
+        packet.id = gsGifPacketSequence.fetch_add(1, std::memory_order_relaxed) + 1;
+        packet.path = path;
+        gsGifPacketContext = packet;
+        auto& store = gsMetricStore(); std::lock_guard lock(store.mutex);
+        store.gif.observe(packet);
+    }
+    ~GsGifPacketScope() { if (previous) gsGifPacketContext = *previous; }
+    GsGifPacketScope(const GsGifPacketScope&) = delete;
+    GsGifPacketScope& operator=(const GsGifPacketScope&) = delete;
+};
 inline GsMetricClock::time_point beginGsDrawMetric() {
     return gsMetricPath() ? GsMetricClock::now() : GsMetricClock::time_point{};
 }
@@ -182,8 +203,9 @@ inline void pollGsProductionMetrics() {
     if (store.reports >= 64 || now - store.lastReport < std::chrono::seconds(5)) return;
     GsProductionCounters copy;
     GsTriangleSamples samples;
+    GsGifPacketCounters gif;
     { std::lock_guard lock(store.mutex); copy = store.counters; store.counters.clearBins();
-      samples = store.triangles; store.triangles.clear(); }
+      samples = store.triangles; store.triangles.clear(); gif = store.gif; }
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - store.origin).count();
     std::ofstream file(path, std::ios::app);
     if (!file) throw std::runtime_error("Cannot open private GS metrics output");
@@ -217,6 +239,10 @@ inline void pollGsProductionMetrics() {
     }
     file << "],\"triangle_samples\":";
     samples.writeJson(file);
+    file << ",\"gif_path_packets\":"; GsTriangleSamples::writeArray(file, gif.packets);
+    file << ",\"gif_path_bytes\":"; GsTriangleSamples::writeArray(file, gif.bytes);
+    file << ",\"gif_framing_status\":"; GsTriangleSamples::writeArray(file, gif.framing);
+    file << ",\"gif_unknown_paths\":" << gif.unknownPaths;
     file << "}\n"; file.flush();
     if (!file) throw std::runtime_error("Cannot write private GS metrics output");
     ++store.reports; store.lastReport = now;
