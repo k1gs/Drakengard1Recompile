@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ps2_runtime.h"
+#include "ee_gif_write_probe.h"
 #include <algorithm>
 #include <array>
 #include <cerrno>
@@ -102,6 +103,10 @@ void traceEeWatchedWrite(uint8_t* rdram,uint32_t address,uint32_t width,
                                 const R5900Context* context) {
     const uint32_t watched=eeWriteWatchSlot;
     address &= 32u*1024u*1024u-1u; // Same physical RAM aliasing as FAST_WRITE.
+    auto& gifProbe=eeGifWriteProbe();
+    if (gifProbe.matches(address,width))
+        gifProbe.observe(address,width,low,high,context?context->pc:0,
+            context?getRegU32(context,31):0,context?getRegU32(context,29):0);
     if (watched==0xffffffffu || uint64_t(address)+width<=watched || uint64_t(watched)+8u<=address) return;
     recordEeWatchedWrite(rdram,address,width,low,high,op,context,watched);
 }

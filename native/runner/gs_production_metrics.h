@@ -1,6 +1,8 @@
 #pragma once
 #include "capture/gs_capture_limits.h"
 #include "gs_triangle_samples.h"
+#include "ee_gif_write_probe.h"
+#include "vif_unpack_observation.h"
 #include <algorithm>
 #include <atomic>
 #include <array>
@@ -125,8 +127,11 @@ inline const char* gsMetricPath() {
     static const GsMetricGate gate(GsMetricClock::now(), gsMetricStartDelay());
     return gate.active(GsMetricClock::now()) ? path : nullptr;
 }
+inline void consumeEeGifProbeIfMatching();
 inline void observeGsRawVertex(uint64_t encoding, uint64_t lo, uint64_t hi) {
-    if (gsMetricPath()) gsRawVertexWindow.add(encoding, lo, hi);
+    if (!gsMetricPath()) return;
+    gsRawVertexWindow.add(encoding, lo, hi);
+    consumeEeGifProbeIfMatching();
 }
 struct GsMetricStore {
     std::mutex mutex;
@@ -134,10 +139,29 @@ struct GsMetricStore {
     GsObservedRgb image;
     GsTriangleSamples triangles;
     GsGifPacketCounters gif;
+    VifUnpackObservation vif;
+    std::array<EeGifProbeReport,8> probeReports{};
+    unsigned probeReportCount{};
     GsMetricClock::time_point origin = GsMetricClock::now(), lastReport = origin;
     unsigned reports{};
 };
 inline GsMetricStore& gsMetricStore() { static GsMetricStore store; return store; }
+inline void consumeEeGifProbeIfMatching() {
+    auto& probe=eeGifWriteProbe();
+    if (!probe.active()) return;
+    const auto& v=gsRawVertexWindow.entries[(gsRawVertexWindow.sequence-1)%gsRawVertexWindow.entries.size()];
+    if (!v.sourceKnown || v.sourceScratch || v.path!=3 || !probe.matches(uint32_t(v.sourceAddress),8)) return;
+    EeGifProbeReport report;
+    if (!probe.consume(uint32_t(v.sourceAddress),8,v.packetId,report,uint32_t(v.sourceTag))) return;
+    auto& store=gsMetricStore(); std::lock_guard lock(store.mutex);
+    if (store.probeReportCount<store.probeReports.size()) store.probeReports[store.probeReportCount++]=report;
+}
+inline void observeVifUnpack(uint32_t command,uint32_t cycle,uint32_t mode,bool complete,
+                             const uint8_t* source,uint32_t bytes) {
+    if (!gsMetricPath()) return;
+    auto& store=gsMetricStore(); std::lock_guard lock(store.mutex);
+    store.vif.observe(command,cycle,mode,complete,{source,bytes});
+}
 inline std::atomic<uint64_t> gsGifPacketSequence{};
 inline thread_local const uint8_t* gsCurrentGifData{};
 inline thread_local uint32_t gsCurrentGifBytes{};
@@ -238,6 +262,16 @@ template<class Batch> void completeGsDrawMetric(GsMetricClock::time_point start,
     store.counters.draw(key, uint64_t(elapsed));
     store.counters.geometry.observe(batch);
     store.triangles.observe(batch, key.words, store.counters.draws, gsRawVertexWindow);
+    static const bool probeEnabled=std::getenv("DRAKENGARD_GIF_WRITE_PROBE")!=nullptr;
+    auto& probe=eeGifWriteProbe();
+    if (probeEnabled && !probe.active() && probe.generation()<8 && gsGifPacketContext.path==3 &&
+        gsGifPacketContext.activeTagHi==0x421u && batch.vertexCount==3) {
+        bool zero=true;
+        for(const auto& v:batch.vertices) zero=zero && v.x==0 && v.y==0 && v.z==0;
+        const auto& v=gsRawVertexWindow.entries[(gsRawVertexWindow.sequence-1)%gsRawVertexWindow.entries.size()];
+        if (zero && v.sourceKnown && !v.sourceScratch && v.packetId==gsGifPacketContext.id)
+            probe.arm(uint32_t(v.sourceAddress),8,v.packetId,uint32_t(v.sourceTag));
+    }
     captureGsZeroPacket(batch);
 }
 inline void observeGsClutLoad() {
@@ -260,8 +294,13 @@ inline void pollGsProductionMetrics() {
     GsProductionCounters copy;
     GsTriangleSamples samples;
     GsGifPacketCounters gif;
+    VifUnpackObservation vif;
+    std::array<EeGifProbeReport,8> probeReports{};
+    unsigned probeReportCount{};
     { std::lock_guard lock(store.mutex); copy = store.counters; store.counters.clearBins();
-      samples = store.triangles; store.triangles.clear(); gif = store.gif; }
+      samples = store.triangles; store.triangles.clear(); gif = store.gif;
+      vif=store.vif;store.vif.clearExamples();probeReports=store.probeReports;
+      probeReportCount=store.probeReportCount;store.probeReportCount=0; }
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - store.origin).count();
     std::ofstream file(path, std::ios::app);
     if (!file) throw std::runtime_error("Cannot open private GS metrics output");
@@ -299,6 +338,10 @@ inline void pollGsProductionMetrics() {
     file << ",\"gif_path_bytes\":"; GsTriangleSamples::writeArray(file, gif.bytes);
     file << ",\"gif_framing_status\":"; GsTriangleSamples::writeArray(file, gif.framing);
     file << ",\"gif_unknown_paths\":" << gif.unknownPaths;
+    file << ",\"vif_unpack\":";vif.writeJson(file);
+    file << ",\"ee_gif_write_probes\":[";
+    for(unsigned i=0;i<probeReportCount;++i) { if(i)file<<',';writeEeGifProbeJson(file,probeReports[i]); }
+    file << ']';
     file << "}\n"; file.flush();
     if (!file) throw std::runtime_error("Cannot write private GS metrics output");
     ++store.reports; store.lastReport = now;

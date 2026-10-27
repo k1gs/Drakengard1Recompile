@@ -15,7 +15,9 @@ function(drakengard_configure_runner)
         "${REPO_ROOT}/native/runner/verify_input.cpp")
     set_property(TARGET ps2EntryRunner PROPERTY SOURCES "${runner_sources}")
     include("${REPO_ROOT}/native/runner/cmake/signed_branches.cmake")
+    include("${REPO_ROOT}/native/runner/cmake/vu0_registers.cmake")
     file(GLOB guest_sources CONFIGURE_DEPENDS "${GENERATED_DIR}/*.cpp")
+    drakengard_prepare_vu0_registers(guest_sources "${GENERATED_DIR}" "${CMAKE_BINARY_DIR}/guest_vu0")
     drakengard_correct_signed_branches(guest_sources "${CMAKE_BINARY_DIR}/guest_branches")
     target_sources(ps2EntryRunner PRIVATE
         "${REPO_ROOT}/native/runner/main.cpp"

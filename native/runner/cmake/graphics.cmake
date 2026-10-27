@@ -135,3 +135,15 @@ get_target_property(runtime_sources ps2_runtime SOURCES)
 list(FILTER runtime_sources EXCLUDE REGEX "/ps2_gif_arbiter[.]cpp$")
 set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
 target_sources(ps2_runtime PRIVATE "${arbiter_file}")
+
+file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/ps2_vif1_interpreter.cpp" vif_source)
+drakengard_replace_pinned(vif_source
+    "            if (m_vu1Data && totalBytes > 0 && pos + totalBytes <= sizeBytes)"
+    "            if (drakengard::gsMetricPath()) { const bool complete=m_vu1Data && totalBytes>0 && pos+totalBytes<=sizeBytes; drakengard::observeVifUnpack(cmd,vif1_regs.cycle,vif1_regs.mode,complete,data+pos,complete?totalBytes:0u); }\n            if (m_vu1Data && totalBytes > 0 && pos + totalBytes <= sizeBytes)"
+    "VIF1 UNPACK command observation")
+set(vif_file "${CMAKE_BINARY_DIR}/private_observed_Vif1.cpp")
+file(CONFIGURE OUTPUT "${vif_file}" CONTENT "#include \"gs_production_metrics.h\"\n${vif_source}" @ONLY)
+get_target_property(runtime_sources ps2_runtime SOURCES)
+list(FILTER runtime_sources EXCLUDE REGEX "/ps2_vif1_interpreter[.]cpp$")
+set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
+target_sources(ps2_runtime PRIVATE "${vif_file}")
