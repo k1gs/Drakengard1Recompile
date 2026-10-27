@@ -3,6 +3,7 @@
 #include "gs_triangle_samples.h"
 #include "ee_gif_write_probe.h"
 #include "vif_unpack_observation.h"
+#include "gs_path1_capture.h"
 #include <algorithm>
 #include <atomic>
 #include <array>
@@ -142,6 +143,7 @@ struct GsMetricStore {
     VifUnpackObservation vif;
     std::array<EeGifProbeReport,8> probeReports{};
     unsigned probeReportCount{};
+    std::array<uint64_t,4> path1FogDraws{};
     GsMetricClock::time_point origin = GsMetricClock::now(), lastReport = origin;
     unsigned reports{};
 };
@@ -186,9 +188,12 @@ class GsGifPacketScope {
     const uint8_t* previousData{};
     uint32_t previousBytes{},previousOffset{};
     GsDmaSource* source{};
+    GsKickOrigin previousKick;
 public:
     GsGifPacketScope(unsigned path, const uint8_t* data, uint32_t bytes) {
+        const auto kick=path==1?takeGsKickOrigin(data,bytes):GsKickOrigin{};
         if (!gsMetricPath()) return;
+        previousKick=gsCurrentKickOrigin;gsCurrentKickOrigin=kick;
         previous = gsGifPacketContext;
         previousSource=gsCurrentDmaSource; previousData=gsCurrentGifData;
         previousBytes=gsCurrentGifBytes; previousOffset=gsCurrentGifDataOffset;
@@ -211,6 +216,7 @@ public:
         gsGifPacketContext=*previous; gsCurrentDmaSource=previousSource;
         gsCurrentGifData=previousData; gsCurrentGifBytes=previousBytes; gsCurrentGifDataOffset=previousOffset;
         if(source)source->active=false;
+        gsCurrentKickOrigin=previousKick;
     } }
     GsGifPacketScope(const GsGifPacketScope&) = delete;
     GsGifPacketScope& operator=(const GsGifPacketScope&) = delete;
@@ -237,6 +243,35 @@ template<class Batch> void captureGsZeroPacket(const Batch& batch) {
 inline GsMetricClock::time_point beginGsDrawMetric() {
     return gsMetricPath() ? GsMetricClock::now() : GsMetricClock::time_point{};
 }
+template<class Batch> unsigned gsPath1BatchFogBucket(const Batch& batch) {
+    unsigned minimum=255,maximum=0;
+    for(const auto& v:batch.vertices) { minimum=(std::min)(minimum,unsigned(v.fog));maximum=(std::max)(maximum,unsigned(v.fog)); }
+    return gsPath1FogBucket(batch.state.prim.fge,minimum,maximum);
+}
+template<class Batch> void captureGsPath1Packet(const Batch& batch,const GsDrawKey& key,uint64_t draw) {
+    static GsPath1Captures captures;
+    const char* directory=gsPath1CaptureDirectory();
+    if(!directory || captures.saved()==8 || gsGifPacketContext.path!=1 || !gsCurrentGifData || batch.vertexCount!=3 ||
+       unsigned(batch.state.prim.type)<3 || unsigned(batch.state.prim.type)>5 || !gsRawVertexWindow.sequence)return;
+    const auto& raw=gsRawVertexWindow.entries[(gsRawVertexWindow.sequence-1)%gsRawVertexWindow.entries.size()];
+    if(raw.packetId!=gsGifPacketContext.id || raw.path!=1)return;
+    const GsPath1CaptureKey selection{{key.words[0],key.words[2],key.words[3],key.words[7],key.words[8],
+                                     gsGifPacketContext.activeTagHi,batch.state.context.alpha},gsPath1BatchFogBucket(batch)};
+    if(!captures.accepts(1,gsGifPacketContext.id,gsCurrentGifBytes,selection))return;
+    GsTriangleSamples selected;selected.observe(batch,key.words,draw,gsRawVertexWindow);
+    if(!selected.size)return;
+    captures.capture(directory,1,gsGifPacketContext.id,{gsCurrentGifData,gsCurrentGifBytes},selection,
+        [&](std::ostream& file) {
+            file<<"{\"packet\":";writeGsGifPacketJson(file,gsGifPacketContext);
+            file<<",\"xgkick\":";writeGsKickOrigin(file,gsCurrentKickOrigin);
+            file<<",\"origin_metadata_drops\":"<<gsKickOrigins.dropped
+                <<",\"fog_bucket\":"<<selection.bucket
+                <<",\"alpha_register\":"<<batch.state.context.alpha
+                <<",\"pabe\":"<<(batch.state.pabe?"true":"false")
+                <<",\"scanmsk\":"<<batch.state.scanmsk
+                <<",\"selected_draw\":";selected.writeJson(file);file<<'}';
+        });
+}
 template<class Batch> void completeGsDrawMetric(GsMetricClock::time_point start, const Batch& batch) {
     if (start == GsMetricClock::time_point{}) return;
     const auto& s = batch.state;
@@ -262,6 +297,8 @@ template<class Batch> void completeGsDrawMetric(GsMetricClock::time_point start,
     store.counters.draw(key, uint64_t(elapsed));
     store.counters.geometry.observe(batch);
     store.triangles.observe(batch, key.words, store.counters.draws, gsRawVertexWindow);
+    if(gsGifPacketContext.path==1 && batch.vertexCount==3 && unsigned(s.prim.type)>=3 && unsigned(s.prim.type)<=5)
+        ++store.path1FogDraws[gsPath1BatchFogBucket(batch)];
     static const bool probeEnabled=std::getenv("DRAKENGARD_GIF_WRITE_PROBE")!=nullptr;
     auto& probe=eeGifWriteProbe();
     if (probeEnabled && !probe.active() && probe.generation()<8 && gsGifPacketContext.path==3 &&
@@ -273,6 +310,7 @@ template<class Batch> void completeGsDrawMetric(GsMetricClock::time_point start,
             probe.arm(uint32_t(v.sourceAddress),8,v.packetId,uint32_t(v.sourceTag));
     }
     captureGsZeroPacket(batch);
+    captureGsPath1Packet(batch,key,store.counters.draws);
 }
 inline void observeGsClutLoad() {
     if (!gsMetricPath()) return;
@@ -297,10 +335,11 @@ inline void pollGsProductionMetrics() {
     VifUnpackObservation vif;
     std::array<EeGifProbeReport,8> probeReports{};
     unsigned probeReportCount{};
+    std::array<uint64_t,4> path1FogDraws{};
     { std::lock_guard lock(store.mutex); copy = store.counters; store.counters.clearBins();
       samples = store.triangles; store.triangles.clear(); gif = store.gif;
       vif=store.vif;store.vif.clearExamples();probeReports=store.probeReports;
-      probeReportCount=store.probeReportCount;store.probeReportCount=0; }
+      probeReportCount=store.probeReportCount;store.probeReportCount=0;path1FogDraws=store.path1FogDraws; }
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - store.origin).count();
     std::ofstream file(path, std::ios::app);
     if (!file) throw std::runtime_error("Cannot open private GS metrics output");
@@ -339,6 +378,7 @@ inline void pollGsProductionMetrics() {
     file << ",\"gif_framing_status\":"; GsTriangleSamples::writeArray(file, gif.framing);
     file << ",\"gif_unknown_paths\":" << gif.unknownPaths;
     file << ",\"vif_unpack\":";vif.writeJson(file);
+    file << ",\"path1_fog_draws\":";GsTriangleSamples::writeArray(file,path1FogDraws);
     file << ",\"ee_gif_write_probes\":[";
     for(unsigned i=0;i<probeReportCount;++i) { if(i)file<<',';writeEeGifProbeJson(file,probeReports[i]); }
     file << ']';

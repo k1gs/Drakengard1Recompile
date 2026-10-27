@@ -33,5 +33,12 @@ function(drakengard_prepare_micro_vf0 upstream_root output)
         message(FATAL_ERROR "Pinned micro VU lower dispatch changed")
     endif()
     string(REPLACE "${anchor}" "{ drakengard::MicroVf0LowerScope vf0Phase; ${anchor} }" prepared "${prepared}")
-    file(CONFIGURE OUTPUT "${output}" CONTENT "#include \"vu_micro_vf0.h\"\n${prepared}" @ONLY)
+    set(anchor "    if (m_activeMemory)\n        m_activeMemory->submitGifPacket(GifPathId::Path1, m_xgkick.packet.data(), m_xgkick.totalBytes);")
+    string(REPLACE "${anchor}"
+        "    drakengard::GsKickOfferScope kickOrigin(m_xgkick.packet.data(),m_xgkick.totalBytes,{true,m_state.pc,m_xgkick.sourceAddress,m_xgkick.totalBytes,m_xgkick.issueCycle,m_cycle});\n${anchor}"
+        next "${prepared}")
+    if(next STREQUAL prepared)
+        message(FATAL_ERROR "Pinned XGKICK submit boundary changed")
+    endif()
+    file(CONFIGURE OUTPUT "${output}" CONTENT "#include \"vu_micro_vf0.h\"\n#include \"gs_path1_capture.h\"\n${next}" @ONLY)
 endfunction()

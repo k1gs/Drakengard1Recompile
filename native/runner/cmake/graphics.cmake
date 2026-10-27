@@ -127,7 +127,7 @@ drakengard_replace_pinned(arbiter_source
 set(arbiter_file "${CMAKE_BINARY_DIR}/private_observed_GifArbiter.cpp")
 drakengard_replace_pinned(arbiter_source
     "    m_queue.push_back(std::move(pkt));"
-    "    if(unsigned(pathId)==3u) drakengard::relayGsDmaSource(data,sizeBytes,pkt.data.data());\n    m_queue.push_back(std::move(pkt));"
+    "    if(unsigned(pathId)==3u) drakengard::relayGsDmaSource(data,sizeBytes,pkt.data.data());\n    if(unsigned(pathId)==1u) drakengard::relayGsKickOrigin(data,sizeBytes,pkt.data.data());\n    m_queue.push_back(std::move(pkt));"
     "GIF source copied buffer identity")
 file(CONFIGURE OUTPUT "${arbiter_file}"
     CONTENT "#include \"gs_production_metrics.h\"\n${arbiter_source}" @ONLY)
