@@ -33,6 +33,8 @@ def send(run, buttons, hold, axes=None):
     directory = ROOT / "work" / f"native-run-{run:03d}"
     path = directory / "pad-control.txt"
     with command_lock(directory / "pad-control.lock"):
+        if (directory / "result.json").exists():
+            raise ValueError("Native run has ended; controller command refused")
         # Read only the opt-in host file, never guest input or memory dumps.
         with path.open("r", encoding="ascii") as current:
             payload = current.read(129)

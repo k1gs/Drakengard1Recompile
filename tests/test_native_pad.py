@@ -42,6 +42,19 @@ class HostControllerWriter(unittest.TestCase):
             with self.subTest(arguments=arguments), self.assertRaises(ValueError):
                 native_pad.send(*arguments)
 
+    def test_refuses_an_ended_run_without_recording_an_input(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(native_pad, "ROOT", Path(folder)):
+            run = Path(folder) / "work/native-run-001"
+            run.mkdir(parents=True)
+            target = run / "pad-control.txt"
+            target.write_text("D1PAD1 7 FFFF 0\n", encoding="ascii")
+            (run / "result.json").write_text("{}")
+            with self.assertRaisesRegex(ValueError, "has ended"):
+                native_pad.send(1, 0xffff, 1000, (127, 127, 127, 0))
+            self.assertEqual(target.read_text(), "D1PAD1 7 FFFF 0\n")
+            self.assertFalse((run / "pad-control-events.jsonl").exists())
+            self.assertFalse((run / "pad-control.lock").exists())
+
     def test_analog_commands_and_digital_release_share_sequence(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(native_pad, "ROOT", Path(folder)):
             run=Path(folder)/"work/native-run-001"
