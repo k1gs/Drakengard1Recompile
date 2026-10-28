@@ -1,4 +1,6 @@
 #include "gs_path1_capture.h"
+#include "gs_fragment_probe.h"
+#include <sstream>
 #include <chrono>
 #include <iostream>
 #include <vector>
@@ -6,6 +8,22 @@
 void check(bool value) { if(!value)throw std::runtime_error("PATH1 capture regression"); }
 int main() {
     try {
+        // Exhausting the bounded depth history must retain all decision counts.
+        drakengard::GsFragmentProbe fragment;
+        drakengard::gsFragmentProbe=&fragment;
+        for(unsigned i=0;i<100;++i) {
+            drakengard::observeGsFragment(drakengard::GsFragmentProbe::Enter);
+            fragment.testDepth(i,99,i>=99);
+        }
+        fragment.texture(0,128);fragment.texture(127,255);
+        fragment.mask(true,false,true);
+        drakengard::gsFragmentProbe=nullptr;
+        drakengard::observeGsFragment(drakengard::GsFragmentProbe::Enter);
+        check(fragment.counts[0]==100 && fragment.depthCount==16 && fragment.depth[15].incoming==15);
+        check(fragment.textureAlpha[0]==1 && fragment.textureAlpha[1]==1 && fragment.combinedAlpha[2]==1 && fragment.combinedAlpha[3]==1);
+        check(fragment.alphaMasks[5]==1);
+        std::ostringstream fragmentJson;fragment.write(fragmentJson);
+        check(fragmentJson.str().find("[15,99,0]")!=std::string::npos);
         drakengard::GsKickOrigins origins;
         std::array<uint8_t,16> producer{},a{},b{};
         origins.offer={producer.data(),16,{true,0x80,0x100,16,10,20}};

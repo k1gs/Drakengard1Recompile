@@ -4,6 +4,9 @@
 #include "ee_gif_write_probe.h"
 #include "vif_unpack_observation.h"
 #include "gs_path1_capture.h"
+#include "gs_fragment_probe.h"
+#include <memory>
+#include <sstream>
 #include <algorithm>
 #include <atomic>
 #include <array>
@@ -272,6 +275,53 @@ template<class Batch> void captureGsPath1Packet(const Batch& batch,const GsDrawK
                 <<",\"selected_draw\":";selected.writeJson(file);file<<'}';
         });
 }
+// At most two draws per fog stratum and one per packet in the whole process.
+// The opt-in output and existing metric delay bound diagnostic overhead.
+class GsFragmentScope {
+    GsFragmentProbe* previous=gsFragmentProbe;
+    std::unique_ptr<GsFragmentProbe> probe;
+    std::string prefix;
+    const char* output{};
+public:
+    template<class Batch> explicit GsFragmentScope(const Batch& batch) {
+        gsFragmentProbe=nullptr;
+        static const char* path=std::getenv("DRAKENGARD_GS_FRAGMENT_OUTPUT");
+        if(!path || !*path || gsGifPacketContext.path!=1 || batch.vertexCount!=3 ||
+           unsigned(batch.state.prim.type)<3 || unsigned(batch.state.prim.type)>5 || !gsMetricPath())return;
+        static std::array<unsigned,4> buckets{};
+        static std::array<uint64_t,8> packets{};
+        static unsigned count{};
+        const auto bucket=gsPath1BatchFogBucket(batch);
+        if(count==packets.size() || buckets[bucket]==2)return;
+        for(unsigned i=0;i<count;++i)if(packets[i]==gsGifPacketContext.id)return;
+        packets[count++]=gsGifPacketContext.id;++buckets[bucket];
+        probe=std::make_unique<GsFragmentProbe>();output=path;
+        const auto& state=batch.state;const auto& c=state.context;
+        std::ostringstream out;
+        out<<"{\"packet\":";writeGsGifPacketJson(out,gsGifPacketContext);
+        out<<",\"xgkick\":";writeGsKickOrigin(out,gsCurrentKickOrigin);
+        out<<",\"fog_bucket\":"<<bucket<<",\"test\":"<<c.test<<",\"alpha\":"<<c.alpha
+           <<",\"frame\":["<<c.frame.fbp<<','<<c.frame.fbw<<','<<unsigned(c.frame.psm)<<','<<c.frame.fbmsk
+           <<"],\"zbuf\":["<<c.zbuf.zbp<<','<<unsigned(c.zbuf.psm)<<','<<unsigned(c.zbuf.zmask)
+           <<"],\"texture\":["<<c.tex0.tbp0<<','<<unsigned(c.tex0.psm)<<','<<c.tex0.cbp<<','<<unsigned(c.tex0.cpsm)
+           <<"],\"scissor\":["<<c.scissor.x0<<','<<c.scissor.x1<<','<<c.scissor.y0<<','<<c.scissor.y1
+           <<"],\"vertex_xyz_float_bits_rgba_fog\":[";
+        bool first=true;for(const auto& v:batch.vertices) {
+            if(!first)out<<',';first=false;
+            out<<'['<<std::bit_cast<uint32_t>(float(v.x))<<','<<std::bit_cast<uint32_t>(float(v.y))<<','<<std::bit_cast<uint32_t>(float(v.z))<<','<<unsigned(v.r)<<','<<unsigned(v.g)<<','<<unsigned(v.b)<<','<<unsigned(v.a)<<','<<unsigned(v.fog)<<']';
+        }
+        out<<"],\"fragments\":";prefix=out.str();gsFragmentProbe=probe.get();
+    }
+    void complete() {
+        if(!probe)return;
+        std::ofstream file(output,std::ios::app);
+        file<<prefix;probe->write(file);file<<"}\n";file.flush();
+        if(!file)throw std::runtime_error("Cannot write bounded GS fragment observation");
+    }
+    ~GsFragmentScope() { gsFragmentProbe=previous; }
+    GsFragmentScope(const GsFragmentScope&)=delete;
+    GsFragmentScope& operator=(const GsFragmentScope&)=delete;
+};
 template<class Batch> void completeGsDrawMetric(GsMetricClock::time_point start, const Batch& batch) {
     if (start == GsMetricClock::time_point{}) return;
     const auto& s = batch.state;

@@ -56,7 +56,7 @@ if(graphics_clut_fast STREQUAL graphics_filtered)
     message(FATAL_ERROR "Pinned GS indexed texture sample point changed")
 endif()
 string(REPLACE "    DrawPrimitive(batch);"
-    "    const auto metricStart = drakengard::beginGsDrawMetric();\n    DrawPrimitive(batch);\n    drakengard::completeGsDrawMetric(metricStart, batch);"
+    "    const auto metricStart = drakengard::beginGsDrawMetric();\n    drakengard::GsFragmentScope fragments(batch);\n    DrawPrimitive(batch);\n    fragments.complete();\n    drakengard::completeGsDrawMetric(metricStart, batch);"
     graphics_measured "${graphics_clut_fast}")
 if(graphics_measured STREQUAL graphics_clut_fast)
     message(FATAL_ERROR "Pinned GS completed-draw metric point changed")
@@ -67,6 +67,47 @@ string(REPLACE "void GSCpuBackend::LoadClutUnlocked(const GSTex0Reg &tex0, const
 if(graphics_clut_measured STREQUAL graphics_measured)
     message(FATAL_ERROR "Pinned GS CLUT-load metric point changed")
 endif()
+include("${CMAKE_CURRENT_LIST_DIR}/pinned_patch.cmake")
+string(FIND "${graphics_clut_measured}" "void GSCpuBackend::WritePixel(" fragment_begin)
+string(FIND "${graphics_clut_measured}" "\nuint32_t GSCpuBackend::LookupCLUT" fragment_end)
+if(fragment_begin LESS 0 OR fragment_end LESS fragment_begin)
+    message(FATAL_ERROR "Pinned GS pixel observation boundary changed")
+endif()
+math(EXPR fragment_length "${fragment_end} - ${fragment_begin}")
+string(SUBSTRING "${graphics_clut_measured}" ${fragment_begin} ${fragment_length} fragment_body)
+string(SHA256 fragment_hash "${fragment_body}")
+if(NOT fragment_hash STREQUAL "aa63f006cd83bab547b5cd80bfe8da09823b02df87584efdee433db251408a02")
+    message(FATAL_ERROR "Pinned GS pixel body changed")
+endif()
+set(fragment_observed "${fragment_body}")
+drakengard_replace_pinned(fragment_observed
+    "    const auto &ctx = state.context;"
+    "    drakengard::observeGsFragment(drakengard::GsFragmentProbe::Enter);\n    const auto &ctx = state.context;" "GS fragment stage 0")
+drakengard_replace_pinned(fragment_observed
+    "    if (x < ctx.scissor.x0 || x > ctx.scissor.x1 || y < ctx.scissor.y0 || y > ctx.scissor.y1)\n        return;"
+    "    if (x < ctx.scissor.x0 || x > ctx.scissor.x1 || y < ctx.scissor.y0 || y > ctx.scissor.y1) {\n        drakengard::observeGsFragment(drakengard::GsFragmentProbe::ScissorReject);\n        return;\n    }" "GS fragment stage 1")
+drakengard_replace_pinned(fragment_observed
+    "    if (!writeMask.writesAnything())"
+    "    if(drakengard::gsFragmentProbe) drakengard::gsFragmentProbe->mask(writeMask.writeRgb,writeMask.writeAlpha,writeMask.writeDepth);\n    if (!writeMask.writesAnything())" "GS fragment stage 2")
+drakengard_replace_pinned(fragment_observed
+    "    if (!writeMask.writesAnything())\n    {"
+    "    if (!writeMask.writesAnything())\n    {\n        drakengard::observeGsFragment(drakengard::GsFragmentProbe::AlphaReject);" "GS fragment stage 3")
+drakengard_replace_pinned(fragment_observed
+    "    if (!passesDestinationAlphaTest(ctx.test, static_cast<uint8_t>(fpsm), rawFramebufferPixel))\n    {"
+    "    if (!passesDestinationAlphaTest(ctx.test, static_cast<uint8_t>(fpsm), rawFramebufferPixel))\n    {\n        drakengard::observeGsFragment(drakengard::GsFragmentProbe::DestinationReject);" "GS fragment stage 4")
+drakengard_replace_pinned(fragment_observed
+    "    if (!zpass)\n    {"
+    "    if(drakengard::gsFragmentProbe) drakengard::gsFragmentProbe->testDepth(static_cast<uint32_t>(z),storedZ,zpass);\n    if (!zpass)\n    {\n        drakengard::observeGsFragment(drakengard::GsFragmentProbe::DepthReject);" "GS fragment stage 5")
+drakengard_replace_pinned(fragment_observed
+    "        WriteVramUnlocked(fpsm, fbp, fbw, x, y, pixel);"
+    "        WriteVramUnlocked(fpsm, fbp, fbw, x, y, pixel);\n        drakengard::observeGsFragment(drakengard::GsFragmentProbe::FrameWrite);" "GS fragment stage 6")
+drakengard_replace_pinned(fragment_observed
+    "        WriteVramUnlocked(zpsm, zbp, fbw, x, y, z);"
+    "        WriteVramUnlocked(zpsm, zbp, fbw, x, y, z);\n        drakengard::observeGsFragment(drakengard::GsFragmentProbe::DepthWrite);" "GS fragment stage 7")
+string(REPLACE "${fragment_body}" "${fragment_observed}" graphics_clut_measured "${graphics_clut_measured}")
+drakengard_replace_pinned(graphics_clut_measured
+    "                const TextureCombineResult color = combineTexture(tex, shadeR, shadeG, shadeB, shadeA, tr, tg, tb, ta);"
+    "                const TextureCombineResult color = combineTexture(tex, shadeR, shadeG, shadeB, shadeA, tr, tg, tb, ta);\n                if(drakengard::gsFragmentProbe) drakengard::gsFragmentProbe->texture(ta,color.a);" "GS triangle texture alpha observation")
 file(CONFIGURE OUTPUT "${graphics_file}"
     CONTENT "#include \"gs_production_metrics.h\"\n#include \"gs_bilinear.h\"\n#include \"gs_scanout.h\"\n#include \"capture/gs_color_diagnostic.h\"\n${graphics_clut_measured}" @ONLY)
 set_source_files_properties("${graphics_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
