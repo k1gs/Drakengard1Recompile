@@ -21,6 +21,7 @@ class QuiescentSio2 {
     Dualshock2 pad;
     VirtualPadInput input;
     uint16_t pendingButtons{}, previousReport{0xffff};
+    std::array<uint8_t,4> previousAxes{127,127,127,127};
     std::array<uint8_t,12> pendingPressure{};
     std::array<bool,12> pendingPressureValid{};
     uint64_t totalPackets{};
@@ -82,6 +83,16 @@ public:
         }
         const auto reply=pad.exchange(tx,sample);
         if (!port && tx.size()>=5 && tx[1]==0x42 && reply[1]!=0xf3 && sample.connected) {
+            // Observe returned serial bytes, not merely the published host axes.
+            if(reply.size()>=9 && (reply[1]==0x73 || reply[1]==0x79)) {
+                const std::array<uint8_t,4> axes{reply[5],reply[6],reply[7],reply[8]};
+                if(axes!=previousAxes) {
+                    std::cerr<<"[sio2-pad-axis-report] axes="<<unsigned(axes[0])<<','<<unsigned(axes[1])<<','<<unsigned(axes[2])<<','<<unsigned(axes[3])
+                             <<" id=0x"<<std::hex<<unsigned(reply[1])<<std::dec<<'\n';
+                    previousAxes=axes;
+                }
+            }
+
             pendingButtons=0;
             pendingPressureValid.fill(false);
             if (sample.buttons!=previousReport) {

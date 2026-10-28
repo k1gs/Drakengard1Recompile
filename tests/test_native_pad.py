@@ -41,3 +41,23 @@ class HostControllerWriter(unittest.TestCase):
         for arguments in ((0, 0xffff, 0), (1, 0x10000, 1), (1, 0xff7f, 0), (1, 0xff7f, 10001)):
             with self.subTest(arguments=arguments), self.assertRaises(ValueError):
                 native_pad.send(*arguments)
+
+    def test_analog_commands_and_digital_release_share_sequence(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(native_pad, "ROOT", Path(folder)):
+            run=Path(folder)/"work/native-run-001"
+            run.mkdir(parents=True)
+            target=run/"pad-control.txt"
+            target.write_text("D1PAD1 0 FFFF 0\n",encoding="ascii")
+            event=native_pad.send(1,0xffff,3000,(0,255,42,127))
+            self.assertEqual(event["axes_rx_ry_lx_ly"],[0,255,42,127])
+            self.assertEqual(target.read_text(),"D1PAD2 1 FFFF 3000 00FF2A7F\n")
+            self.assertEqual(native_pad.send(1,0xffff,0)["sequence"],2)
+            self.assertEqual(target.read_text(),"D1PAD1 2 FFFF 0\n")
+            self.assertFalse((run/"pad-control.lock").exists())
+
+    def test_rejects_invalid_axes_before_touching_files(self):
+        for axes in [(0,0,0),(-1,127,127,127),(256,127,127,127),(1.0,127,127,127)]:
+            with self.subTest(axes=axes),self.assertRaises(ValueError):
+                native_pad.send(1,0xffff,100,axes)
+        with self.assertRaises(ValueError):
+            native_pad.send(1,0xffff,0,(127,127,127,0))

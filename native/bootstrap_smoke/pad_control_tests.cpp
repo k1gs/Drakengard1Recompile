@@ -1,4 +1,5 @@
 #include "pad_control.h"
+#include "../iop_probe/dualshock2.h"
 
 #include <cstdint>
 #include <stdexcept>
@@ -12,6 +13,32 @@ template<class Action> void refuses(Action action) {
 }
 
 void checkPadControl() {
+    drakengard::PadControl analog;
+    auto state=analog.sampleInput("D1PAD2 1 FFFF 100 7F7F7F00\n",10);
+    check(state.buttons==0xffff && state.axes==std::array<uint8_t,4>{127,127,127,0});
+    check(analog.sampleInput("D1PAD2 1 FFFF 100 7F7F7F00\n",109).axes[3]==0);
+    check(analog.sampleInput("D1PAD2 1 FFFF 100 7F7F7F00\n",110).axes==drakengard::PadControlSample{}.axes);
+    refuses([&] { analog.sampleInput("D1PAD2 1 FFFF 100 7F7F7FFF\n",111); });
+    refuses([&] { analog.sampleInput("D1PAD2 2 FFFF 0 7F7F7F00\n",111); });
+    refuses([&] { analog.sampleInput("D1PAD2 2 FFFF 100 7F7F7F0G\n",111); });
+    refuses([&] { analog.sampleInput("D1PAD2 2 FFFF 100 7F7F7F\n",111); });
+    refuses([&] { analog.sampleInput("D1PAD2 2 FFFF 100 7F7F7F00 extra\n",111); });
+    refuses([&] { analog.sampleInput("D1PAD2 2 FFFF 100\n",111); });
+    // The command's actual axis bytes survive the existing controller serial path.
+    Dualshock2 serial; VirtualPadInput input; input.connected=true;
+    serial.exchange(std::array<uint8_t,5>{1,0x43,0,1,0},input);
+    serial.exchange(std::array<uint8_t,9>{1,0x44,0,1,3},input);
+    serial.exchange(std::array<uint8_t,9>{1,0x43},input);
+    drakengard::PadControl transport;
+    const auto command=transport.sampleInput("D1PAD2 1 FFFF 100 00FF2A7F\n",0);
+    input.buttons=command.buttons;input.axes=command.axes;
+    auto reply=serial.exchange(std::array<uint8_t,9>{1,0x42},input);
+    check(reply[1]==0x73 && reply[5]==0 && reply[6]==255 && reply[7]==42 && reply[8]==127);
+    input.axes=transport.sampleInput("D1PAD2 1 FFFF 100 00FF2A7F\n",100).axes;
+    reply=serial.exchange(std::array<uint8_t,9>{1,0x42},input);
+    check(reply[5]==127 && reply[6]==127 && reply[7]==127 && reply[8]==127);
+    // Switching back to the original button protocol centers all axes.
+    check(analog.sampleInput("D1PAD1 2 FFFF 0\n",111).axes==drakengard::PadControlSample{}.axes);
     drakengard::PadControl pad;
     check(pad.sample("D1PAD1 0 FFFF 0\n", 0) == 0xffff);
     check(pad.sample("D1PAD1 1 FFFE 100\n", 1000) == 0xfffe);

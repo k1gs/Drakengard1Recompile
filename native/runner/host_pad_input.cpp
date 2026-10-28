@@ -35,7 +35,8 @@ void pollVirtualPadInput() {
         const auto now=std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
         VirtualPadInput input; input.connected=true;
-        input.buttons=controller.sample({bytes.data(),size},now);
+        const auto command=controller.sampleInput({bytes.data(),size},now);
+        input.buttons=command.buttons;input.axes=command.axes;
         constexpr unsigned pressureBits[]{5,7,4,6,12,13,14,15,10,11,8,9};
         for (unsigned i=0;i<12;++i) input.pressure[i]=(input.buttons&(1u<<pressureBits[i]))?0:255;
         static uint16_t previous=0xffff;
