@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <array>
 #include <iostream>
 #include <chrono>
@@ -13,10 +14,22 @@
 // Keyboard is an explicit virtual device, even without a physical gamepad.
 bool configureHostPadWindow() {
     if (!std::getenv("DRAKENGARD_PAD_CONTROL")) return false;
-    SetConfigFlags(FLAG_WINDOW_ALWAYS_RUN);
+    unsigned flags=FLAG_WINDOW_ALWAYS_RUN;
+    if(hostPadWindowHiddenRequested())flags|=FLAG_WINDOW_HIDDEN|FLAG_WINDOW_UNFOCUSED;
+    SetConfigFlags(flags);
     return true;
 }
 bool hostPadWindowRunsAlways() { return IsWindowState(FLAG_WINDOW_ALWAYS_RUN); }
+bool hostPadWindowHiddenRequested() {
+    const auto value=std::getenv("DRAKENGARD_DIAGNOSTIC_HIDDEN");
+    return std::getenv("DRAKENGARD_PAD_CONTROL") && value && std::strcmp(value,"1")==0;
+}
+bool hostPadWindowIsHidden() { return IsWindowState(FLAG_WINDOW_HIDDEN); }
+void finishHostPadWindowConfiguration() {
+    // InitWindow installs its default Escape exit key. A hidden file-driven
+    // diagnostic has no keyboard control; its process runner owns the stop cap.
+    if(hostPadWindowHiddenRequested())SetExitKey(KEY_NULL);
+}
 void pollVirtualPadInput() {
     if (!std::getenv("DRAKENGARD_VIRTUAL_PAD")) return;
     if (const char* commandPath=std::getenv("DRAKENGARD_PAD_CONTROL")) {

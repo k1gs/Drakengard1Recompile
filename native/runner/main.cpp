@@ -67,8 +67,13 @@ int main(int argc, char** argv) {
         const bool controlled=configureHostPadWindow();
         if (!runtime->initialize("Drakengard Europe - diagnostic runtime")) return 3;
         if (controlled) {
+            finishHostPadWindowConfiguration();
             if (!hostPadWindowRunsAlways())
                 throw std::runtime_error("Host controller diagnostic requires an always-running window loop");
+            if(hostPadWindowHiddenRequested() && !hostPadWindowIsHidden())
+                throw std::runtime_error("Hidden controller diagnostic window was not hidden");
+            std::cerr << "[diagnostic-host] hidden_requested=" << hostPadWindowHiddenRequested()
+                      << " hidden=" << hostPadWindowIsHidden() << '\n';
             std::cerr << "[diagnostic-host] controller source keeps frame/event loop running while minimized\n";
         }
         pollVirtualPadInput();
