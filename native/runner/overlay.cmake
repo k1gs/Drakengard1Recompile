@@ -20,6 +20,8 @@ function(drakengard_configure_runner)
     drakengard_prepare_vu0_registers(guest_sources "${GENERATED_DIR}" "${CMAKE_BINARY_DIR}/guest_vu0")
     include("${REPO_ROOT}/native/runner/cmake/player_probe.cmake")
     drakengard_prepare_player_probe(guest_sources)
+    include("${REPO_ROOT}/native/runner/cmake/body_probe.cmake")
+    drakengard_prepare_body_probe(guest_sources)
     drakengard_correct_signed_branches(guest_sources "${CMAKE_BINARY_DIR}/guest_branches")
     target_sources(ps2EntryRunner PRIVATE
         "${REPO_ROOT}/native/runner/main.cpp"
