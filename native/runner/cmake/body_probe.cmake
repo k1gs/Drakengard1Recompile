@@ -7,6 +7,8 @@ function(drakengard_prepare_body_probe source_variable)
         "${CMAKE_BINARY_DIR}/private_headers/ee_body_probe.h" COPYONLY)
     configure_file("${REPO_ROOT}/native/runner/ee_geometry_probe.h"
         "${CMAKE_BINARY_DIR}/private_headers/ee_geometry_probe.h" COPYONLY)
+    configure_file("${REPO_ROOT}/native/runner/caim_vif_trace.h"
+        "${CMAKE_BINARY_DIR}/private_headers/caim_vif_trace.h" COPYONLY)
     set(prepared)
     set(matches 0)
     set(geometry_matches 0)

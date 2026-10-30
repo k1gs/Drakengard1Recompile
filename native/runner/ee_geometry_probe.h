@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include "caim_vif_trace.h"
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -34,6 +35,9 @@ public:
         const unsigned part=state.partOffset/16;
         const std::array<uint32_t,3> fader{word(0x48a42c),word(0x48a430),word(0x48a434)};
         const unsigned phase=fader==std::array<uint32_t,3>{}?1:0;
+        // Arm before the handler submits DMA, not from a later RAM snapshot.
+        if(part==0 && state.resource==0x5c5e60 && word(state.sp+0x14)==0x795250)
+            caimVifTrace.boundary(slot==0,part,phase,std::getenv("DRAKENGARD_CAIM_VIF_TRACE"));
         if(records[slot][part][phase])return;
         const auto mesh=word(state.sp+0x14);range(mesh,0x40);
         const auto skeleton=word(state.resource+0xc8);range(skeleton,0x28);
@@ -54,7 +58,7 @@ public:
         words("mesh_descriptor_words",state.sp+0x10,12);
         words("output_matrix_bits",poses,bones*16);
         words("packet_builder_words",state.sp+0xd0,16);
-        // The verified part0/flags1 handler builds this shared VIF1 DMA chain.
+        // This legacy-named capture is a shared DMA chain, not VIF1 identity.
         // Capture only after that handler returns. This is a bounded prefix,
         // not a claim that every referenced DMA payload has been captured.
         if(slot==1 && part==0 && word(mesh+8)==1)

@@ -77,8 +77,10 @@ drakengard_replace_pinned(memory_real_status
     "                            m_pendingGifTransfers.push_back(std::move(pt));"
     "                            drakengard::queueGsDmaSource(pt.chainData.data(),pt.chainData.size());\n                            m_pendingGifTransfers.push_back(std::move(pt));"
     "GIF source queue identity")
+include("${CMAKE_CURRENT_LIST_DIR}/caim_vif_trace.cmake")
+drakengard_trace_caim_memory(memory_real_status)
 file(CONFIGURE OUTPUT "${memory_file}"
-    CONTENT "#include \"gs_production_metrics.h\"\n#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"ipu_diagnostic.h\"\n#include \"iop_bridge.h\"\n#include \"empty_gif_chain.h\"\n${memory_real_status}" @ONLY)
+    CONTENT "#include \"caim_vif_trace.h\"\n#include \"gs_production_metrics.h\"\n#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"ipu_diagnostic.h\"\n#include \"iop_bridge.h\"\n#include \"empty_gif_chain.h\"\n${memory_real_status}" @ONLY)
 set_source_files_properties("${memory_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
 get_target_property(runtime_sources ps2_runtime SOURCES)

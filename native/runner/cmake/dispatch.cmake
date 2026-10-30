@@ -62,8 +62,10 @@ drakengard_replace_pinned(runtime_presentation_metric
     "                                         uint32_t chcr)\n{"
     "                                         uint32_t chcr)\n{\n    drakengard::GsDmaCpuScope gifCpuScope(true,ctx->pc,getRegU32(ctx,31),getRegU32(ctx,29),rdram,PS2_RAM_SIZE);"
     "GIF CPU chain scope")
+include("${CMAKE_CURRENT_LIST_DIR}/caim_vif_trace.cmake")
+drakengard_trace_caim_micro(runtime_presentation_metric)
 file(CONFIGURE OUTPUT "${runtime_file}"
-    CONTENT "#include \"gs_production_metrics.h\"\n#include <exception>\n#include \"game_thread_guard.h\"\n#include \"kernel_functions.h\"\n#include \"firmware_functions.h\"\n#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"sif_transport.h\"\n#include \"ee_transfer_diagnostic.h\"\n${runtime_presentation_metric}" @ONLY)
+    CONTENT "#include \"caim_vif_trace.h\"\n#include \"gs_production_metrics.h\"\n#include <exception>\n#include \"game_thread_guard.h\"\n#include \"kernel_functions.h\"\n#include \"firmware_functions.h\"\n#include \"strict_device_error.h\"\n#include \"sif_diagnostic.h\"\n#include \"sif_transport.h\"\n#include \"ee_transfer_diagnostic.h\"\n${runtime_presentation_metric}" @ONLY)
 set_source_files_properties("${runtime_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib")
 get_target_property(runtime_sources ps2_runtime SOURCES)

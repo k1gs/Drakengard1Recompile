@@ -56,7 +56,7 @@ if(graphics_clut_fast STREQUAL graphics_filtered)
     message(FATAL_ERROR "Pinned GS indexed texture sample point changed")
 endif()
 string(REPLACE "    DrawPrimitive(batch);"
-    "    const auto metricStart = drakengard::beginGsDrawMetric();\n    drakengard::GsFragmentScope fragments(batch);\n    DrawPrimitive(batch);\n    fragments.complete();\n    drakengard::completeGsDrawMetric(metricStart, batch);"
+    "    const auto metricStart = drakengard::beginGsDrawMetric();\n    drakengard::GsFragmentScope fragments(batch);\n    drakengard::caimVifTrace.draw(batch);\n    DrawPrimitive(batch);\n    fragments.complete();\n    drakengard::completeGsDrawMetric(metricStart, batch);"
     graphics_measured "${graphics_clut_fast}")
 if(graphics_measured STREQUAL graphics_clut_fast)
     message(FATAL_ERROR "Pinned GS completed-draw metric point changed")
@@ -109,7 +109,7 @@ drakengard_replace_pinned(graphics_clut_measured
     "                const TextureCombineResult color = combineTexture(tex, shadeR, shadeG, shadeB, shadeA, tr, tg, tb, ta);"
     "                const TextureCombineResult color = combineTexture(tex, shadeR, shadeG, shadeB, shadeA, tr, tg, tb, ta);\n                if(drakengard::gsFragmentProbe) drakengard::gsFragmentProbe->texture(ta,color.a);" "GS triangle texture alpha observation")
 file(CONFIGURE OUTPUT "${graphics_file}"
-    CONTENT "#include \"gs_production_metrics.h\"\n#include \"gs_bilinear.h\"\n#include \"gs_scanout.h\"\n#include \"capture/gs_color_diagnostic.h\"\n${graphics_clut_measured}" @ONLY)
+    CONTENT "#include \"caim_vif_trace.h\"\n#include \"gs_production_metrics.h\"\n#include \"gs_bilinear.h\"\n#include \"gs_scanout.h\"\n#include \"capture/gs_color_diagnostic.h\"\n${graphics_clut_measured}" @ONLY)
 set_source_files_properties("${graphics_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/gs")
 get_target_property(runtime_sources ps2_runtime SOURCES)
@@ -163,15 +163,15 @@ target_sources(ps2_runtime PRIVATE "${frontend_file}")
 file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/gs/ps2_gif_arbiter.cpp" arbiter_source)
 drakengard_replace_pinned(arbiter_source
     "            m_processFn(pkt.data.data(), static_cast<uint32_t>(pkt.data.size()));"
-    "            drakengard::GsGifPacketScope packetScope(unsigned(pkt.pathId),pkt.data.data(),static_cast<uint32_t>(pkt.data.size()));\n            m_processFn(pkt.data.data(), static_cast<uint32_t>(pkt.data.size()));"
+    "            drakengard::GsGifPacketScope packetScope(unsigned(pkt.pathId),pkt.data.data(),static_cast<uint32_t>(pkt.data.size()));\n            drakengard::CaimGifConsumerScope caimPacket(pkt.data.data(),static_cast<uint32_t>(pkt.data.size()));\n            m_processFn(pkt.data.data(), static_cast<uint32_t>(pkt.data.size()));"
     "GIF packet source scope")
 set(arbiter_file "${CMAKE_BINARY_DIR}/private_observed_GifArbiter.cpp")
 drakengard_replace_pinned(arbiter_source
     "    m_queue.push_back(std::move(pkt));"
-    "    if(unsigned(pathId)==3u) drakengard::relayGsDmaSource(data,sizeBytes,pkt.data.data());\n    if(unsigned(pathId)==1u) drakengard::relayGsKickOrigin(data,sizeBytes,pkt.data.data());\n    m_queue.push_back(std::move(pkt));"
+    "    if(unsigned(pathId)==3u) drakengard::relayGsDmaSource(data,sizeBytes,pkt.data.data());\n    drakengard::caimVifTrace.relayGif(unsigned(pathId),data,sizeBytes,pkt.data.data());\n    if(unsigned(pathId)==1u) drakengard::relayGsKickOrigin(data,sizeBytes,pkt.data.data());\n    m_queue.push_back(std::move(pkt));"
     "GIF source copied buffer identity")
 file(CONFIGURE OUTPUT "${arbiter_file}"
-    CONTENT "#include \"gs_production_metrics.h\"\n${arbiter_source}" @ONLY)
+    CONTENT "#include \"caim_vif_trace.h\"\n#include \"gs_production_metrics.h\"\n${arbiter_source}" @ONLY)
 get_target_property(runtime_sources ps2_runtime SOURCES)
 list(FILTER runtime_sources EXCLUDE REGEX "/ps2_gif_arbiter[.]cpp$")
 set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")
@@ -182,8 +182,15 @@ drakengard_replace_pinned(vif_source
     "            if (m_vu1Data && totalBytes > 0 && pos + totalBytes <= sizeBytes)"
     "            if (drakengard::gsMetricPath()) { const bool complete=m_vu1Data && totalBytes>0 && pos+totalBytes<=sizeBytes; drakengard::observeVifUnpack(cmd,vif1_regs.cycle,vif1_regs.mode,complete,data+pos,complete?totalBytes:0u); }\n            if (m_vu1Data && totalBytes > 0 && pos + totalBytes <= sizeBytes)"
     "VIF1 UNPACK command observation")
+include("${CMAKE_CURRENT_LIST_DIR}/vif0_unpack.cmake")
+drakengard_prepare_vif0_unpack("${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/private_headers/vif0_unpack.h")
+drakengard_adapt_vif0_unpack(vif_source)
+include("${CMAKE_CURRENT_LIST_DIR}/caim_vif_trace.cmake")
+drakengard_trace_caim_vif(vif_source)
 set(vif_file "${CMAKE_BINARY_DIR}/private_observed_Vif1.cpp")
-file(CONFIGURE OUTPUT "${vif_file}" CONTENT "#include \"gs_production_metrics.h\"\n${vif_source}" @ONLY)
+file(CONFIGURE OUTPUT "${vif_file}" CONTENT "#include \"vif0_unpack.h\"\n#include \"caim_vif_trace.h\"\n#include \"gs_production_metrics.h\"\n${vif_source}" @ONLY)
+set_source_files_properties("${vif_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
+    INCLUDE_DIRECTORIES "${CMAKE_BINARY_DIR}/private_headers")
 get_target_property(runtime_sources ps2_runtime SOURCES)
 list(FILTER runtime_sources EXCLUDE REGEX "/ps2_vif1_interpreter[.]cpp$")
 set_property(TARGET ps2_runtime PROPERTY SOURCES "${runtime_sources}")

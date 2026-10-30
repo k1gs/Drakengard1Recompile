@@ -20,8 +20,8 @@ A source-only project working toward a native PC port of **Drakengard**.
 
 > **Research in progress. No playable build is available.**
 > The native diagnostic runner progresses beyond the **Chapter I mission briefing**
-> and draws an in-scene radar and message. Character and environment rendering,
-> in-world movement and combat are not yet verified.
+> and renders **Caim with his weapon, terrain, objects, radar and HUD**.
+> In-world movement, character control and combat are not yet verified.
 
 ## The project
 
@@ -41,7 +41,7 @@ revision or dump authenticity. Game-specific bindings require the verified ELF h
 | EE ↔ IOP | Guest-owned reboot, two actual BOOTEND stores and SIF transfers | Broader device and service coverage |
 | Guest modules & input | Original IOP modules execute; SIO2 accepts ordinary button presses/releases and menu selections | Broader controller coverage and in-game validation |
 | Disc services | 226 CDVD transfers and 5,997,856 bytes read from the verified ISO | Validate later disc operations |
-| Graphics & gameplay | Main menu, prologue, Chapter I briefing and in-scene radar/message | Restore visible character/environment; verify movement and combat |
+| Graphics & gameplay | Main menu, prologue, Chapter I briefing, terrain/objects and visible Caim after compressed VIF0 UNPACK correction | Verify character control, movement and combat |
 | Audio, saves & recovery | Not yet verified | Verify these in actual gameplay |
 
 Passing CI validates preparation tools and synthetic service contracts.
@@ -49,9 +49,9 @@ It does **not** establish a working port.
 
 ![Native runner: radar and in-scene message](assets/progress/native-scene-hud.png)
 
-*Actual GS output from the native runner. The radar and message are visible;
-the character and environment are not yet visible. This frame does not establish
-playable gameplay or independently verify the host window.*
+*Earlier GS output from the native runner: radar and message were visible, but
+character/environment rendering was not yet established in this captured checkpoint.
+The image is not evidence of playable gameplay or an independent host-window check.*
 
 ## Getting started
 
