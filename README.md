@@ -21,8 +21,8 @@ A source-only project working toward a native PC port of **Drakengard**.
 > **Research in progress. No playable build is available.**
 > The native diagnostic runner progresses beyond the **Chapter I mission briefing**
 > and renders **Caim with his weapon, terrain, objects, radar and HUD**.
-> Analog character movement is verified in a bounded diagnostic run.
-> Combat, audio, saves and recovery are not yet verified.
+> Analog character movement and a rendered melee attack animation are verified in bounded diagnostic runs.
+> Hits, combat, audio, saves and recovery are not yet verified.
 
 ## The project
 
@@ -42,7 +42,7 @@ revision or dump authenticity. Game-specific bindings require the verified ELF h
 | EE ↔ IOP | Guest-owned reboot, two actual BOOTEND stores and SIF transfers | Broader device and service coverage |
 | Guest modules & input | Original IOP modules execute; SIO2 accepts ordinary button presses/releases and menu selections | Broader controller coverage and in-game validation |
 | Disc services | 226 CDVD transfers and 5,997,856 bytes read from the verified ISO | Validate later disc operations |
-| Graphics & gameplay | Main menu, prologue, Chapter I briefing, visible Caim/terrain/objects and actual analog movement after the opening script releases control | Verify attacks, combat and sustained gameplay |
+| Graphics & gameplay | Main menu, prologue, Chapter I briefing, visible Caim/terrain/objects, actual analog movement and a Square-triggered melee attack animation after the opening script releases control | Verify hits, combat and sustained gameplay |
 | Audio, saves & recovery | Not yet verified | Verify these in actual gameplay |
 
 Passing CI validates preparation tools and synthetic service contracts.
