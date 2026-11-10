@@ -12,6 +12,7 @@
 #include "spu_adma_tests.h"
 #include "spu_reverb_dsp_tests.h"
 #include "spu_fx_route_tests.h"
+#include "spu_core_mix_tests.h"
 #include "cooperative_clock.h"
 #include "../runner/gs_interrupt_line.h"
 #include "../runner/empty_gif_chain.h"
@@ -139,6 +140,8 @@ int main() {
         iop_tests::stoppedSpuVoices();
         iop_tests::silentSpuVoices();
         iop_tests::nonzeroSpuAdpcm();
+        iop_tests::spuCoreOutputRouting();
+        iop_tests::spuCoreDecodeBeforeOutputWrite();
         iop_tests::nonzeroSpuWetRouting();
         iop_tests::zeroInputSpuEffects();
         iop_tests::spuSetupTransfers();

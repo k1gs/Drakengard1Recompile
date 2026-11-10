@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.21)
+project(HostAudioDeviceSmoke LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+if(NOT EXISTS "${REPO_ROOT}/tools/deps/raylib-minimal/CMakeLists.txt")
+    message(FATAL_ERROR "Prepare the runner's local raylib dependency first; no game inputs are needed")
+endif()
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_GAMES OFF CACHE BOOL "" FORCE)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+add_subdirectory("${REPO_ROOT}/tools/deps/raylib-minimal" "${CMAKE_BINARY_DIR}/raylib-dependency")
+add_executable(host_audio_device main.cpp "${REPO_ROOT}/native/runner/host_audio_output.cpp")
+target_include_directories(host_audio_device PRIVATE "${REPO_ROOT}/native/runner")
+target_link_libraries(host_audio_device PRIVATE raylib)
+# This is an explicit, muted hardware check. Do not add it to unattended CTest
+# or substitute its synthetic source for real game-audio acceptance.

@@ -76,6 +76,10 @@ class CooperativeIopBridge {
         ipuDma.pump(ipu,eeRam,eeScratchpad,enabled);
     }
 public:
+    void setAudioSink(std::function<void(std::array<int32_t,2>)> sink) {
+        if(!boot) throw StrictDeviceError("SPU audio requires prepared IOP");
+        boot->setAudioSink(std::move(sink));
+    }
     uint32_t readIntcStatus() const { return intcStatus.read(); }
     void acknowledgeIntcStatus(uint32_t value) { intcStatus.acknowledge(value); }
     void latchIntcCause(uint32_t cause) { intcStatus.raise(cause); }
@@ -398,6 +402,10 @@ uint32_t takeEeIpuDmaCompletions() {
 void prepareCooperativeIop(const IopBootInputs& inputs) {
     std::lock_guard lock(bridgeMutex);
     return bridge.prepareCooperativeIop(inputs);
+}
+void setCooperativeAudioSink(std::function<void(std::array<int32_t,2>)> sink) {
+    std::lock_guard lock(bridgeMutex);
+    bridge.setAudioSink(std::move(sink));
 }
 void activateCooperativeIop(std::string_view arguments, uint32_t mode) {
     std::lock_guard lock(bridgeMutex);

@@ -48,6 +48,7 @@ struct IopBoot::Impl {
 IopBoot::IopBoot(const IopBootInputs& inputs) : impl(std::make_unique<Impl>(inputs)) {}
 IopBoot::~IopBoot() = default;
 void IopBoot::videoEvent(bool start) { impl->session->videoEvent(start); }
+void IopBoot::setAudioSink(std::function<void(std::array<int32_t,2>)> sink) { impl->session->setAudioSink(std::move(sink)); }
 void IopBoot::enableVirtualPad() { impl->session->enableVirtualPad(); }
 void IopBoot::publishPadInput(const VirtualPadInput& input) { impl->session->publishPadInput(input); }
 void IopBoot::enableEntryDevices() {

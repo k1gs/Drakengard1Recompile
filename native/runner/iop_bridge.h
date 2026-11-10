@@ -6,6 +6,7 @@
 
 namespace drakengard {
 void prepareCooperativeIop(const IopBootInputs& inputs);
+void setCooperativeAudioSink(std::function<void(std::array<int32_t,2>)> sink);
 void activateCooperativeIop(std::string_view arguments, uint32_t mode);
 void beginFirmwareExperiment();
 void finishFirmwareExperiment();

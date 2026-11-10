@@ -26,10 +26,12 @@ function(drakengard_configure_runner)
     target_sources(ps2EntryRunner PRIVATE
         "${REPO_ROOT}/native/runner/main.cpp"
         "${REPO_ROOT}/native/runner/host_pad_input.cpp"
+        "${REPO_ROOT}/native/runner/host_audio_output.cpp"
         "${REPO_ROOT}/native/runner/pad_control_file.cpp"
         "${REPO_ROOT}/native/runner/host_arrow_input.cpp" ${guest_sources})
     # Keep raylib declarations out of the WinAPI input/control unity units.
     set_source_files_properties("${REPO_ROOT}/native/runner/host_pad_input.cpp"
+        "${REPO_ROOT}/native/runner/host_audio_output.cpp"
         "${REPO_ROOT}/native/runner/host_arrow_input.cpp"
         "${REPO_ROOT}/native/runner/pad_control_file.cpp"
         TARGET_DIRECTORY ps2EntryRunner PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)

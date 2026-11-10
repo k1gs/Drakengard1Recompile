@@ -3,6 +3,8 @@
 #include <bit>
 #include <cstdint>
 #include <iostream>
+#include <functional>
+#include <utility>
 #include <stdexcept>
 #include <type_traits>
 #include "spu_envelope.h"
@@ -10,6 +12,7 @@
 #include "spu_adpcm.h"
 #include "spu_gaussian.h"
 #include "spu_reverb_setup.h"
+#include "spu_core_mix.h"
 
 // Functional ADPCM voice state. Noise and volume sweeps remain fail-closed.
 // Decoded PCM is observable here; no host audio output is established.
@@ -40,6 +43,11 @@ class SpuIdleVoices {
     bool enabled{};
     const SpuRamWritePort* ram{};
     uint64_t nonzeroSamples{};
+    const SpuVolumeRegisters* mixerVolumes{};
+    SpuRamWritePort* outputRam{};
+    std::array<SpuCoreMix::Stereo,2> coreOutput{},routedWet{};
+    std::function<void(SpuCoreMix::Stereo)> sampleSink;
+    bool sinkBound{};
     bool validBlock(uint32_t address,uint8_t* flags=nullptr) const {
         if (!ram) return false;
         const auto base=address&0xffff8;
@@ -67,6 +75,19 @@ public:
         if (enabled) throw std::runtime_error("Stopped SPU voices already enabled");
         enabled=true; cycle=modeledCycle; ram=memory;
     }
+    void bindMixer(const SpuVolumeRegisters& volumes,SpuRamWritePort& memory) {
+        if(!enabled || mixerVolumes || ram!=&memory || samples)
+            throw std::runtime_error("SPU mixer requires one binding before sample execution");
+        mixerVolumes=&volumes;outputRam=&memory;
+    }
+    const SpuCoreMix::Stereo& mixedPcm(unsigned core) const { return coreOutput.at(core); }
+    void bindSampleSink(std::function<void(SpuCoreMix::Stereo)> sink) {
+        if(!sink || sinkBound || samples) throw std::runtime_error("SPU sample sink requires one fresh binding");
+        sampleSink=std::move(sink);sinkBound=true;
+    }
+    void clearSampleSink() noexcept { sampleSink=nullptr; }
+    const SpuCoreMix::Stereo& wetInput(unsigned core) const { return routedWet.at(core); }
+    int32_t voiceOutput(unsigned core,unsigned voice) const { return cores.at(core).voices.at(voice).output; }
     bool allows(uint32_t address,uint32_t opcode,uint32_t value=0) const {
         if (!enabled || !mapped(address)) return false;
         if (opcode==0x21 || opcode==0x25) return true;
@@ -134,6 +155,8 @@ public:
         samples+=ticks;
         static const auto gaussian=spuGaussianTable();
         for (uint64_t tick=0;tick<ticks;++tick) {
+            std::array<SpuCoreMix::Routed,2> voiceMix{};
+            const uint32_t outPos=uint32_t((firstSample+tick)&511);
             std::array<std::array<int32_t,2>,2> inputFrame{};
             if constexpr (!std::is_same_v<Input,std::nullptr_t>)
                 for (unsigned c=0;c<2;++c) inputFrame[c]=input(c,firstSample+tick);
@@ -154,7 +177,11 @@ public:
                     voice.decoder.reset(); voice.fifo.fill(0); voice.blockLoaded=false;
                     voice.output=voice.interpolated=0;
                 }
-                if (!voice.started) continue;
+                const auto captureVoice=[&](int32_t value) {
+                    if(outputRam && (n==1 || n==3))
+                        outputRam->writeWord(((&core==&cores[0])?0x400u:0xc00u)+(n==3?0x200u:0u)+outPos,uint16_t(value));
+                };
+                if (!voice.started) { captureVoice(0);continue; }
                 uint8_t flags{};
                 if ((core.masks[1]&bit) || !validBlock(voice.addresses[2],&flags)) {
                     std::cerr << "[spu-unsupported-stream] core=" << (&core-cores.data()) << " voice=" << n
@@ -207,6 +234,7 @@ public:
                 }
                 voice.envelope.tick(voice.parameters[3],voice.parameters[4]);
                 voice.output=(voice.interpolated*voice.envelope.value)>>15;
+                captureVoice(voice.output);
                 if (voice.output && ++nonzeroSamples<=8)
                     std::cerr << "[spu-adpcm-pcm] core=" << (&core-cores.data()) << " voice=" << n
                               << " pcm=" << voice.interpolated << " envelope=" << voice.envelope.value
@@ -222,8 +250,33 @@ public:
                 voice.pitchFraction+=pitch;
                 voice.consumed+=voice.pitchFraction>>12; voice.pitchFraction&=0xfff;
             }
-            // Core-to-core output/master volume and external mixing are not yet
-            // modeled. Never assert zero wet input when that path could carry
+            voiceMix[unsigned(&core-cores.data())]={dry,wet};
+            core.keyOn=core.keyOff=0;
+            }
+            // Both cores decode voices before core0 FX/output writes can affect
+            // the SPU RAM seen by core1's decoder in the next sample.
+            for(unsigned c=0;c<2;++c) {
+            auto& core=cores[c];
+            const auto& [dry,wet]=voiceMix[c];
+            if(mixerVolumes) {
+                for(unsigned side=0;side<2;++side) {
+                    outputRam->writeWord(0x1000+c*0x800+side*0x200+outPos,uint16_t(SpuCoreMix::clip(dry[side])));
+                    outputRam->writeWord(0x1400+c*0x800+side*0x200+outPos,uint16_t(SpuCoreMix::clip(wet[side])));
+                }
+                const auto external=c?SpuCoreMix::scale(coreOutput[0],*mixerVolumes,1,4):SpuCoreMix::Stereo{};
+                const auto routed=SpuCoreMix::route(dry,wet,core.input,external,core.mmix);
+                routedWet[c]=routed.wet;
+                if(effects) effects->observeInput(c,routed.wet[0],routed.wet[1]);
+                else if(routed.wet[0] || routed.wet[1])
+                    throw std::runtime_error("SPU mixed wet input requires an FX owner");
+                coreOutput[c]=SpuCoreMix::finish(routed.dry,effects?effects->output(c):SpuCoreMix::Stereo{},*mixerVolumes,c);
+                if(!c) for(unsigned side=0;side<2;++side)
+                    outputRam->writeWord(0x800+side*0x200+outPos,uint16_t(coreOutput[0][side]));
+                continue;
+            }
+            // Standalone voice-only probes retain their strict zero-input
+            // admission guard when the core mixer/volume owner is not bound.
+            // Without that binding, never assert zero wet input when it could carry
             // a real nonzero dry signal into core1 (including FX-off history).
             if (effects && &core==&cores[0])
                 for (unsigned side=0;side<2;++side)
@@ -237,7 +290,10 @@ public:
             if (effects && &core==&cores[0]) for (unsigned side=0;side<2;++side)
                 if (effects->output(0)[side] && (cores[1].mmix&(side?1:2)))
                     throw std::runtime_error("SPU nonzero core0 FX external mixing is unsupported");
-            core.keyOn=core.keyOff=0;
+            }
+            if(sampleSink) {
+                if(!mixerVolumes) throw std::runtime_error("SPU sample sink requires a bound core mixer");
+                sampleSink(coreOutput[1]);
             }
         }
     }

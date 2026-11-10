@@ -57,6 +57,9 @@ public:
         sif0.bind(std::move(sink)); dma.enableSif0Sender();
     }
     void pumpSif0() { sif0.pump(memory); }
+    void setAudioSink(std::function<void(SpuCoreMix::Stereo)> sink) {
+        if(sink) voices.bindSampleSink(std::move(sink));else voices.clearSampleSink();
+    }
     void enableEntryDevices() {
         pio.enable(); cache.enableRebootControls(); rom.enableIopBootCode(); rom.enableAbsentRom1();
         sio2.enable(); dma.enableCdvdReceiver();
@@ -64,6 +67,7 @@ public:
         state.budget.enableGuestReboot();
         spdif.enable(); volumes.enable(); spuRam.enable();
         voices.enable(timers.cycles(),&spuRam); reverb.enable(&spuRam); spuControl.enable(&reverb,true);
+        voices.bindMixer(volumes,spuRam);
         reverb.enableProcessing();
         spuDma.bindSampleClock();
         dma.enableSpuWriter(spuDma);

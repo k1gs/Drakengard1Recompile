@@ -73,6 +73,19 @@ the original image outside the repository.
 The fingerprint tool inspects inputs; it does not extract an ISO or establish authenticity.
 The native runner is a diagnostic experiment and requires additional local preparation.
 
+## Audio output
+
+The strict IOP path mixes SPU2 core0/core1 output and sends each completed stereo
+frame to a bounded 48 kHz PCM16 host stream. MMIX routing, direct volumes, FX
+handoff and dynamic output buffers have component coverage. Host underruns emit
+silence; overflow drops are counted without altering guest execution. Noise,
+volume sweeps and other unsupported device modes still stop explicitly.
+
+An optional device-only check in `native/audio_smoke` uses the runner's local
+raylib dependency and synthetic PCM, with output intentionally muted. It does
+not establish game audio quality. Native acceptance of uninterrupted audio,
+sustained gameplay, saves and recovery remains incomplete.
+
 ## Contributing
 
 Focused work on device contracts, CPU behavior and synthetic tests is welcome.

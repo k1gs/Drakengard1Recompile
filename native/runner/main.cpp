@@ -5,6 +5,7 @@
 #include "capture/guest_frame_capture.h"
 #include "gs_production_metrics.h"
 #include "host_pad_input.h"
+#include "host_audio_output.h"
 #include "runtime/ee_scheduler.h"
 #include "ee_write_watch.h"
 #include <exception>
@@ -39,7 +40,11 @@ int main(int argc, char** argv) {
                 argv[7], argv[8], argv[9], argv[10], argv[2]});
         }
         auto runtime = std::make_unique<PS2Runtime>();
-        struct Diagnostics { unsigned frames{}; GuestFrameCapture capture; } diagnostics;
+        struct Diagnostics {
+            unsigned frames{};
+            GuestFrameCapture capture;
+            std::unique_ptr<drakengard::HostAudioOutput> audio;
+        } diagnostics;
         runtime->setDebugUiCallbacks(
             [](PS2Runtime&, void*) {},
             [](PS2Runtime& rt, void* data) {
@@ -49,6 +54,7 @@ int main(int argc, char** argv) {
                 drakengard::pollGsProductionMetrics();
                 auto& ticks = state.frames;
                 if (++ticks % 120 != 0) return;
+                if(state.audio) state.audio->reportProgress();
                 const auto snapshot = rt.eeScheduler().snapshot();
                 std::cerr << "[diagnostic] frame=" << ticks << " sequence=" << snapshot.sequence
                           << " cycle=" << snapshot.eeCycle << " running=" << snapshot.runningThreadId;
@@ -66,6 +72,10 @@ int main(int argc, char** argv) {
         // guest-stop/error propagation. This changes host event waiting only.
         const bool controlled=configureHostPadWindow();
         if (!runtime->initialize("Drakengard Europe - diagnostic runtime")) return 3;
+        // Local lifetime ends before runtime destroys the already-open device.
+        // Binding precedes firmware execution, so no strict SPU frame is polled
+        // or skipped between the mixer and the host queue.
+        if(argc>=11) diagnostics.audio=std::make_unique<drakengard::HostAudioOutput>();
         if (controlled) {
             finishHostPadWindowConfiguration();
             if (!hostPadWindowRunsAlways())
