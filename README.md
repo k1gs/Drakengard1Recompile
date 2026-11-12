@@ -54,6 +54,12 @@ It does **not** establish a working port.
 character/environment rendering was not yet established in this captured checkpoint.
 The image is not evidence of playable gameplay or an independent host-window check.*
 
+![Caim approaching soldiers in Chapter I](assets/progress/chapter-i-approach.png)
+
+*Chapter I in the native diagnostic runner. Caim approached the soldiers using analog input.
+The image updated 87 times over 88.5 seconds of measured movement (about 0.98 updates per second).
+The run ended before the melee contact test.*
+
 ## Getting started
 
 The public checks need no game or BIOS. Install **Python 3.10+** and **Git**:
@@ -98,7 +104,7 @@ failure cases before extending coverage.
 ## Source-only & licensing
 
 This repository distributes original project source, synthetic tests, configuration templates
-and the project README, plus the reviewed progress image shown above. It includes
+and the project README, plus the reviewed progress images shown above. It includes
 **no game inputs, BIOS, original executables or generated game code**. Supply your own
 local inputs; keep them in ignored directories.
 

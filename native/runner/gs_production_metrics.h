@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>
+#include <iostream>
 #include <mutex>
 #include <optional>
 #include <stdexcept>
@@ -370,7 +371,29 @@ inline void observeGsUiTick(uint64_t tick) {
     if (!gsMetricPath()) return;
     auto& store = gsMetricStore(); std::lock_guard lock(store.mutex); store.counters.ui(tick);
 }
+inline void observeGsFrameRate(const std::vector<uint8_t>& pixels, uint32_t width, uint32_t height) {
+    static const bool enabled = std::getenv("DRAKENGARD_FRAME_RATE_TRACE") != nullptr;
+    if (!enabled) return;
+    // This hook runs on the presentation thread after a successful GS readback.
+    static GsObservedRgb image;
+    static GsProductionCounters interval;
+    static auto start = GsMetricClock::now();
+    image.observe(interval, pixels, width, height);
+    const auto now = GsMetricClock::now();
+    if (now - start < std::chrono::seconds(5)) return;
+    const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count();
+    const auto unixTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    std::ostringstream report;
+    report << "[gs-frame-rate] unix_ns=" << unixTime << " elapsed_ns=" << elapsed
+           << " observed=" << interval.presentations << " rgb_changes=" << interval.rgbChanges
+           << " invalid=" << interval.invalidImages << '\n';
+    std::cerr << report.str();
+    interval.presentations = interval.rgbChanges = interval.invalidImages = 0;
+    start = now;
+}
 inline void observeGsRgb(const std::vector<uint8_t>& pixels, uint32_t width, uint32_t height) {
+    observeGsFrameRate(pixels, width, height);
     if (!gsMetricPath()) return;
     auto& store = gsMetricStore(); std::lock_guard lock(store.mutex);
     store.image.observe(store.counters, pixels, width, height);

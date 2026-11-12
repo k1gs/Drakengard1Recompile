@@ -6,8 +6,10 @@ import sys
 
 ROOT_FILES = {"README.md", "LICENSE",
               ".gitignore", ".gitattributes"}
-# Explicitly requested, visually reviewed progress image; all other binaries stay closed.
+# Explicitly requested and visually reviewed progress images.
 REVIEWED_IMAGES = {
+    "assets/progress/chapter-i-approach.png":
+        "f6069394cc0dea021c5124a5682acbcef5e432ccdb4bb5424c87214f45cdd62b",
     "assets/progress/native-scene-hud.png":
         "241db09b52f90e889b8fc9cd60066190120c8e4038d82a2e36e7f3bb2f4c78e3",
 }
