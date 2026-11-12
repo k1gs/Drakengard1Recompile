@@ -1,4 +1,5 @@
 #include "cdvd_device.h"
+#include "virtual_card_auth.h"
 #include "dvd_frame.h"
 #include <algorithm>
 #include <iostream>
@@ -162,6 +163,19 @@ void CdvdDevice::scommand(uint8_t command) {
         // do not silently consume that IRQ if one is introduced later.
         deviceCheck(!(m_interrupt & 4u), "CDVD power-event cancellation requires an event model");
         m_response = {0}; m_responsePosition = 0;
+    } else if (m_cardAuth && ((command >= 0x80 && command <= 0x88) || command == 0x8f)) {
+        m_response = m_cardAuth->cdvd(command, m_sparameters);
+        m_responsePosition = 0;
+        if (command == 0x88 && m_response[0] == 0)
+            std::cerr << "[cdvd-magicgate] virtual card challenge verified\n";
+    } else if (command == 0x80 && m_sparameters.size() == 1) {
+        // Beginning card authentication with no active MagicGate backend
+        // returns the command's error status through SDATAOUT.
+        if (!m_reportedUnavailableCardAuth) {
+            std::cerr << "[cdvd-magicgate] card authentication unavailable; returning error status 0x80\n";
+            m_reportedUnavailableCardAuth = true;
+        }
+        m_response = {0x80}; m_responsePosition = 0;
     } else unknownDevice("S-command", command, m_sparameters);
     m_scommand = command; m_sparameters.clear();
 }

@@ -7,6 +7,7 @@
 #include <functional>
 
 namespace drakengard {
+class VirtualCardAuth;
 struct CdvdCalendar { int year, month, day, hour, minute, second; };
 // Synchronous virtual DVD controller. Command acceptance is separate from actual
 // payload consumption and completion IRQ; unsupported formats/commands fail closed.
@@ -23,6 +24,7 @@ public:
     size_t drainToc(std::span<uint8_t> destination);
     bool takeInterruptEdge();
     void setClockSource(std::function<CdvdCalendar()> source) { m_clock = std::move(source); }
+    void bindCardAuth(VirtualCardAuth& auth) { m_cardAuth = &auth; }
     size_t pendingBytes() const { return m_payload.size() - m_position; }
     uint64_t actualSectorsRead() const { return m_actualSectors; }
 private:
@@ -30,6 +32,7 @@ private:
     void scommand(uint8_t command);
     void complete();
     IsoMedia& m_image;
+    VirtualCardAuth* m_cardAuth{};
     std::optional<std::array<uint8_t, 4>> m_mecha;
     std::function<CdvdCalendar()> m_clock;
     uint8_t m_ncommand{}, m_scommand{}, m_error{}, m_interrupt{}, m_status{0x0a}, m_traySticky{};
@@ -43,5 +46,6 @@ private:
     size_t m_responsePosition{}, m_position{};
     size_t m_sectorSize{2048};
     bool m_toc{};
+    bool m_reportedUnavailableCardAuth{};
 };
 }

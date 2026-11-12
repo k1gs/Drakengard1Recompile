@@ -19,6 +19,7 @@ class BootstrapSession {
     Sif1Receiver sif1;
     Sif0Sender sif0;
     PioWriteCapture pio;
+    std::optional<drakengard::VirtualCardAuth> cardAuth;
     QuiescentSio2 sio2;
     Sio2Dma sio2Dma{sio2};
     SpdifSetup spdif;
@@ -45,6 +46,14 @@ class BootstrapSession {
 public:
     SifRegisters sif;
     void enableVirtualPad() { sio2.enableVirtualPad(); dma.enableSio2(sio2Dma); }
+    void attachCard(const std::filesystem::path& image, bool writable) {
+        sio2.attachCard(image,writable);
+#ifdef _WIN32
+        cardAuth.emplace();
+        sio2.bindCardAuth(*cardAuth);
+        cdvd.bindCardAuth(*cardAuth);
+#endif
+    }
     void configureRuntimeBudget(uint32_t limit) { state.budget.configureRuntimeLimit(limit); }
     void publishPadInput(const VirtualPadInput& input) { sio2.publishInput(input); }
     void videoEvent(bool start) {

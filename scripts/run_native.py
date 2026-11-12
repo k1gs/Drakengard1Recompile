@@ -31,6 +31,9 @@ def main(argv=None):
     parser.add_argument("--virtual-pad", action="store_true", help="Emulate DualShock2 port1 from keyboard/gamepad input; requires --iop-video-events")
     parser.add_argument("--pad-control", action="store_true", help="Use an explicit bounded host controller command file instead of window/keyboard input")
     parser.add_argument("--gs-metrics", action="store_true", help="Record bounded GS production/state diagnostics; adds observation overhead, not a game FPS counter")
+    card = parser.add_mutually_exclusive_group()
+    card.add_argument("--read-only-memory-card", type=Path, help="Attach an existing raw 8 MiB PS2 card image in slot 1")
+    card.add_argument("--memory-card", type=Path, help="Attach an existing raw 8 MiB PS2 card image in slot 1 and allow writes")
     parser.add_argument("--ee-write-watch", type=parse_int0, default=None,
                         help="Watch one aligned 8-byte EE RAM slot; requires --ee-firmware-entry")
     parser.add_argument("--ee-write-watch-arm-value", type=parse_int0, default=None,
@@ -51,6 +54,8 @@ def main(argv=None):
         parser.error("Virtual pad requires --iop-video-events")
     if args.pad_control and not args.virtual_pad:
         parser.error("Pad control requires --virtual-pad")
+    if (args.read_only_memory_card is not None or args.memory_card is not None) and not args.virtual_pad:
+        parser.error("Memory card requires --virtual-pad")
     if args.iop_runtime_millions != 256 and not args.ee_firmware_entry:
         parser.error("Nondefault IOP runtime budgets require --ee-firmware-entry")
     if args.ee_write_watch is not None:
@@ -108,6 +113,14 @@ def main(argv=None):
         environment.pop("DRAKENGARD_PAD_CONTROL", None)
         environment.pop("DRAKENGARD_GS_COLOR_OUTPUT", None)
         environment.pop("DRAKENGARD_GS_METRICS_OUTPUT", None)
+        environment.pop("DRAKENGARD_READ_ONLY_MEMORY_CARD", None)
+        environment.pop("DRAKENGARD_MEMORY_CARD", None)
+        result["read_only_memory_card"] = args.read_only_memory_card is not None
+        result["writable_memory_card"] = args.memory_card is not None
+        if args.read_only_memory_card is not None:
+            environment["DRAKENGARD_READ_ONLY_MEMORY_CARD"] = str(args.read_only_memory_card.resolve())
+        if args.memory_card is not None:
+            environment["DRAKENGARD_MEMORY_CARD"] = str(args.memory_card.resolve())
         result["gs_metrics_experiment"] = args.gs_metrics
         if args.gs_metrics:
             environment["DRAKENGARD_GS_METRICS_OUTPUT"] = str(run / "gs-metrics.jsonl")

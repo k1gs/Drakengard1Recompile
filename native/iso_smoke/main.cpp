@@ -1,6 +1,7 @@
 #include "iso_media.h"
 #include "cdvd_rpc.h"
 #include "cdvd_device.h"
+#include "virtual_card_auth.h"
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -14,6 +15,89 @@ namespace {
 using Bytes = std::vector<uint8_t>;
 constexpr size_t Sector = 2048;
 void check(bool value) { if (!value) throw std::runtime_error("ISO synthetic assertion failed"); }
+#ifdef _WIN32
+void checkVirtualCardAuth(drakengard::IsoMedia& media) {
+    drakengard::VirtualCardAuth auth;
+    drakengard::CdvdDevice cdvd(media);
+    cdvd.bindCardAuth(auth);
+    const auto scmd = [&](uint8_t command, std::span<const uint8_t> parameters = {}) {
+        for (auto byte : parameters) cdvd.writeRegister(0x17, byte);
+        cdvd.writeRegister(0x16, command);
+        Bytes response;
+        while (cdvd.readRegister(0x17) == 0) {
+            check(response.size() < 16);
+            response.push_back(cdvd.readRegister(0x18));
+        }
+        check(!cdvd.takeInterruptEdge());
+        return response;
+    };
+    const auto card = [&](uint8_t mode, std::span<const uint8_t> payload = {}, bool read = false) {
+        Bytes request(read || !payload.empty() ? 14 : 5);
+        request[0] = 0x81;
+        request[1] = 0xf0;
+        request[2] = mode;
+        if (!payload.empty()) {
+            check(payload.size() == 8);
+            std::reverse_copy(payload.begin(), payload.end(), request.begin() + 3);
+            for (auto byte : payload) request[11] ^= byte;
+        }
+        return auth.serial(request, request.size(), 0x55);
+    };
+    const auto readBlock = [&](uint8_t mode) {
+        const auto response = card(mode, {}, true);
+        check(response[3] == 0x2b && response[13] == 0x55);
+        uint8_t checksum{};
+        Bytes data(response.rbegin() + 2, response.rend() - 4);
+        for (auto byte : data) checksum ^= byte;
+        check(data.size() == 8 && checksum == response[12]);
+        return data;
+    };
+    for (unsigned attempt = 0; attempt < 3; ++attempt) {
+        auth.reset();
+        const std::array<uint8_t, 1> slot{0};
+        check(scmd(0x88) == Bytes{0x80});
+        check(scmd(0x80, slot) == Bytes{0});
+        check(auth.serial(std::array<uint8_t, 5>{0x81, 0xf7, 1, 0, 0}, 5, 0x55).back() == 0x55);
+        check(card(0).back() == 0x55);
+        check(scmd(0x81, slot) == Bytes{0});
+        auto material = readBlock(1);
+        const auto seed = readBlock(2);
+        material.insert(material.end(), seed.begin(), seed.end());
+        check(scmd(0x82, material) == Bytes{0});
+        check(card(3).back() == 0x55);
+        check(scmd(0x83, readBlock(4)) == Bytes{0});
+        check(card(5).back() == 0x55 && scmd(0x8f) == Bytes{0});
+        const auto first = scmd(0x84);
+        const auto second = scmd(0x85);
+        check(first.size() == 13 && second.size() == 13 && first[0] == 0 && second[0] == 0);
+        Bytes challenge1(first.begin() + 1, first.begin() + 9);
+        Bytes challenge2(first.begin() + 9, first.end());
+        challenge2.insert(challenge2.end(), second.begin() + 1, second.begin() + 5);
+        check(card(6, std::span(second).subspan(5)).back() == 0x55);
+        check(card(7, challenge2).back() == 0x55);
+        for (uint8_t mode : {8, 9, 10}) check(card(mode).back() == 0x55);
+        if (attempt == 1) challenge1[0] ^= 1;
+        check(card(11, challenge1).back() == 0x55);
+        if (attempt == 1) {
+            check(card(12).back() == 0x66 && scmd(0x88) == Bytes{0x80});
+            continue;
+        }
+        for (uint8_t mode : {12, 13, 14}) check(card(mode).back() == 0x55);
+        auto responses = readBlock(15);
+        check(card(16).back() == 0x55);
+        const auto response2 = readBlock(17);
+        responses.insert(responses.end(), response2.begin(), response2.end());
+        if (attempt == 2) responses[0] ^= 1;
+        check(scmd(0x86, responses) == Bytes{0});
+        check(card(18).back() == 0x55);
+        check(scmd(0x87, readBlock(19)) == Bytes{0});
+        check(scmd(0x8f) == Bytes{uint8_t(attempt == 0 ? 0 : 0x80)});
+        if (attempt == 0) check(card(20).back() == 0x55);
+        check(scmd(0x88) == Bytes{uint8_t(attempt == 0 ? 0 : 0x80)});
+        check(scmd(0x88) == Bytes{0x80});
+    }
+}
+#endif
 void both(Bytes& bytes, size_t offset, uint32_t value) {
     for (unsigned n = 0; n < 4; ++n) {
         bytes[offset + n] = uint8_t(value >> (8 * n));
@@ -183,6 +267,17 @@ int main() {
         }
         device.writeRegister(0x17, 0); device.writeRegister(0x16, 3);
         for (uint8_t expected : {1, 2, 3, 4}) check(device.readRegister(0x18) == expected);
+        device.writeRegister(0x17, 0);
+        device.writeRegister(0x16, 0x80);
+        check(device.readRegister(0x16) == 0x80 && device.readRegister(0x17) == 0);
+        check(device.readRegister(0x18) == 0x80 && device.readRegister(0x17) == 0x40 &&
+              !device.takeInterruptEdge());
+        bool missingAuthParameter = false;
+        try { device.writeRegister(0x16, 0x80); } catch (const std::runtime_error&) { missingAuthParameter = true; }
+        check(missingAuthParameter && device.readRegister(0x17) == 0x40);
+#ifdef _WIN32
+        checkVirtualCardAuth(media);
+#endif
         unsigned clockReads = 0;
         device.setClockSource([&] { ++clockReads; return drakengard::CdvdCalendar{2000, 2, 29, 23, 59, 58}; });
         device.writeRegister(0x16, 8);

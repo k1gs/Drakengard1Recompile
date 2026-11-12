@@ -70,6 +70,15 @@ class NativeLaunchGuards(unittest.TestCase):
     def test_pad_control_requires_opt_in_virtual_pad(self):
         self.refuses_before_intake(["--input-complete", "--pad-control"])
 
+    def test_memory_card_requires_virtual_pad(self):
+        for mode in ("--read-only-memory-card", "--memory-card"):
+            with self.subTest(mode=mode):
+                self.refuses_before_intake(["--input-complete", mode, "fixture.ps2"])
+
+    def test_card_modes_are_mutually_exclusive(self):
+        self.refuses_before_intake(["--input-complete", "--read-only-memory-card", "a.ps2",
+                                    "--memory-card", "b.ps2"])
+
     def test_nondefault_runtime_budget_requires_entry(self):
         for preset in ("512", "1024", "2048"):
             with self.subTest(preset=preset):

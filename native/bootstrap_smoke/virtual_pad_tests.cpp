@@ -1,5 +1,6 @@
 #include "quiescent_sio2.h"
 #include "sio2_dma.h"
+#include <chrono>
 #include <map>
 
 namespace {
@@ -20,6 +21,179 @@ struct Registers {
     uint32_t interruptStatus() const { return pending; }
     void setInterruptStatus(uint32_t value) { pending=value; }
 };
+
+void checkReadOnlyCard() {
+    using drakengard::Ps2MemoryCard;
+    const auto directory=std::filesystem::temp_directory_path()/("drakengard-card-test-"+
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    expect(std::filesystem::create_directory(directory));
+    const auto path=directory/"fixture.ps2";
+    struct RemoveFixture {
+        std::filesystem::path file, directory;
+        ~RemoveFixture() {
+            std::error_code ignored;
+            auto lease=file;
+            lease += ".drakengard.lock";
+            std::filesystem::remove(lease,ignored);
+            std::filesystem::remove(file,ignored);
+            std::filesystem::remove(directory,ignored);
+        }
+    } cleanup{path,directory};
+
+    QuiescentSio2 sio;
+    sio.enable();
+    rejects([&] { sio.attachCard(path); });
+    sio.enableVirtualPad();
+    {
+        std::ofstream shortImage(path,std::ios::binary);
+        shortImage.put(0);
+    }
+    rejects([&] { sio.attachCard(path); });
+    std::vector<uint8_t> image(Ps2MemoryCard::ImageBytes,0xff);
+    for (unsigned i=0;i<Ps2MemoryCard::PageBytes;++i)
+        image[Ps2MemoryCard::PageBytes+i]=uint8_t(3*i+7);
+    {
+        std::ofstream file(path,std::ios::binary|std::ios::trunc);
+        file.write(reinterpret_cast<const char*>(image.data()),image.size());
+        file.close();
+        expect(bool(file));
+    }
+    sio.attachCard(path);
+    rejects([&] { sio.attachCard(path); });
+    Registers regs;
+    const auto store=[&](uint32_t address,uint32_t value) {
+        regs.write32(address,value);
+        sio.afterWrite(regs,address);
+    };
+    const auto descriptor=[&](uint32_t length,unsigned port=0) {
+        store(0x1f808200,(length<<18)|(length<<8)|port);
+    };
+    const auto pio=[&](std::initializer_list<uint8_t> request) {
+        descriptor(uint32_t(request.size()));
+        for (auto byte:request) sio.fifoWrite(byte);
+        std::vector<uint8_t> reply;
+        while (sio.availableBytes()) reply.push_back(sio.fifoRead());
+        return reply;
+    };
+    const auto rejectDma=[&](std::initializer_list<uint8_t> request) {
+        descriptor(uint32_t(request.size()));
+        std::array<uint8_t,16> block{};
+        std::copy(request.begin(),request.end(),block.begin());
+        rejects([&] { sio.dmaBlock(block); });
+        expect(!sio.availableBytes());
+    };
+    store(0x1f808268,0x3bc);
+    expect(pio({0x81,0x11,0,0})==std::vector<uint8_t>({0,0,0x2b,0x55}));
+    expect(sio.read(0x1f80826c)==0x1100);
+    expect(pio({0x81,0x26})==std::vector<uint8_t>({0,0,0x2b,0,2,16,0,0,64,0,0,0x52,0x55}));
+    expect(pio({0x81,0x27,0x5a})==std::vector<uint8_t>({0,0,0,0x2b,0x5a}));
+    expect(pio({0x81,0xbf,0,0,0})==std::vector<uint8_t>({0,0,0xff,0x2b,0x5a}));
+    rejectDma({0x81,0xbf,0,0});
+    expect(pio({0x81,0x28})==std::vector<uint8_t>({0,0,0x2b,0x5a,0x5a}));
+    expect(pio({0x81,0xf3})==std::vector<uint8_t>({0,0,0,0x2b,0x55}));
+    expect(pio({0x81,0x52,0})==std::vector<uint8_t>({0,0,0x5a}));
+    rejectDma({0x81,0x52,0,0,0});
+    rejectDma({0x81,0x43,1});
+    rejectDma({0x81,0x23,1,0,0,0,0});
+    expect(pio({0x81,0x23,1,0,0,0,1})==std::vector<uint8_t>({0,0,0,0,0,0,0,0x2b,0x55}));
+    expect(pio({0x81,0x43,2})==std::vector<uint8_t>({0,0,0,0x2b,7,10,13,0x55}));
+
+    constexpr unsigned payload=128, block=136, destination=120;
+    descriptor(payload+6);
+    regs.ram[0]=0x81; regs.ram[1]=0x43; regs.ram[2]=payload;
+    regs.write32(0x1f801540,0); regs.write32(0x1f801544,0x10000|block/4);
+    regs.write32(0x1f801550,destination); regs.write32(0x1f801554,0x10000|block/4);
+    regs.write32(0x1f801578,1); regs.write32(0x1f801570,0x880000); regs.write32(0x1f801574,0x00b00000);
+    regs.write32(0x1f801548,0x01000201); regs.write32(0x1f801558,0x41000200);
+    Sio2Dma dma(sio);
+    for (unsigned i=0;i<40;++i) dma.pump(regs);
+    expect(regs.read32(0x1f801540)==block && regs.read32(0x1f801550)==destination+block);
+    expect(regs.read32(0x1f801548)==0x201 && regs.read32(0x1f801558)==0x40000200 && regs.pending==8);
+    uint8_t checksum=0;
+    for (unsigned i=0;i<payload;++i) {
+        const auto byte=image[Ps2MemoryCard::PageBytes+2+i];
+        expect(regs.ram[destination+4+i]==byte);
+        checksum^=byte;
+    }
+    expect(regs.ram[destination+3]==0x2b && regs.ram[destination+payload+4]==checksum);
+    expect(regs.ram[destination+payload+5]==0x55 && regs.ram[destination+payload+6]==0);
+    expect(pio({0x81,0x81})==std::vector<uint8_t>({0,0,0x2b,0x55}));
+    rejectDma({0x81,0x43,1});
+    rejectDma({0x81,0x22,1,0,0,0,1});
+    rejectDma({0x81,0xf0,0});
+    descriptor(4,1);
+    sio.dmaBlock(std::array<uint8_t,8>{0x81,0x11,0,0});
+    expect(sio.read(0x1f80826c)==0x1d100);
+    for (unsigned i=0;i<8;++i) expect(sio.fifoRead()==(i<6?0xff:0));
+
+    QuiescentSio2 writable;
+    writable.enable(); writable.enableVirtualPad();
+    writable.attachCard(path,true);
+    rejects([&] { Ps2MemoryCard secondWriter(path,true); });
+    regs.write32(0x1f808268,0x3bc);
+    writable.afterWrite(regs,0x1f808268);
+    const auto transfer=[&](std::span<const uint8_t> request, unsigned length) {
+        std::array<uint8_t,144> buffer{};
+        std::copy(request.begin(),request.end(),buffer.begin());
+        regs.write32(0x1f808200,(length<<18)|(length<<8));
+        writable.afterWrite(regs,0x1f808200);
+        writable.dmaBlock(buffer);
+        for (auto& byte:buffer) byte=writable.fifoRead();
+        return buffer;
+    };
+    const std::array<uint8_t,7> selectWrite{0x81,0x22,1,0,0,0,1};
+    const std::array<uint8_t,2> end{0x81,0x81};
+    const std::array<uint8_t,3> readOne{0x81,0x43,1};
+    const std::array<uint8_t,7> selectRead{0x81,0x23,1,0,0,0,1};
+    expect(transfer(selectWrite,9)[8]==0x55);
+    rejects([&] { transfer(end,4); });
+    std::array<uint8_t,132> chunk{0x81,0x42,128};
+    std::fill_n(chunk.begin()+3,128,uint8_t{0x3c});
+    chunk.back()=1;
+    rejects([&] { transfer(chunk,134); });
+    chunk.back()=0;
+    for (unsigned i=0;i<4;++i) {
+        const auto reply=transfer(chunk,134);
+        expect(reply[3]==0x2b && reply[132]==0 && reply[133]==0x55);
+    }
+    std::array<uint8_t,20> spare{0x81,0x42,16};
+    std::fill_n(spare.begin()+3,16,uint8_t{0x55});
+    expect(transfer(spare,22)[21]==0x55);
+    const auto readCommitted=[&] {
+        Ps2MemoryCard reopened(path);
+        reopened.exchange(selectRead,9);
+        return reopened.exchange(readOne,7)[4];
+    };
+    expect(readCommitted()==7);
+#ifdef _WIN32
+    {
+        // Force the atomic replacement to fail without disturbing the old image.
+        struct OpenImage {
+            HANDLE handle;
+            ~OpenImage() { if (handle != INVALID_HANDLE_VALUE) CloseHandle(handle); }
+        } blocker{CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
+        expect(blocker.handle != INVALID_HANDLE_VALUE);
+        rejects([&] { transfer(end,4); });
+        expect(readCommitted()==7);
+    }
+#endif
+    expect(transfer(end,4)[3]==0x55);
+    expect(readCommitted()==(7&0x3c));
+    {
+        std::ifstream saved(path,std::ios::binary);
+        saved.seekg(Ps2MemoryCard::PageBytes+512);
+        expect(saved.get()==(image[Ps2MemoryCard::PageBytes+512]&0x55));
+    }
+    const std::array<uint8_t,7> unaligned{0x81,0x21,1,0,0,0,1};
+    rejects([&] { transfer(unaligned,9); });
+    const std::array<uint8_t,7> selectErase{0x81,0x21,0,0,0,0,0};
+    const std::array<uint8_t,2> erase{0x81,0x82}, eraseEnd{0x81,0x12};
+    expect(transfer(selectErase,9)[8]==0x55);
+    expect(transfer(erase,4)[3]==0x55);
+    expect(transfer(eraseEnd,4)[3]==0x55);
+    expect(readCommitted()==0xff);
+}
 }
 void checkVirtualPad() {
     Dualshock2 pad; VirtualPadInput input; input.connected=true; input.buttons=0xbff7;
@@ -157,4 +331,5 @@ void checkVirtualPad() {
     edges.publishInput(focusPressed);
     auto focusLost=released; focusLost.cancelPending=true; edges.publishInput(focusLost);
     expect(readReport()==std::array<uint8_t,5>{0xff,0x79,0x5a,0xff,0xff});
+    checkReadOnlyCard();
 }

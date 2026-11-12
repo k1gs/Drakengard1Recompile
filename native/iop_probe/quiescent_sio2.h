@@ -5,11 +5,12 @@
 #include <deque>
 #include <iostream>
 #include "dualshock2.h"
+#include "ps2_memory_card.h"
+#include "../runner/virtual_card_auth.h"
 
 // Reset/setup registers are always the reviewed quiescent subset. The explicit
 // virtual-pad profile adds bounded PIO/DMA packets and START/IRQ acknowledgement.
-// PortStat 0xF is a reset register, not proof of an attached pad. Memory cards
-// remain unattached: negative serial responses cannot read or write saves.
+// PortStat 0xF is a reset register, not proof of an attached pad or card.
 class QuiescentSio2 {
     bool enabled{}, configured{};
     std::array<uint32_t,8> portControls{};
@@ -19,12 +20,15 @@ class QuiescentSio2 {
     std::vector<uint8_t> tx;
     std::deque<uint8_t> rx;
     Dualshock2 pad;
+    std::optional<drakengard::Ps2MemoryCard> card;
+    drakengard::VirtualCardAuth* cardAuth{};
     VirtualPadInput input;
     uint16_t pendingButtons{}, previousReport{0xffff};
     std::array<uint8_t,4> previousAxes{127,127,127,127};
     std::array<uint8_t,12> pendingPressure{};
     std::array<bool,12> pendingPressureValid{};
     uint64_t totalPackets{};
+    unsigned cardReports{};
     static constexpr std::array<unsigned,12> pressureButtonBits{5,7,4,6,12,13,14,15,10,11,8,9};
     static bool command(uint32_t address) {
         return address>=0x1f808200 && address<=0x1f80823c && !(address&3);
@@ -32,11 +36,31 @@ class QuiescentSio2 {
     static bool portControl(uint32_t address) {
         return address>=0x1f808240 && address<=0x1f80825c && !(address&3);
     }
+    void cardPacket(std::span<const uint8_t> request, size_t capacity, size_t dmaBytes=0) {
+        const auto response=cardAuth && request.size()>=2 && (request[1]==0xf0 || request[1]==0xf7)
+            ? cardAuth->serial(request,capacity,card->currentTerminator()) : card->exchange(request,capacity);
+        if (cardAuth && request[1]==0xf3) cardAuth->reset();
+        rx.insert(rx.end(),response.begin(),response.end());
+        if (dmaBytes) rx.insert(rx.end(),dmaBytes-response.size(),0);
+        status=0x1100;
+        ++packetIndex;
+        ++packetCount;
+        if (cardReports<48) {
+            ++cardReports;
+            std::cerr << "[sio2-memory-card-command] command=0x" << std::hex << unsigned(request[1])
+                      << std::dec << " request=" << request.size() << " reply=" << response.size() << '\n';
+        }
+    }
 public:
     void enableVirtualPad() {
         if (virtualPad) throw std::runtime_error("Virtual pad already enabled");
         virtualPad=true;
     }
+    void attachCard(const std::filesystem::path& image, bool writable = false) {
+        if (!virtualPad || card) throw std::runtime_error("Memory card requires an empty slot on enabled SIO2");
+        card.emplace(image,writable);
+    }
+    void bindCardAuth(drakengard::VirtualCardAuth& auth) { cardAuth=&auth; }
     void publishInput(const VirtualPadInput& sample) {
         // Preserve real host press edges until one actual pad report samples
         // them. UI frames and guest serial polls run at different rates.
@@ -63,11 +87,19 @@ public:
             throw std::runtime_error("SIO2 TX outside a configured command queue");
         const uint32_t descriptor=commands[packetIndex];
         const auto length=(descriptor>>8)&0x3ffu;
-        if (!length || length>32 || ((descriptor>>18)&0x3ffu)!=length)
+        const unsigned port=descriptor&1;
+        const bool attachedCard=!port && card && (tx.empty()?value:tx.front())==0x81;
+        const auto maxLength=attachedCard?drakengard::Ps2MemoryCard::MaxPacketBytes:32;
+        if (!length || length>maxLength || ((descriptor>>18)&0x3ffu)!=length)
             throw std::runtime_error("Unsupported SIO2 descriptor length/response size");
         tx.push_back(value);
         if (tx.size()<length) return;
-        const unsigned port=descriptor&1;
+        if (attachedCard) {
+            if (rx.size()>1024) throw std::runtime_error("SIO2 RX capacity exceeded");
+            cardPacket(tx,1024-rx.size());
+            tx.clear();
+            return;
+        }
         if (tx[0]==0x81) {
             // Unattached serial endpoint: every clock reads the pulled-up data
             // line. This is a negative response, never a card operation or auth success.
@@ -122,6 +154,13 @@ public:
         const auto descriptor=commands[packetIndex];
         const auto length=(descriptor>>8)&0x3ffu;
         if (!length || length>bytes.size()) throw std::runtime_error("SIO2 DMA block shorter than descriptor");
+        if (bytes[0]==0x81 && !(descriptor&1) && card) {
+            if (!configured || length>drakengard::Ps2MemoryCard::MaxPacketBytes || ((descriptor>>18)&0x3ffu)!=length ||
+                rx.size()+bytes.size()>4096)
+                throw std::runtime_error("Unsupported SIO2 memory card DMA descriptor or capacity");
+            cardPacket(bytes.first(length),bytes.size(),bytes.size());
+            return;
+        }
         if (bytes[0]==0x81 && ((length==4 && bytes[1]==0x11) || (length==5 && bytes[1]==0xf3)) && bytes.size()>=6 &&
             ((descriptor>>18)&0x3ffu)==length) {
             // No card is attached. Pinned Sio2::Memcard + MemoryCardProtocol::Probe

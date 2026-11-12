@@ -49,7 +49,21 @@ IopBoot::IopBoot(const IopBootInputs& inputs) : impl(std::make_unique<Impl>(inpu
 IopBoot::~IopBoot() = default;
 void IopBoot::videoEvent(bool start) { impl->session->videoEvent(start); }
 void IopBoot::setAudioSink(std::function<void(std::array<int32_t,2>)> sink) { impl->session->setAudioSink(std::move(sink)); }
-void IopBoot::enableVirtualPad() { impl->session->enableVirtualPad(); }
+void IopBoot::enableVirtualPad() {
+    impl->session->enableVirtualPad();
+#ifdef _WIN32
+    const auto* readOnly = _wgetenv(L"DRAKENGARD_READ_ONLY_MEMORY_CARD");
+    const auto* writable = _wgetenv(L"DRAKENGARD_MEMORY_CARD");
+#else
+    const auto* readOnly = std::getenv("DRAKENGARD_READ_ONLY_MEMORY_CARD");
+    const auto* writable = std::getenv("DRAKENGARD_MEMORY_CARD");
+#endif
+    if (readOnly && writable) throw StrictDeviceError("Select only one PS2 memory card image");
+    if (const auto* image = writable ? writable : readOnly) {
+        impl->session->attachCard(std::filesystem::path(image), writable != nullptr);
+        std::cerr << "[sio2-memory-card] raw image attached " << (writable ? "writable" : "read-only") << " in slot 1\n";
+    }
+}
 void IopBoot::publishPadInput(const VirtualPadInput& input) { impl->session->publishPadInput(input); }
 void IopBoot::enableEntryDevices() {
     if (!impl->reviewedRom) throw StrictDeviceError("IOPBOOT execution requires the exact reviewed BIOS SHA-256");

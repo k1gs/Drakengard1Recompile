@@ -74,5 +74,8 @@ target_include_directories(${target} PUBLIC
     "${IOP_ROOT}/include" "${IOP_ROOT}/src/emulator"
     "${IOP_ROOT}/src/emulator/services" "${IOP_ROOT}/src/emulator/core" "${REPO_ROOT}/native/runner")
 target_compile_features(${target} PUBLIC cxx_std_20)
+if(WIN32)
+    target_link_libraries(${target} PUBLIC bcrypt)
+endif()
 
 endfunction()
