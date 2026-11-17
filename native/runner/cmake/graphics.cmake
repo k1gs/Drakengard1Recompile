@@ -106,10 +106,94 @@ drakengard_replace_pinned(fragment_observed
     "        WriteVramUnlocked(zpsm, zbp, fbw, x, y, z);\n        drakengard::observeGsFragment(drakengard::GsFragmentProbe::DepthWrite);" "GS fragment stage 7")
 string(REPLACE "${fragment_body}" "${fragment_observed}" graphics_clut_measured "${graphics_clut_measured}")
 drakengard_replace_pinned(graphics_clut_measured
+    "    const auto metricStart = drakengard::beginGsDrawMetric();"
+    [=[    const auto snapshotTexture = [&] {
+        return drakengard::snapshotGsTexture(batch, m_texturePageCache,
+            [this](const GSDrawState& state, uint16_t u, uint16_t v, bool compareVram) {
+                const auto value = SampleTexture(state, 0.0f, 0.0f, 1.0f, u, v);
+                const auto& tex = state.context.tex0;
+                return std::pair{value, compareVram && value == ReadVramUnlocked(tex.psm, tex.tbp0, tex.tbw, u / 16, v / 16)};
+            });
+    };
+    drakengard::gsFrameReplayCapture.draw(this, batch, snapshotTexture, {m_vram, m_vramSize});
+    if (const auto* sink = drakengard::GsTextureSnapshotScope::active)
+    {
+        sink->submit(snapshotTexture());
+    }
+    const auto metricStart = drakengard::beginGsDrawMetric();]=] "GS texture snapshot before draw")
+drakengard_replace_pinned(graphics_clut_measured
     "                const TextureCombineResult color = combineTexture(tex, shadeR, shadeG, shadeB, shadeA, tr, tg, tb, ta);"
     "                const TextureCombineResult color = combineTexture(tex, shadeR, shadeG, shadeB, shadeA, tr, tg, tb, ta);\n                if(drakengard::gsFragmentProbe) drakengard::gsFragmentProbe->texture(ta,color.a);" "GS triangle texture alpha observation")
+drakengard_replace_pinned(graphics_clut_measured
+    "    SnapshotVram(snapshot);\n    if (snapshot.empty())"
+    [=[    std::optional<drakengard::GsReplayFrame> replay;
+    if (drakengard::gsFrameReplayCapture.active())
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        snapshot.clear();
+        if (m_vram && m_vramSize)
+        {
+            snapshot.assign(m_vram, m_vram + m_vramSize);
+            const auto pmode = decodePmode(request.pmode);
+            const bool displayConfigured =
+                (pmode.enableCrt1 && hasDisplaySetup(request.display1, decodeDisplayFrame(request.dispfb1))) ||
+                (pmode.enableCrt2 && hasDisplaySetup(request.display2, decodeDisplayFrame(request.dispfb2)));
+            replay = drakengard::gsFrameReplayCapture.boundary(this, request.vsyncTick, snapshot, displayConfigured);
+        }
+    }
+    else
+        SnapshotVram(snapshot);
+    if (snapshot.empty())]=] "GS frame replay VRAM boundary")
+drakengard_replace_pinned(graphics_clut_measured
+    "    return snapshotBackend.PresentFromLocalMemory(request);"
+    [=[    if (!replay) return snapshotBackend.PresentFromLocalMemory(request);
+    const struct ScanoutScope {
+        ~ScanoutScope() { drakengard::gsReplayScanout = nullptr; }
+    } scanoutScope;
+    drakengard::gsReplayScanout = &replay->scanout;
+    auto result = snapshotBackend.PresentFromLocalMemory(request);
+    if (result && replay->pairCpuPixels) {
+        replay->cpuPixels = result.pixels;
+        replay->cpuWidth = result.width;
+        replay->cpuHeight = result.height;
+        replay->cpuStride = kHostFrameWidth;
+    }
+    drakengard::gsFrameReplayCapture.publish(std::move(*replay));
+    return result;]=] "GS frame replay scanout boundary")
+drakengard_replace_pinned(graphics_clut_measured
+    "            result.sourceFbp = selected1.fbp;\n            return result;"
+    "            result.sourceFbp = selected1.fbp;\n            if (auto* scanout = drakengard::gsReplayScanout)\n                scanout->kind = drakengard::GsReplayScanout::Kind::Composite;\n            return result;"
+    "GS composite scanout selection")
+drakengard_replace_pinned(graphics_clut_measured
+    "    result.sourceFbp = selected.fbp;\n    return result;"
+    [=[    result.sourceFbp = selected.fbp;
+    if (auto* scanout = drakengard::gsReplayScanout)
+    {
+        using Kind = drakengard::GsReplayScanout::Kind;
+        const bool alternate = selected.fbp != displayFrame.fbp || selected.fbw != displayFrame.fbw ||
+                               selected.psm != displayFrame.psm;
+        const auto kind = result.usedPreferred ? Kind::PreferredTexture : alternate ? Kind::AlternateFrame : Kind::Direct;
+        *scanout = {kind, selected, kind == Kind::Direct ? origin.x : 0u, kind == Kind::Direct ? origin.y : 0u,
+                    result.width, gsScanoutReadHeight(result.height, request.smode2), result.height, request.smode2};
+    }
+    return result;]=] "GS single-source scanout selection")
+foreach(replay_write IN ITEMS
+    "    m_vram = vram;"
+    "    ResetUnlocked();\n}\n\nvoid GSCpuBackend::ResetUnlocked()"
+    "    WriteVramUnlocked(psm, base, bw, x, y, value);"
+    "    const uint32_t x0 = context.scissor.x0;")
+    drakengard_replace_pinned(graphics_clut_measured "${replay_write}"
+        "    drakengard::gsFrameReplayCapture.vramWrite(this);\n${replay_write}" "GS frame replay external VRAM write")
+endforeach()
+drakengard_replace_pinned(graphics_clut_measured
+    "    const uint32_t rrw = m_transfer.trxreg.rrw;\n    const uint32_t dsax = m_transfer.trxpos.dsax;\n    uint32_t offset = 0u;"
+    "    drakengard::gsFrameReplayCapture.imageUpload(this, m_transfer, m_transferState.copiedPixels, {data, sizeBytes});\n    const uint32_t rrw = m_transfer.trxreg.rrw;\n    const uint32_t dsax = m_transfer.trxpos.dsax;\n    uint32_t offset = 0u;" "GS replay host image upload")
+drakengard_replace_pinned(graphics_clut_measured
+    "    if (command.direction == 2u)\n        PerformLocalToLocalTransfer();"
+    "    if (command.direction == 2u)\n    {\n        drakengard::gsFrameReplayCapture.vramWrite(this);\n        PerformLocalToLocalTransfer();\n    }"
+    "GS frame replay local transfer")
 file(CONFIGURE OUTPUT "${graphics_file}"
-    CONTENT "#include \"caim_vif_trace.h\"\n#include \"gs_production_metrics.h\"\n#include \"gs_bilinear.h\"\n#include \"gs_scanout.h\"\n#include \"capture/gs_color_diagnostic.h\"\n${graphics_clut_measured}" @ONLY)
+    CONTENT "#include \"caim_vif_trace.h\"\n#include \"gs_production_metrics.h\"\n#include \"gs_bilinear.h\"\n#include \"gs_scanout.h\"\n#include \"gs_frame_replay.h\"\n#include \"capture/gs_color_diagnostic.h\"\n${graphics_clut_measured}" @ONLY)
 set_source_files_properties("${graphics_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/gs")
 get_target_property(runtime_sources ps2_runtime SOURCES)
@@ -120,6 +204,10 @@ target_sources(ps2_runtime PRIVATE "${graphics_file}")
 # Observe the original XYZ packets immediately before vertexKick; preserve all decoding.
 include("${CMAKE_CURRENT_LIST_DIR}/pinned_patch.cmake")
 file(READ "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/gs/gs_frontend.cpp" frontend_source)
+drakengard_replace_pinned(frontend_source
+    "    const bool hasFrame = static_cast<bool>(frame);"
+    "    const bool hasFrame = static_cast<bool>(frame);\n    drakengard::latchedHostScanoutMode = hasFrame ? request.smode2 : 0;"
+    "host scanout mode from the latched presentation request")
 drakengard_replace_pinned(frontend_source
     "        vtx.fog = f;\n        vertexKick(!adk);"
     "        vtx.fog = f;\n        drakengard::observeGsRawVertex(0x104u,lo,hi);\n        vertexKick(!adk);" "packed XYZF2 sample")
@@ -152,7 +240,7 @@ drakengard_replace_pinned(frontend_source
     "register GIF data offset")
 set(frontend_file "${CMAKE_BINARY_DIR}/private_sampled_GsFrontend.cpp")
 file(CONFIGURE OUTPUT "${frontend_file}"
-    CONTENT "#include \"gs_production_metrics.h\"\n${frontend_source}" @ONLY)
+    CONTENT "#include \"gs_production_metrics.h\"\n#include \"gs_scanout.h\"\n${frontend_source}" @ONLY)
 set_source_files_properties("${frontend_file}" TARGET_DIRECTORY ps2_runtime PROPERTIES
     INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/ps2xRuntime/src/lib/gs")
 get_target_property(runtime_sources ps2_runtime SOURCES)

@@ -4,6 +4,15 @@
 #include <span>
 #include <stdexcept>
 
+namespace drakengard {
+
+// Set by the display thread while it latches the corresponding CPU scanout.
+inline thread_local uint64_t latchedHostScanoutMode = 0;
+
+inline uint32_t hostScanoutRowStep(uint64_t mode) { return (mode & 3u) == 3u ? 2u : 1u; }
+
+}
+
 // INT+FFMD scans a half-height framebuffer into an interlaced display.
 // PCSX2 v2.8.2 GSState::GSPCRTCRegs::SetRects rounds odd read heights up.
 inline uint32_t gsScanoutReadHeight(uint32_t height,uint64_t smode2) {
